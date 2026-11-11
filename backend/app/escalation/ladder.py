@@ -24,6 +24,7 @@ from app.identity import security
 from app.identity.models import Device
 from app.journey.models import Journey
 from app.journey.state import ESCALATED_STATES, Outcome, State
+from app.notification import signing
 from app.notification.channels import CHANNEL_ORDER, Message, Senders
 from app.notification.models import AlertChannels
 
@@ -39,26 +40,49 @@ def ack_token_hash(settings: Settings, token: str) -> bytes:
 # --- messages --------------------------------------------------------------------------------
 
 
-def alert_message(escalation: Escalation, label: str, ack_url: str) -> Message:
+def _wording(escalation: Escalation, label: str) -> tuple[str, str]:
     """Plain words, no location (the phone's own SMS carries that; live location is E2E)."""
     if escalation.covert:
-        return Message(
+        return (
             f"URGENT: {label} triggered a silent alarm",
             f"{label} may be in danger and may not be able to talk. Do NOT call their phone. "
             "Call 112 if you think they are at risk.",
-            ack_url,
         )
     if escalation.level == State.FULL_ESCALATION:
-        return Message(
+        return (
             f"URGENT: {label} may need help now",
             f"Try to reach {label} right away. If you can't, call 112.",
-            ack_url,
         )
-    return Message(
+    return (
         f"{label} missed a safety check-in",
         f"{label} hasn't checked in and didn't answer a private prompt. Please try to reach them.",
-        ack_url,
     )
+
+
+def alert_message(
+    escalation: Escalation,
+    recipient: EscalationRecipient,
+    ack_url: str,
+    settings: Settings,
+    now: datetime,
+) -> Message:
+    """The alert for one contact: signed for push, with a verification code for people."""
+    title, body = _wording(escalation, recipient.owner_label)
+    code = signing.verification_code(
+        settings.token_secret, str(escalation.id), str(recipient.contact_account_id)
+    )
+    payload = {
+        "v": 1,
+        "type": "alert",
+        "escalation_id": str(escalation.id),
+        "level": escalation.level,
+        "covert": escalation.covert,
+        "owner_label": recipient.owner_label,
+        "opened_at": escalation.opened_at.isoformat(),
+        "issued_at": now.isoformat(),
+        "code": code,
+    }
+    return Message(title, body, ack_url, code=code, data=signing.sign(payload, settings))
 
 
 def all_clear_message(label: str, reason: str) -> Message:
@@ -211,8 +235,10 @@ def send_due(db: Session, senders: Senders, settings: Settings, now: datetime) -
         token = crypto.decrypt(recipient.ack_token_enc) or ""
         message = alert_message(
             escalation,
-            recipient.owner_label,
+            recipient,
             f"{settings.public_base_url}/escalations/ack#{token}",
+            settings,
+            now,
         )
         delivered = None
         # Never wait on one channel: skip channels that aren't set up or fail, right away.

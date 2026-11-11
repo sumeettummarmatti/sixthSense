@@ -22,3 +22,13 @@ class TelegramLink(BaseModel):
 
 class AlertEmail(BaseModel):
     email: EmailStr = Field(description="Must be the email this account signs in with")
+
+
+class SigningKey(BaseModel):
+    key_id: str
+    alg: str = "Ed25519"
+    ed25519_public_key: str = Field(description="Base64 raw 32-byte public key")
+
+
+class SigningKeys(BaseModel):
+    keys: list[SigningKey] = Field(description="Current key first; a previous key after rotation")

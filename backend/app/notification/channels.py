@@ -8,7 +8,7 @@ import base64
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Protocol
 
@@ -29,10 +29,18 @@ class Message:
     title: str
     body: str
     ack_url: str | None = None
+    code: str | None = None  # verification code shown on the same alert in the app (P2-W6)
+    data: dict[str, str] = field(default_factory=dict)  # signed alert for push (P2-W6)
 
     def text(self) -> str:
         link = f"\n\nTap to say you're on it: {self.ack_url}" if self.ack_url else ""
-        return f"{self.title}\n{self.body}{link}"
+        code = (
+            f"\n\nVerification code: {self.code}. The SixthSense app shows the same code on "
+            "this alert. If it doesn't, this message is fake."
+            if self.code
+            else ""
+        )
+        return f"{self.title}\n{self.body}{link}{code}"
 
 
 class Sender(Protocol):
@@ -153,7 +161,7 @@ class FcmSender:
             "message": {
                 "token": target,
                 "notification": {"title": message.title, "body": message.body},
-                "data": {"ack_url": message.ack_url or ""},
+                "data": {"ack_url": message.ack_url or "", **message.data},
                 "android": {"priority": "high"},
             }
         }

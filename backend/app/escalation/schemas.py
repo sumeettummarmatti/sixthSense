@@ -14,6 +14,9 @@ class ActiveEscalation(BaseModel):
     covert: bool = Field(description="Silent alarm: do not call their phone")
     opened_at: datetime
     acknowledged: bool
+    verification_code: str = Field(
+        description="Same code as in the Telegram/email alert; if they differ, that message is fake"
+    )
 
 
 class ActiveEscalations(BaseModel):

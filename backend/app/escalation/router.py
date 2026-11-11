@@ -18,6 +18,7 @@ from app.escalation.models import Escalation, EscalationRecipient
 from app.identity.router import CurrentSessionDep, DbDep, SettingsDep
 from app.journey.models import Journey
 from app.journey.state import Event, InvalidTransition, State, apply_event
+from app.notification import signing
 from app.notification.channels import Senders, get_senders
 
 router = APIRouter(prefix="/escalations", tags=["escalation"])
@@ -52,7 +53,9 @@ def _open_for_recipient(
 
 
 @router.get("/active", response_model=schemas.ActiveEscalations)
-def active(session: CurrentSessionDep, db: DbDep) -> schemas.ActiveEscalations:
+def active(
+    session: CurrentSessionDep, db: DbDep, settings: SettingsDep
+) -> schemas.ActiveEscalations:
     rows = db.execute(
         select(Escalation, EscalationRecipient)
         .join(EscalationRecipient, EscalationRecipient.escalation_id == Escalation.id)
@@ -71,6 +74,9 @@ def active(session: CurrentSessionDep, db: DbDep) -> schemas.ActiveEscalations:
                 covert=escalation.covert,
                 opened_at=escalation.opened_at,
                 acknowledged=escalation.acknowledged_at is not None,
+                verification_code=signing.verification_code(
+                    settings.token_secret, str(escalation.id), str(session.account_id)
+                ),
             )
             for escalation, recipient in rows
         ]

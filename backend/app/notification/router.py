@@ -13,7 +13,7 @@ from app.core import audit, crypto
 from app.identity import security
 from app.identity.models import Account, Device
 from app.identity.router import CurrentSessionDep, DbDep, RedisDep, SettingsDep
-from app.notification import schemas
+from app.notification import schemas, signing
 from app.notification.channels import Message, Senders, get_senders
 from app.notification.models import AlertChannels
 
@@ -25,6 +25,18 @@ TELEGRAM_LINK_TTL = 600
 
 def _channels(db: DbDep, account_id) -> AlertChannels:
     return db.get(AlertChannels, account_id) or AlertChannels(account_id=account_id)
+
+
+@router.get("/signing-keys", response_model=schemas.SigningKeys)
+def signing_public_keys(settings: SettingsDep) -> schemas.SigningKeys:
+    """Public keys that sign push alerts. No sign-in: the app can also bundle the current one."""
+    keys = signing.signing_keys(settings.alert_signing_key, settings.alert_signing_key_previous)
+    return schemas.SigningKeys(
+        keys=[
+            schemas.SigningKey(key_id=key.key_id, ed25519_public_key=key.public_b64())
+            for key in keys
+        ]
+    )
 
 
 @router.get("/channels", response_model=schemas.ChannelStatus)

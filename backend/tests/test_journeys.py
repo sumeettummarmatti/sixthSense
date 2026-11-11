@@ -294,10 +294,12 @@ def test_run_watchdog_reports_newly_escalated(client, user, make_user, db, clock
             "/journeys/protocol", json={"heartbeat_timeout_min": 120}, headers=person["headers"]
         )
     quiet = start(client, user)
-    start(client, other, check_in_interval_min=240)
+    other_journey = start(client, other, check_in_interval_min=240)
+    mine = lambda result: [(e.journey_id, e.state) for e in result if e.journey_id in ids]  # noqa: E731
+    ids = {quiet["id"], other_journey["id"]}  # the dev database may hold journeys from manual runs
     escalated = service.run_watchdog(db, T0 + timedelta(minutes=19))
-    assert [(e.journey_id, e.state) for e in escalated] == [(quiet["id"], "contact_alert")]
-    assert service.run_watchdog(db, T0 + timedelta(minutes=19)) == []  # nothing new
+    assert mine(escalated) == [(quiet["id"], "contact_alert")]
+    assert mine(service.run_watchdog(db, T0 + timedelta(minutes=19))) == []  # nothing new
 
 
 def test_purge_drops_journeys_ended_over_7_days_ago(client, user, db, clock) -> None:

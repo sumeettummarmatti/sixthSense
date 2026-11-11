@@ -1,12 +1,17 @@
+import base64
 import json
 import logging
+import os
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from sqlalchemy import select, update
 
 from app.core.audit import AuditEvent
@@ -19,6 +24,7 @@ from app.journey import service as journeys
 from app.journey.models import Journey
 from app.journey.router import _now as journey_now
 from app.main import app
+from app.notification import signing
 from app.notification.channels import FcmSender, Message, Senders, TelegramSender, get_senders
 from app.notification.models import AlertChannels
 from app.notification.router import link_telegram_chats
@@ -543,3 +549,115 @@ def test_nothing_personal_in_logs(client, db, redis, senders, clock, people, cap
     client.post("/escalations/ack", json={"token": token})
     for secret in ("asha-fcm", "ben@college.edu", "777123", token, "Priya"):
         assert secret not in caplog.text
+
+
+# --- signed alerts (P2-W6) -----------------------------------------------------------------
+
+
+def verify(client, data: dict[str, str]) -> dict:
+    """What the app does: check the signature with the published key, then trust the JSON."""
+    keys = client.get("/notifications/signing-keys").json()["keys"]
+    key = next(k for k in keys if k["key_id"] == data["kid"])
+    public = Ed25519PublicKey.from_public_bytes(base64.b64decode(key["ed25519_public_key"]))
+    public.verify(base64.b64decode(data["sig"]), data["alert"].encode())
+    return json.loads(data["alert"])
+
+
+def test_push_alert_is_signed_and_verifiable(client, db, senders, clock, people) -> None:
+    start_journey(client, people["owner"], clock)
+    silent_until_contact_alert(db, senders, clock)
+    _, message = senders.push.sent[0]
+    alert = verify(client, message.data)
+    [escalation] = escalations(db, people["owner"])
+    assert alert == {
+        "v": 1,
+        "type": "alert",
+        "escalation_id": str(escalation.id),
+        "level": "contact_alert",
+        "covert": False,
+        "owner_label": "Priya",
+        "opened_at": escalation.opened_at.isoformat(),
+        "issued_at": clock.now.isoformat(),
+        "code": message.code,
+    }
+
+
+def test_tampered_or_forged_alert_fails_verification(client, db, senders, clock, people) -> None:
+    start_journey(client, people["owner"], clock)
+    silent_until_contact_alert(db, senders, clock)
+    data = dict(senders.push.sent[0][1].data)
+    data["alert"] = data["alert"].replace("contact_alert", "full_escalation")
+    with pytest.raises(InvalidSignature):
+        verify(client, data)
+    forged = Ed25519PrivateKey.generate()
+    data["sig"] = base64.b64encode(forged.sign(data["alert"].encode())).decode()
+    with pytest.raises(InvalidSignature):
+        verify(client, data)
+
+
+def test_people_get_a_code_the_app_also_shows(client, db, senders, clock, people) -> None:
+    start_journey(client, people["owner"], clock)
+    silent_until_contact_alert(db, senders, clock)
+    _, email = senders.email.sent[0]  # Ben
+    _, push = senders.push.sent[0]  # Asha
+    assert f"Verification code: {email.code}" in email.text()
+    assert re.fullmatch(r"[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}", email.code)
+    for person, message in (("ben", email), ("asha", push)):
+        shown = client.get("/escalations/active", headers=people[person]["headers"]).json()
+        assert shown["escalations"][0]["verification_code"] == message.code
+    assert email.code != push.code  # per contact, so one leaked code can't fake another's
+
+
+def test_signing_keys_are_public_and_support_rotation(client) -> None:
+    current = client.get("/notifications/signing-keys").json()["keys"]
+    assert len(current) == 1 and current[0]["alg"] == "Ed25519"
+    seed = base64.b64encode(os.urandom(32)).decode()
+    rotated = get_settings().model_copy(
+        update={
+            "alert_signing_key": seed,
+            "alert_signing_key_previous": get_settings().alert_signing_key,
+        }
+    )
+    app.dependency_overrides[get_settings] = lambda: rotated
+    keys = client.get("/notifications/signing-keys").json()["keys"]
+    assert [k["key_id"] for k in keys][1] == current[0]["key_id"]  # old key still listed
+    data = signing.sign({"type": "alert"}, rotated)
+    assert data["kid"] == keys[0]["key_id"]
+    assert verify(client, data) == {"type": "alert"}
+
+
+def test_bad_signing_key_rejected() -> None:
+    with pytest.raises(ValueError, match="32-byte"):
+        signing._load(base64.b64encode(b"short").decode())
+
+
+def test_fcm_push_carries_the_signed_alert(tmp_path) -> None:
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    ).decode()
+    key_file = tmp_path / "sa.json"
+    key_file.write_text(
+        json.dumps(
+            {
+                "private_key": pem,
+                "client_email": "x@y",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        )
+    )
+    sent = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={})
+
+    settings = get_settings().model_copy(
+        update={"fcm_project_id": "demo", "fcm_service_account_file": str(key_file)}
+    )
+    sender = FcmSender(settings, httpx.Client(transport=httpx.MockTransport(handler)))
+    data = signing.sign({"type": "alert"}, settings)
+    sender.send("device", Message("T", "B", "http://x/ack#t", code="AAAA-BBBB", data=data))
+    assert sent[0]["message"]["data"] == {"ack_url": "http://x/ack#t", **data}
