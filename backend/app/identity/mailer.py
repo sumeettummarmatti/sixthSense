@@ -1,0 +1,39 @@
+import logging
+import smtplib
+from email.message import EmailMessage
+from functools import lru_cache
+
+from app.core.config import get_settings
+
+log = logging.getLogger(__name__)
+
+
+class SmtpMailer:
+    """Sends sign-in codes over plain SMTP: Mailpit locally, any free SMTP account for real."""
+
+    def send_sign_in_code(self, to: str, code: str) -> None:
+        settings = get_settings()
+        message = EmailMessage()
+        message["From"] = settings.smtp_from
+        message["To"] = to
+        message["Subject"] = f"{code} is your SixthSense sign-in code"
+        message.set_content(
+            f"Your SixthSense sign-in code is {code}.\n\n"
+            f"It expires in {settings.otp_ttl_seconds // 60} minutes and works once.\n"
+            "If you didn't ask for it, ignore this email. Nobody at SixthSense will ask for it."
+        )
+        try:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
+                if settings.smtp_starttls:
+                    smtp.starttls()
+                if settings.smtp_username:
+                    smtp.login(settings.smtp_username, settings.smtp_password)
+                smtp.send_message(message)
+        except (OSError, smtplib.SMTPException) as exc:
+            # Never include the address or code; the exception type is enough to debug.
+            log.warning("sign-in email failed: %s", type(exc).__name__)
+
+
+@lru_cache
+def get_mailer() -> SmtpMailer:
+    return SmtpMailer()
