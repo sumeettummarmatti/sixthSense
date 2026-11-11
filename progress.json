@@ -259,9 +259,9 @@
         {
           "id": "P2-W4-watchdog-alert-ladder",
           "title": "Heartbeat watchdog + FCM push → Telegram bot → email ladder, idempotent",
-          "status": "todo",
+          "status": "done",
           "week": 4,
-          "notes": "sumeet: free channels only (no CPaaS SMS/voice). SMS comes from the user's phone (P1-W5)"
+          "notes": "shruj: Arq worker (uv run arq app.worker.WorkerSettings) ticks every 5 s: journey watchdog, open/close escalations, send due alerts, all-clears, Telegram linking; nightly purge (journeys 7 d, escalations 90 d). Escalation = one open row per (journey, level); all accepted contacts (or the protocol's chosen ones) alerted in parallel; each walks FCM push -> Telegram -> email one minute apart, skipping channels not set up, repeating every 5 min for ~1 h until someone acknowledges. Contact endpoints: GET /escalations/active, POST /escalations/{id}/ack | resolve | raise, POST /escalations/ack (link, no sign-in) + tap-to-confirm page. Ack pauses the auto-upgrade of a missed check-in; raise = can't reach them. Channel setup: /notifications/push-token, /notifications/telegram/link (getUpdates polling, no public URL needed), /notifications/email (must equal own sign-in email). FCM token, Telegram chat id and email encrypted with DATA_KEY. Covert alarms say 'do NOT call their phone'. No location in alerts. Server can't dial 112 (phone does). Migration 0005. 149 tests pass, ruff clean; live worker run: SOS email in <1 s via Mailpit, ack by link, resolve. Real FCM/Telegram need FCM_PROJECT_ID + FCM_SERVICE_ACCOUNT_FILE and TELEGRAM_BOT_TOKEN + TELEGRAM_BOT_USERNAME in .env (not yet created). Branch p2/watchdog-alert-ladder."
         },
         {
           "id": "P2-W5-location-relay",
@@ -601,6 +601,36 @@
       "decision": "Journeys copy the protocol timers at start; the phone must send heartbeats at least every heartbeat_timeout_min / 2 (default timeout 10 min)",
       "why": "Mid-journey settings edits can't move deadlines; server watchdog needs a liveness signal (no location)",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Alert ladder: all contacts in parallel; each gets FCM push -> Telegram -> email one minute apart (skipping channels not set up), repeated every 5 min for ~1 h; first acknowledgement stops it for everyone",
+      "why": "Free channels only (₹0); never wait on one channel; parallel escalation (HLD F3)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "A contact's acknowledgement pauses the automatic contact_alert -> full_escalation upgrade; the contact then resolves ('safe') or raises the alarm",
+      "why": "HLD upgrades on 'danger / no answer'; an ack is an answer, and repeated urgent alerts after someone is handling it cause confusion",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Contacts opt in to alert email only with their own sign-in email (HMAC match); FCM tokens, Telegram chat ids and alert emails are stored encrypted with DATA_KEY",
+      "why": "Email channel needs a deliverable address; matching the sign-in email stops alerts being pointed at someone else's inbox",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Telegram via getUpdates polling in the worker, not a webhook",
+      "why": "Works on a laptop or free VM with no public HTTPS URL",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Silent-alarm (covert) alerts tell contacts not to call the person's phone; alerts never include location",
+      "why": "A call could tip off a coercer; live location is E2E only (rule 2, ADR-3)",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -627,13 +657,22 @@
         "P1-W3-android-foreground-service"
       ],
       "by": "sumeet"
+    },
+    {
+      "id": "B5",
+      "title": "Real push/Telegram alerts need a free Firebase project (service-account JSON) and a Telegram bot token from @BotFather; email works today",
+      "affects": [
+        "P2-W4-watchdog-alert-ladder"
+      ],
+      "by": "shruj"
     }
   ],
   "next_steps": [
     "tanisha: connect onboarding to /auth/otp/request + /auth/otp/verify and add Keystore device sign-in (see contracts/openapi.yaml, PROGRESS.md 'shruj: Email OTP + device auth')",
     "tanisha: contacts screen -> invite link via share sheet + deep link to accept; keep name/number on the phone keyed by contact_link_id; upload E2E keys after sign-in (contracts/openapi.yaml)",
     "tanisha: wire journey screens to /journeys (start, heartbeat every <=5 min, check-in ok/duress, prompt, sos, arrive/end); see contracts/openapi.yaml",
-    "shruj: P2-W4-watchdog-alert-ladder (schedule service.run_watchdog + purge_expired with Arq; FCM -> Telegram -> email; idempotent)",
+    "shruj: create Firebase project + Telegram bot (free) and put keys in .env; then P2-W5-location-relay",
+    "tanisha: contact side of alerts: send FCM token (PUT /notifications/push-token), 'Get alerts on Telegram' button, alert screen with I'm on it / They're safe / Raise alarm (see contracts/openapi.yaml)",
     "sumeet: merge PR #1 (setup/foundation -> main)",
     "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",

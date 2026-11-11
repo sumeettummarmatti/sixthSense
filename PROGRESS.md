@@ -12,13 +12,28 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
-| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`) | `P2-W4-watchdog-alert-ladder` |
+| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`) | Firebase + Telegram keys, then `P2-W5-location-relay` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. sumeet, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+
+## 2026-11-11 — shruj: Watchdog + alert ladder
+- Shruj: Built `P2-W4-watchdog-alert-ladder` on branch `p2/watchdog-alert-ladder` (stacked on `p2/journey-state-machine`). The backend now actually alerts contacts.
+- Shruj: **New worker**, run next to the API: `cd backend && uv run arq app.worker.WorkerSettings` (added to the README run table). Every 5 s it runs the journey watchdog, opens/closes alerts, sends what's due and links Telegram chats; every night it deletes journeys after 7 days and alerts after 90 days.
+- Shruj: **How alerts go out:** all contacts at once. Each gets FCM push → Telegram → email, one minute apart, skipping channels they haven't set up, then the ladder repeats every 5 min for about an hour. The first "I'm on it" stops it for everyone. Triggering twice sends nothing extra.
+- Shruj: **What contacts can do:** see open alerts (`GET /escalations/active`), "I'm on it" (`/ack`, or the link in the message, no sign-in), "They're safe" (`/resolve`: back to normal or journey ends; others get an all-clear), "I can't reach them" (`/raise`: urgent alert to everyone). Once someone says "I'm on it", a missed check-in no longer upgrades itself to a full alarm.
+- Shruj: **Message wording:** no location ever. A silent alarm (duress PIN / covert SOS) says "Do NOT call their phone" so nobody tips off a coercer. If she checks in during an alert, contacts get "All clear".
+- Shruj: **Contact setup:** `PUT /notifications/push-token` (FCM), `POST /notifications/telegram/link` (one-time t.me link, works without a public server), `PUT /notifications/email` (opt-in, must be their own sign-in email). FCM tokens, Telegram chat ids and emails are encrypted with the new `DATA_KEY`.
+- Shruj: The server can't call 112 (no paid telephony); the phone does that.
+- Shruj: Migration `0005` (core DB): `alert_channels`, `escalations`, `escalation_recipients`, plus `devices.fcm_token_enc` and `journeys.alert_acknowledged_at`. New `.env.example` keys: `DATA_KEY`, `PUBLIC_BASE_URL`, `FCM_*`, `TELEGRAM_*`. Firebase key files are gitignored. `contracts/openapi.yaml` updated (29 paths, matches the backend).
+- Shruj: Checks: ruff clean, 149 tests pass (34 new, incl. real FCM/Telegram request formats against a fake network). Live run with the real worker: SOS → alert email in Mailpit in under a second → "I'm on it" via the link → resolved.
+- Shruj: **After pulling:** copy the new alerts block from `.env.example` into your `.env`, `cd backend && uv sync && uv run alembic upgrade head`, and start the worker.
+- **To do (Shruj):** email alerts work today. For push and Telegram, create a free Firebase project (download the service-account JSON) and a Telegram bot with @BotFather, then fill `FCM_*` and `TELEGRAM_*` in `.env`.
+- **Needs Tanisha:** send the FCM token after sign-in; a "Get alerts on Telegram" button; an alert screen for contacts with I'm on it / They're safe / I can't reach them; open `…/escalations/ack#…` links.
+- **Next:** `P2-W5-location-relay`.
 
 ## 2026-11-11 — shruj: Journey state machine
 - Shruj: Built `P2-W3-journey-state-machine` in `backend/app/journey/`, on branch `p2/journey-state-machine` (stacked on `p2/trusted-contacts`).
