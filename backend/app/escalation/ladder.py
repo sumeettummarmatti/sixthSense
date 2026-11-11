@@ -144,9 +144,16 @@ def _open(db: Session, journey: Journey, settings: Settings, now: datetime) -> N
 class Closed:
     escalation_id: uuid.UUID
     reason: str
+    resolved_by: uuid.UUID | None = None  # the contact who said "they're safe" gets no all-clear
 
 
-def close(db: Session, escalation: Escalation, reason: str, now: datetime) -> Closed:
+def close(
+    db: Session,
+    escalation: Escalation,
+    reason: str,
+    now: datetime,
+    resolved_by: uuid.UUID | None = None,
+) -> Closed:
     escalation.closed_at = now
     escalation.close_reason = reason
     audit.record(
@@ -155,7 +162,7 @@ def close(db: Session, escalation: Escalation, reason: str, now: datetime) -> Cl
         actor=escalation.owner_id,
         target=f"escalation:{escalation.id}",
     )
-    return Closed(escalation.id, reason)
+    return Closed(escalation.id, reason, resolved_by)
 
 
 def sync(db: Session, settings: Settings, now: datetime) -> list[Closed]:
@@ -281,6 +288,8 @@ def send_all_clear(db: Session, senders: Senders, closed: list[Closed]) -> None:
             )
         )
         for recipient in recipients:
+            if recipient.contact_account_id == item.resolved_by:
+                continue  # they resolved it; telling them "another contact" did is wrong
             message = all_clear_message(recipient.owner_label, item.reason)
             _deliver(db, senders, recipient.last_channel, recipient.contact_account_id, message)
 

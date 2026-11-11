@@ -124,9 +124,14 @@ def resolve(
                 Escalation.journey_id == journey.id, Escalation.closed_at.is_(None)
             )
         )
-        closed = [ladder.close(db, other, "resolved_by_contact", now) for other in others]
+        closed = [
+            ladder.close(db, other, "resolved_by_contact", now, resolved_by=session.account_id)
+            for other in others
+        ]
     else:
-        closed = [ladder.close(db, escalation, "resolved_by_contact", now)]
+        closed = [
+            ladder.close(db, escalation, "resolved_by_contact", now, resolved_by=session.account_id)
+        ]
     ladder.acknowledge(db, escalation, session.account_id, now)
     db.commit()
     ladder.send_all_clear(db, senders, closed)

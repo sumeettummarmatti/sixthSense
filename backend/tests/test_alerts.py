@@ -306,6 +306,8 @@ def test_contact_confirms_safe_during_missed_check_in(client, db, senders, clock
     assert resp.status_code == 200 and resp.json() == {"journey_state": "active"}
     assert escalations(db, people["owner"])[0].close_reason == "resolved_by_contact"
     assert senders.email.sent[-1][1].body == "Another trusted contact confirmed Priya is safe."
+    # Asha resolved it, so she gets no "another contact confirmed" message (seen in the demo)
+    assert [m.title for _, m in senders.push.sent] == ["Priya missed a safety check-in"]
     db.expire_all()
     assert db.get(Journey, uuid.UUID(journey_id)).state == "active"
 
@@ -661,3 +663,56 @@ def test_fcm_push_carries_the_signed_alert(tmp_path) -> None:
     data = signing.sign({"type": "alert"}, settings)
     sender.send("device", Message("T", "B", "http://x/ack#t", code="AAAA-BBBB", data=data))
     assert sent[0]["message"]["data"] == {"ack_url": "http://x/ack#t", **data}
+
+
+# --- demo hardening (P2-W1-demo-telegram-live) ---------------------------------------------
+
+
+def test_telegram_retries_when_connecting_fails(monkeypatch) -> None:
+    monkeypatch.setattr("app.notification.channels.time.sleep", lambda s: None)
+    attempts = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(request)
+        if len(attempts) < 3:
+            raise httpx.ConnectError("Connection reset by peer")
+        return httpx.Response(200, json={"ok": True, "result": {}})
+
+    settings = get_settings().model_copy(update={"telegram_bot_token": " 123:abc \n"})
+    sender = TelegramSender(settings, httpx.Client(transport=httpx.MockTransport(handler)))
+    assert sender.send("555", Message("T", "B"))
+    assert len(attempts) == 3
+    assert attempts[0].url.path == "/bot123:abc/sendMessage"  # stray whitespace stripped
+
+
+def test_telegram_gives_up_after_three_connect_failures(monkeypatch) -> None:
+    monkeypatch.setattr("app.notification.channels.time.sleep", lambda s: None)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("slow TLS")
+
+    settings = get_settings().model_copy(update={"telegram_bot_token": "123:abc"})
+    sender = TelegramSender(settings, httpx.Client(transport=httpx.MockTransport(handler)))
+    assert not sender.send("555", Message("T", "B"))
+
+
+def test_telegram_does_not_resend_after_a_read_error(monkeypatch) -> None:
+    attempts = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(request)
+        raise httpx.ReadTimeout("sent but no answer")
+
+    settings = get_settings().model_copy(update={"telegram_bot_token": "123:abc"})
+    sender = TelegramSender(settings, httpx.Client(transport=httpx.MockTransport(handler)))
+    assert not sender.send("555", Message("T", "B"))
+    assert len(attempts) == 1  # the message may have gone out; never send it twice
+
+
+def test_telegram_link_tolerates_at_sign_in_username(client, people, senders) -> None:
+    settings = get_settings().model_copy(update={"telegram_bot_username": " @sixthsense_bot "})
+    app.dependency_overrides[get_settings] = lambda: settings
+    url = client.post("/notifications/telegram/link", headers=people["ben"]["headers"]).json()[
+        "url"
+    ]
+    assert url.startswith("https://t.me/sixthsense_bot?start=")

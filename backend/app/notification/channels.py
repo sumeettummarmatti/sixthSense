@@ -69,22 +69,34 @@ class TelegramSender:
 
     name = "telegram"
 
+    # Some networks are slow to open a TLS connection to Telegram (~8 s) and sometimes reset
+    # it, so allow a longer connect and retry when connecting fails. Only connect errors are
+    # retried: the request was never sent, so a contact can't get the same alert twice.
+    CONNECT_ATTEMPTS = 3
+
     def __init__(self, settings: Settings, client: httpx.Client | None = None) -> None:
-        self._token = settings.telegram_bot_token
-        self._client = client or httpx.Client(timeout=10)
+        self._token = settings.telegram_bot_token.strip()
+        self._client = client or httpx.Client(timeout=httpx.Timeout(15, connect=20))
 
     def configured(self) -> bool:
         return bool(self._token)
 
     def _call(self, method: str, payload: dict) -> dict | None:
-        try:
-            resp = self._client.post(
-                f"https://api.telegram.org/bot{self._token}/{method}", json=payload
-            )
-            body = resp.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            log.warning("telegram %s failed: %s", method, type(exc).__name__)
-            return None
+        url = f"https://api.telegram.org/bot{self._token}/{method}"
+        for attempt in range(1, self.CONNECT_ATTEMPTS + 1):
+            try:
+                body = self._client.post(url, json=payload).json()
+                break
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                log.warning(
+                    "telegram %s connect failed (%d): %s", method, attempt, type(exc).__name__
+                )
+                if attempt == self.CONNECT_ATTEMPTS:
+                    return None
+                time.sleep(attempt)
+            except (httpx.HTTPError, ValueError) as exc:
+                log.warning("telegram %s failed: %s", method, type(exc).__name__)
+                return None
         if not body.get("ok"):
             log.warning("telegram %s rejected: %s", method, body.get("error_code"))
             return None
