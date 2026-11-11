@@ -121,9 +121,9 @@
         {
           "id": "P1-W0-flutter-shell",
           "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
-          "status": "in_progress",
+          "status": "done",
           "week": 0,
-          "notes": "sumeet: Flutter 3.47.9; mobile/ shell with core/ + features/ + theme; analyze + test pass. Android first (ios/ kept, not built). flutter doctor: Android toolchain ✓ (licenses no longer needed with new Android CLI). Emulator Medium_Phone_API_37.0 boots. Gradle 9.3.1 wrapper download timed out from Java; fetched manually (sha256 verified) into ~/.gradle/wrapper/dists. Remaining: first flutter build apk (downloading Android libs) + run on emulator. Handing over to tanisha"
+          "notes": "sumeet: Flutter 3.47.9; mobile/ shell (core/, features/, Lamplight theme); analyze + test pass. Android first (ios/ kept, not built). flutter doctor Android ✓; emulator Medium_Phone_API_37.0; first debug APK built (~30 min first time: Gradle 9.3.1, NDK 28.2, SDK Platform 36 downloaded) and runs on the emulator. Gradle wrapper download timed out from Java once; fixed by manual download (README troubleshooting). Handed over to tanisha"
         },
         {
           "id": "P1-W0-android-device",
@@ -527,14 +527,6 @@
   ],
   "blockers": [
     {
-      "id": "B1",
-      "title": "First Android build: Java downloads time out on Sumeet's Mac (Gradle wrapper fixed manually); confirm build + run on emulator",
-      "affects": [
-        "P1-W0-flutter-shell"
-      ],
-      "by": "sumeet"
-    },
-    {
       "id": "B2",
       "title": "Legal review (DPDP children, UIDAI registration, liability)",
       "affects": [
@@ -561,7 +553,7 @@
   ],
   "next_steps": [
     "sumeet: merge PR #1 (setup/foundation -> main)",
-    "tanisha: finish Android toolchain (B1), create an emulator, run the app, close P1-W0-flutter-shell",
+    "tanisha: set up Android Studio + emulator on her laptop (README step 3), then P1-W0-android-device (real phone via USB) and P1-W1-signup-contacts-ui",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
     "ALL-W1-api-contract: whole team fills contracts/openapi.yaml"
   ],

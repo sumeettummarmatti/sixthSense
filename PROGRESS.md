@@ -11,16 +11,21 @@
 | Lane | Done | Up next |
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
-| P1 Mobile (**tanisha**) | Flutter shell + theme | Finish Android toolchain, run on emulator → `P1-W0-android-device` → `P1-W1-signup-contacts-ui` |
+| P1 Mobile (**tanisha**) | Flutter shell + theme, **runs on Android emulator** | Tanisha: Android Studio + emulator on her laptop → `P1-W0-android-device` → `P1-W1-signup-contacts-ui` |
 | P2 Safety Core | Repo, backend skeleton, local databases running + migrated | `P2-W1-otp-device-auth` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
-**Blockers:** first Android build (Java download timeouts) · need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
+**Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha. sumeet, shruj, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
 
 ---
+
+## 2026-11-11 — sumeet: App runs on Android emulator
+- First debug build done and installed on the emulator: the SixthSense home screen shows in the Lamplight colours. `P1-W0-flutter-shell` is **done**.
+- The first build took ~30 min (downloads Gradle, the Android NDK and SDK Platform 36 once). Later builds take about a minute.
+- Tip: if the emulator shows a black screen, it's asleep: click the emulator's power button.
 
 ## 2026-11-11 — sumeet: Android toolchain ready
 - `flutter doctor` shows Android ✓; emulator `Medium_Phone_API_37.0` boots.
