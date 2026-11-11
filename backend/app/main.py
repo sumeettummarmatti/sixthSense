@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app import (
     comms,
+    contacts,
     escalation,
     identity,
     journey,
@@ -16,6 +17,7 @@ from app.core.logging import configure_logging
 
 MODULES = [
     identity,
+    contacts,
     journey,
     escalation,
     notification,

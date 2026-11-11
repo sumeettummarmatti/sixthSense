@@ -57,3 +57,30 @@ def client(db: Session, redis: fakeredis.FakeRedis, mailer: FakeMailer) -> Itera
         yield TestClient(app)
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def make_user(client: TestClient, mailer: FakeMailer):
+    """Sign a new user in through the real email-code flow; returns their auth headers + ids."""
+    import base64
+
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+    def _make(email: str) -> dict:
+        key = ec.generate_private_key(ec.SECP256R1())
+        public_key = base64.b64encode(
+            key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        ).decode()
+        client.post("/auth/otp/request", json={"email": email})
+        session = client.post(
+            "/auth/otp/verify",
+            json={"email": email, "code": mailer.last_code(), "device_public_key": public_key},
+        ).json()
+        return {
+            "headers": {"Authorization": f"Bearer {session['access_token']}"},
+            "account_id": session["account_id"],
+            "device_id": session["device_id"],
+        }
+
+    return _make

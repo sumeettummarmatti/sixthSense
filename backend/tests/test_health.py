@@ -12,6 +12,6 @@ def test_healthz() -> None:
 
 
 def test_all_modules_mounted() -> None:
-    assert len(MODULES) == 10
+    assert len(MODULES) == 11
     for module in MODULES:
         assert module.router.prefix.startswith("/")
