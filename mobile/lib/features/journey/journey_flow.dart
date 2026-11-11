@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/api/device_identity.dart';
 import '../../core/journey/journey_runtime.dart';
 import '../../core/theme/app_theme.dart';
+import '../contacts/contact_alerts.dart';
 import '../walk/walk_flow.dart';
 import '../map/map_route_screen.dart';
 
@@ -392,7 +393,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final plan = _plan;
     if (plan == null) {
-      return JourneySetupScreen(onStart: _startJourney);
+      return JourneySetupScreen(onStart: _startJourney, api: widget.api);
     }
     return ActiveJourneyScreen(
       plan: plan,
@@ -439,9 +440,14 @@ class JourneyPlan {
 }
 
 class JourneySetupScreen extends StatefulWidget {
-  const JourneySetupScreen({super.key, required this.onStart});
+  const JourneySetupScreen({
+    super.key,
+    required this.onStart,
+    this.api = const DemoApi(),
+  });
 
   final ValueChanged<JourneyPlan> onStart;
+  final DemoApi api;
 
   @override
   State<JourneySetupScreen> createState() => _JourneySetupScreenState();
@@ -517,7 +523,21 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
     final colors = theme.colorScheme;
     final text = theme.textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Plan a journey')),
+      appBar: AppBar(
+        title: const Text('Plan a journey'),
+        actions: [
+          IconButton(
+            tooltip: 'Accept an invite',
+            onPressed: () => acceptInviteFlow(context, widget.api),
+            icon: const Icon(Icons.link_rounded),
+          ),
+          IconButton(
+            tooltip: 'Get alerts on Telegram',
+            onPressed: () => linkTelegramFlow(context, widget.api),
+            icon: const Icon(Icons.notifications_active_outlined),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(

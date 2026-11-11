@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/device_identity.dart';
+import '../contacts/contact_alerts.dart';
 import '../journey/journey_flow.dart';
 
 /// Demo onboarding connected to email OTP, Android device-key auth, contacts,
@@ -95,7 +96,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     if (contact == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      final invite = await widget.api.createInvite('SixthSense user');
+      // The contact sees this name when they accept. Email prefix for the demo.
+      final email = _emailController.text.trim();
+      final ownerLabel = email.contains('@')
+          ? email.substring(0, email.indexOf('@'))
+          : 'A SixthSense user';
+      final invite = await widget.api.createInvite(ownerLabel);
       final linkedContact = TrustedContactDraft(
         name: contact.name,
         phone: contact.phone,
@@ -122,19 +128,14 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   Future<void> _getTelegramAlerts() async {
     setState(() => _busy = true);
-    try {
-      final url = await widget.api.createTelegramLink();
-      await const DeviceIdentity().openUrl(url);
-      if (mounted) {
-        _showMessage('In Telegram, tap Start to finish linking alerts.');
-      }
-    } on ApiException catch (error) {
-      _showApiError(error);
-    } catch (_) {
-      _showMessage('Could not open Telegram. Check the server connection.');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    await linkTelegramFlow(context, widget.api);
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _acceptInvite() async {
+    setState(() => _busy = true);
+    await acceptInviteFlow(context, widget.api);
+    if (mounted) setState(() => _busy = false);
   }
 
   void _showMessage(String message) {
@@ -216,6 +217,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                           onRemove: (contact) =>
                               setState(() => _contacts.remove(contact)),
                           onTelegram: _getTelegramAlerts,
+                          onAcceptInvite: _acceptInvite,
                           busy: _busy,
                           onContinue: _finishOnboarding,
                           text: text,
@@ -422,11 +424,13 @@ class _ContactsStep extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     required this.onTelegram,
+    required this.onAcceptInvite,
     required this.busy,
     required this.onContinue,
     required this.text,
   });
 
+  final VoidCallback onAcceptInvite;
   final List<TrustedContactDraft> contacts;
   final VoidCallback onAdd;
   final ValueChanged<TrustedContactDraft> onRemove;
@@ -460,6 +464,11 @@ class _ContactsStep extends StatelessWidget {
           onPressed: busy ? null : onAdd,
           icon: const Icon(Icons.person_add_alt_1_rounded),
           label: const Text('Add a trusted contact'),
+        ),
+        TextButton.icon(
+          onPressed: busy ? null : onAcceptInvite,
+          icon: const Icon(Icons.link_rounded),
+          label: const Text('I got an invite link'),
         ),
         const SizedBox(height: 10),
         Expanded(

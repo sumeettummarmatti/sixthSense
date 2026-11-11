@@ -173,6 +173,27 @@ class DemoApi {
   Future<Map<String, dynamic>> createInvite(String ownerLabel) =>
       _request('POST', '/contacts/invites', body: {'owner_label': ownerLabel});
 
+  /// Accepts a trusted-contact invite. Takes the full invite link or just the
+  /// token, and returns the inviter's label.
+  Future<String> acceptInvite(String linkOrToken) async {
+    final token = inviteTokenFrom(linkOrToken);
+    if (token.isEmpty) throw const ApiException(400, 'invite_invalid');
+    final result = await _request(
+      'POST',
+      '/contacts/invites/accept',
+      body: {'invite_token': token},
+    );
+    return result['owner_label'] as String? ?? 'SixthSense user';
+  }
+
+  /// The token is everything after `#` in the invite link (never sent to web
+  /// servers by browsers). A bare token is returned as is.
+  static String inviteTokenFrom(String linkOrToken) {
+    final trimmed = linkOrToken.trim();
+    final hash = trimmed.lastIndexOf('#');
+    return (hash >= 0 ? trimmed.substring(hash + 1) : trimmed).trim();
+  }
+
   Future<String> createTelegramLink() async {
     final result = await _request('POST', '/notifications/telegram/link');
     return result['url'] as String;

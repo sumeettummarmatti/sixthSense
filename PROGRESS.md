@@ -20,6 +20,13 @@
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
 
+## 2026-11-12 — sumeet: Accept invite in the app (on Tanisha's behalf)
+- sumeet: The contact's phone can now become a contact: **"I got an invite link"** in setup, and a link icon on the *Plan a journey* screen. Paste the invite link; the app sends the part after `#` to `POST /contacts/invites/accept`, then offers **Get alerts on Telegram**. A Telegram icon sits next to it for later.
+- sumeet: The invite now carries the owner's email prefix as their name (was "SixthSense user"), so the contact knows who invited them.
+- sumeet: New `mobile/lib/features/contacts/contact_alerts.dart` (accept + Telegram flows, shared by both screens).
+- sumeet: Checks: `flutter analyze` clean, 13 tests pass (2 new: token parsing, paste-and-accept flow). Live run against the API: accept 200, owner sees the contact as accepted, contact gets a Telegram link.
+- sumeet: Next: full 2-phone run with API + worker on one laptop.
+
 ## 2026-11-12 — sumeet: Merged everyone's demo work into `demo`
 - sumeet: `demo` now has Tanisha's app wiring (email sign-in + device key, add contact invite, "Get alerts on Telegram", journey/heartbeat/check-in/SOS/end), Shruj's real Telegram alerts (`p2/demo-telegram-live`) and the optional real-email setup (`p2/demo-real-email`, parked; Mailpit for now).
 - sumeet: Fixed a test that failed on any machine whose `.env` has real secrets (it now ignores `.env`).

@@ -142,9 +142,9 @@
         {
           "id": "P1-W1-demo-api-wiring",
           "title": "Demo: connect sign-up (email code + device key), contacts + Get alerts on Telegram, journey, SOS to the server; test on real phone",
-          "status": "todo",
+          "status": "in_progress",
           "week": 1,
-          "notes": "sumeet: assigned to tanisha; no app lock, no FCM"
+          "notes": "tanisha: sign-in, device key, add-contact invite, Get alerts on Telegram, journey/heartbeat/check-in/SOS/end wired. sumeet (on Tanisha's behalf): added accept invite (paste link -> POST /contacts/invites/accept) in onboarding and on the Plan a journey screen, invite label = owner's email prefix; live-checked against the API. Left: run the full 2-phone demo on real phones."
         },
         {
           "id": "P1-W0-flutter-shell",
@@ -777,7 +777,7 @@
     }
   ],
   "next_steps": [
-    "tanisha: add 'accept invite' in the app (open/paste invite link -> POST /contacts/invites/accept with the token after #). Without it a contact's phone can't become a contact, so Telegram alerts have no one to go to.",
+    "sumeet/tanisha: full 2-phone run: owner signs up + adds contact -> contact signs up, pastes invite link, taps Get alerts on Telegram -> owner starts journey + SOS -> Telegram alert arrives (API + worker on one laptop)",
     "sumeet: create team Gmail App password, put it in .env, run: cd backend && uv run python scripts/send_test_email.py <your email>",
     "sumeet: merge p2/demo-telegram-live into demo; on the demo laptop set PUBLIC_BASE_URL to the Wi-Fi IP/tunnel, run API with --host 0.0.0.0, run the worker on that laptop only",
     "shruj: help tanisha with P1-W1-demo-api-wiring (server on shruj's laptop: http://192.168.1.9:8000 on the same Wi-Fi)",
