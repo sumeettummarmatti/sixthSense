@@ -1,0 +1,433 @@
+{
+  "project": "sixthsense",
+  "updated_at": "2026-11-11",
+  "current_phase": "M0-setup",
+  "status_values": [
+    "todo",
+    "in_progress",
+    "blocked",
+    "done"
+  ],
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Setup: monorepo, local stack, skeletons, CI green",
+      "weeks": "0",
+      "status": "in_progress"
+    },
+    {
+      "id": "M1",
+      "title": "Foundation: sign up + add contacts",
+      "weeks": "1-2",
+      "status": "todo"
+    },
+    {
+      "id": "M2",
+      "title": "Journey + escalation: missed check-in reaches contact even offline",
+      "weeks": "3-4",
+      "status": "todo"
+    },
+    {
+      "id": "M3",
+      "title": "Verification + E2E location",
+      "weeks": "5-6",
+      "status": "todo"
+    },
+    {
+      "id": "M4",
+      "title": "Walk With Me end-to-end, nothing left behind",
+      "weeks": "7-8",
+      "status": "todo"
+    },
+    {
+      "id": "M5",
+      "title": "Reports + routing + campus dashboard",
+      "weeks": "9-10",
+      "status": "todo"
+    },
+    {
+      "id": "M6",
+      "title": "Red-team week",
+      "weeks": "11",
+      "status": "todo"
+    },
+    {
+      "id": "M7",
+      "title": "Campus pilot + external pentest",
+      "weeks": "12",
+      "status": "todo"
+    }
+  ],
+  "lanes": {
+    "ALL": {
+      "owner": "team",
+      "tasks": [
+        {
+          "id": "ALL-W0-planner",
+          "title": "Read docs, write PLANNER.md + progress tracking",
+          "status": "done",
+          "week": 0,
+          "notes": "PLANNER.md, progress.json, PROGRESS.md created"
+        },
+        {
+          "id": "ALL-W1-api-contract",
+          "title": "Agree + write contracts/openapi.yaml",
+          "status": "todo",
+          "week": 1,
+          "notes": ""
+        },
+        {
+          "id": "ALL-W11-red-team",
+          "title": "Red-team week: stalk after walk, fake companion, poison reports, spoof alerts",
+          "status": "todo",
+          "week": 11,
+          "notes": ""
+        },
+        {
+          "id": "ALL-W12-pilot-pentest",
+          "title": "Pilot launch on one campus + external pentest",
+          "status": "todo",
+          "week": 12,
+          "notes": ""
+        }
+      ]
+    },
+    "P1": {
+      "owner": "Mobile (TBD)",
+      "tasks": [
+        {
+          "id": "P1-W0-flutter-shell",
+          "title": "Install Flutter, create app shell (features/, core/)",
+          "status": "blocked",
+          "week": 0,
+          "notes": "brew install flutter running; user installing Android Studio. Then: sdk config, licenses, cocoapods, flutter create"
+        },
+        {
+          "id": "P1-W1-signup-contacts-ui",
+          "title": "Sign-up (OTP) + trusted contacts screens",
+          "status": "todo",
+          "week": 1,
+          "notes": ""
+        },
+        {
+          "id": "P1-W3-journey-ui-timers",
+          "title": "Journey screens + on-phone timers",
+          "status": "todo",
+          "week": 3,
+          "notes": ""
+        },
+        {
+          "id": "P1-W4-sos-duress-pin",
+          "title": "SOS, covert SOS, duress PIN",
+          "status": "todo",
+          "week": 4,
+          "notes": ""
+        },
+        {
+          "id": "P1-W5-sms-fallback-lowbattery",
+          "title": "Offline SMS fallback + low-battery mode",
+          "status": "todo",
+          "week": 5,
+          "notes": ""
+        },
+        {
+          "id": "P1-W6-e2e-location",
+          "title": "E2E encrypted live location",
+          "status": "todo",
+          "week": 6,
+          "notes": ""
+        },
+        {
+          "id": "P1-W7-walk-screens-handshake-chat",
+          "title": "Walk screens, handshake code, masked chat, liveness selfie",
+          "status": "todo",
+          "week": 7,
+          "notes": ""
+        },
+        {
+          "id": "P1-W9-map-routes-report-blur",
+          "title": "Map + routes + report screen + on-device location blur",
+          "status": "todo",
+          "week": 9,
+          "notes": ""
+        }
+      ]
+    },
+    "P2": {
+      "owner": "Safety Core (TBD)",
+      "tasks": [
+        {
+          "id": "P2-W0-monorepo",
+          "title": "Monorepo layout, root files, README",
+          "status": "done",
+          "week": 0,
+          "notes": "Root files (.gitignore, .editorconfig, .env.example), README, contracts/ skeleton, routing-engine stub"
+        },
+        {
+          "id": "P2-W0-local-stack",
+          "title": "docker-compose: core PG+PostGIS, insight PG+PostGIS, Redis, NATS",
+          "status": "in_progress",
+          "week": 0,
+          "notes": "infra/docker-compose.yml written (2x PostGIS on separate networks, Redis, NATS). Not started yet: waiting for user OK to run containers"
+        },
+        {
+          "id": "P2-W0-backend-skeleton",
+          "title": "FastAPI modular monolith skeleton + Alembic + PII-scrub logging",
+          "status": "done",
+          "week": 0,
+          "notes": "FastAPI app factory, 10 module routers, settings, SQLAlchemy, Alembic 0001 postgis, PII-scrub logging. 11 tests pass, ruff clean. Alembic upgrade not run yet (needs DB)"
+        },
+        {
+          "id": "P2-W0-ci",
+          "title": "GitHub Actions: lint/test, Semgrep, Trivy",
+          "status": "done",
+          "week": 0,
+          "notes": "ci.yml: backend/insight uv lint+test, dashboard lint+build, mobile (auto-enabled when pubspec exists), Semgrep, Trivy. dependabot.yml. Not yet run on GitHub"
+        },
+        {
+          "id": "P2-W1-otp-device-auth",
+          "title": "Phone OTP + device-bound keys",
+          "status": "todo",
+          "week": 1,
+          "notes": ""
+        },
+        {
+          "id": "P2-W2-trusted-contacts",
+          "title": "Trusted contacts add/list/silent remove",
+          "status": "todo",
+          "week": 2,
+          "notes": ""
+        },
+        {
+          "id": "P2-W3-journey-state-machine",
+          "title": "Journey state machine + protocol config",
+          "status": "todo",
+          "week": 3,
+          "notes": ""
+        },
+        {
+          "id": "P2-W4-watchdog-alert-ladder",
+          "title": "Heartbeat watchdog + push/SMS/voice ladder, idempotent",
+          "status": "todo",
+          "week": 4,
+          "notes": ""
+        },
+        {
+          "id": "P2-W5-location-relay",
+          "title": "E2E ciphertext location relay (WebSocket)",
+          "status": "todo",
+          "week": 5,
+          "notes": ""
+        },
+        {
+          "id": "P2-W6-signed-alerts",
+          "title": "Signed alerts",
+          "status": "todo",
+          "week": 6,
+          "notes": ""
+        },
+        {
+          "id": "P2-W7-responder-alerts",
+          "title": "Connect responder alerts (via P3 matching)",
+          "status": "todo",
+          "week": 7,
+          "notes": ""
+        },
+        {
+          "id": "P2-W9-load-test-monitoring",
+          "title": "Load test alerts + monitoring",
+          "status": "todo",
+          "week": 9,
+          "notes": ""
+        }
+      ]
+    },
+    "P3": {
+      "owner": "Trust (TBD)",
+      "tasks": [
+        {
+          "id": "P3-W1-vendor-selection",
+          "title": "Pick KYC + liveness vendors, get sandbox access",
+          "status": "todo",
+          "week": 1,
+          "notes": ""
+        },
+        {
+          "id": "P3-W3-tier1-verification",
+          "title": "Tier 1: Aadhaar app/DigiLocker + liveness, delete-after-verify, dedupe hash",
+          "status": "todo",
+          "week": 3,
+          "notes": ""
+        },
+        {
+          "id": "P3-W4-tier2-campus",
+          "title": "Tier 2: college SSO/email + security sign-off",
+          "status": "todo",
+          "week": 4,
+          "notes": ""
+        },
+        {
+          "id": "P3-W5-matching-rules",
+          "title": "Matching: radius, caps, no re-pair 14d, filters",
+          "status": "todo",
+          "week": 5,
+          "notes": ""
+        },
+        {
+          "id": "P3-W7-walk-lifecycle",
+          "title": "Walk lifecycle, handshake, public meeting/drop points",
+          "status": "todo",
+          "week": 7,
+          "notes": ""
+        },
+        {
+          "id": "P3-W8-close-wipe-escrow",
+          "title": "Close + wipe, chat expiry, 2-of-2 escrow, 30-day shred",
+          "status": "todo",
+          "week": 8,
+          "notes": ""
+        },
+        {
+          "id": "P3-W9-complaints-ts-console",
+          "title": "Complaints, suspension, T&S console",
+          "status": "todo",
+          "week": 9,
+          "notes": ""
+        }
+      ]
+    },
+    "P4": {
+      "owner": "Insight (TBD)",
+      "tasks": [
+        {
+          "id": "P4-W0-insight-skeleton",
+          "title": "Insight FastAPI service on separate DB",
+          "status": "done",
+          "week": 0,
+          "notes": "Separate service, insight DB only; RiskLabel enum (no 'safe'); k/m threshold fn; zone-isolation tests. 14 tests pass"
+        },
+        {
+          "id": "P4-W0-dashboard-shell",
+          "title": "Next.js + MapLibre dashboard shell",
+          "status": "done",
+          "week": 0,
+          "notes": "Next.js 15.5.4 + MapLibre 5.9 map page; pnpm 10.18.0 pinned (pnpm 12 corepack broken locally). lint + build pass"
+        },
+        {
+          "id": "P4-W1-report-model-separate-db",
+          "title": "Report data model in insight DB",
+          "status": "todo",
+          "week": 1,
+          "notes": ""
+        },
+        {
+          "id": "P4-W3-report-intake-filters",
+          "title": "Report intake, PII filters, rate limits",
+          "status": "todo",
+          "week": 3,
+          "notes": ""
+        },
+        {
+          "id": "P4-W5-clustering-threshold",
+          "title": "Clustering + k=5/m=3 threshold",
+          "status": "todo",
+          "week": 5,
+          "notes": ""
+        },
+        {
+          "id": "P4-W6-risk-labels",
+          "title": "Three evidence labels, time-of-day aware",
+          "status": "todo",
+          "week": 6,
+          "notes": ""
+        },
+        {
+          "id": "P4-W7-valhalla-safety-costing",
+          "title": "Valhalla + safety costing",
+          "status": "todo",
+          "week": 7,
+          "notes": ""
+        },
+        {
+          "id": "P4-W9-campus-dashboard-before-after",
+          "title": "Campus dashboard: clusters, mark fixed, before/after",
+          "status": "todo",
+          "week": 9,
+          "notes": ""
+        }
+      ]
+    }
+  },
+  "decisions": [
+    {
+      "date": "2026-11-11",
+      "decision": "Code name 'sixthsense' (docs keep 'SafeThread')",
+      "why": "Matches repo and logo"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "4-person lanes P1-P4",
+      "why": "Matches team split doc"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Local-first setup; cloud/Terraform later",
+      "why": "Ship skeleton fast without cloud cost"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "progress.json = source of truth, PROGRESS.md = human log",
+      "why": "Fast for Claude to parse, readable for humans"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Not adopting xtool (xtool-org/xtool)",
+      "why": "Builds SwiftPM-only iOS apps without Xcode; cannot build Flutter apps. Xcode 26.4.1 already installed on the Mac. Revisit only if a Linux/Windows teammate must build a native Swift iOS app"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Android SDK via Android Studio (user installs), not brew CLI tools",
+      "why": "User preference; includes emulator"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "pnpm pinned to 10.18.0 via packageManager",
+      "why": "corepack + pnpm 12 fails with MODULE_NOT_FOUND on this machine"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Python 3.12 pinned for backend/insight (system has 3.14)",
+      "why": "ML deps (hdbscan, torch) lag on newest Python"
+    }
+  ],
+  "blockers": [
+    {
+      "id": "B1",
+      "title": "Flutter + Android Studio install in progress; Xcode first-launch/license needs user sudo",
+      "affects": [
+        "P1-W0-flutter-shell"
+      ]
+    },
+    {
+      "id": "B2",
+      "title": "Legal review (DPDP children, UIDAI registration, liability)",
+      "affects": [
+        "P3-W3-tier1-verification"
+      ]
+    },
+    {
+      "id": "B3",
+      "title": "Campus MoU + security liaison",
+      "affects": [
+        "ALL-W12-pilot-pentest"
+      ]
+    }
+  ],
+  "next_steps": [
+    "User: finish Android Studio setup (SDK Command-line Tools) + run sudo xcodebuild -runFirstLaunch / -license accept",
+    "Then Claude: flutter config --android-sdk, accept licenses, cocoapods, flutter create mobile/, flutter test",
+    "Get user OK to start Docker containers, then alembic upgrade head on both DBs + curl /healthz",
+    "Push setup/foundation and open PR (needs user OK); confirm CI green",
+    "Start ALL-W1-api-contract"
+  ]
+}

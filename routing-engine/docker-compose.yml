@@ -1,0 +1,16 @@
+# Valhalla routing engine (P4). NOT part of the default stack: it is heavy and needs
+# an OSM extract. Start with: docker compose -f routing-engine/docker-compose.yml up -d
+name: sixthsense-routing
+
+services:
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:latest
+    ports: ["8002:8002"]
+    volumes: ["./data:/custom_files"]
+    environment:
+      # Put a campus/city .osm.pbf in routing-engine/data/ (see README).
+      tile_urls: ""
+      serve_tiles: "True"
+      build_elevation: "False"
+      build_admins: "False"
+      build_time_zones: "False"

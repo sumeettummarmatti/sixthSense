@@ -1,0 +1,39 @@
+openapi: 3.1.0
+info:
+  title: SixthSense API
+  version: 0.0.1
+  description: >
+    Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
+    Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
+servers:
+  - url: http://localhost:8000
+    description: Core (local)
+  - url: http://localhost:8001
+    description: Insight (local)
+tags:
+  - {name: auth, description: "OTP, device binding, sessions (P2)"}
+  - {name: verification, description: "Tiers 1-3, liveness, institution, police clearance, vouch (P3)"}
+  - {name: contacts, description: "Trusted contacts add / silent remove / list (P2)"}
+  - {name: journey, description: "Plan, start, heartbeat, check-in, PIN, SOS, arrive (P2)"}
+  - {name: escalation, description: "Acknowledge, status for contacts (P2)"}
+  - {name: walk, description: "Request, accept, confirm, handshake, end, complain (P3)"}
+  - {name: responder, description: "On/off duty, presence (P3)"}
+  - {name: reports, description: "Anonymous submit, published clusters (P4, Insight)"}
+  - {name: routing, description: "Route with caution level (P4)"}
+  - {name: dashboard, description: "Clusters, mark addressed, metrics (P4)"}
+  - {name: realtime, description: "WebSocket: ciphertext relay, alerts, walk updates (P2)"}
+paths:
+  /healthz:
+    get:
+      tags: [ops]
+      summary: Liveness check (both services)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+                  service: {type: string, enum: [core, insight]}

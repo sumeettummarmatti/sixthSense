@@ -1,0 +1,67 @@
+# SixthSense local stack.
+# Core and Insight are SEPARATE Postgres instances with separate credentials (ADR-1):
+# a breach of analytics must reveal no person.
+name: sixthsense
+
+services:
+  core-db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${CORE_DB_USER:-core}
+      POSTGRES_PASSWORD: ${CORE_DB_PASSWORD:-core_dev_password}
+      POSTGRES_DB: ${CORE_DB_NAME:-sixthsense_core}
+    ports: ["${CORE_DB_PORT:-5432}:5432"]
+    volumes: [core-db-data:/var/lib/postgresql/data]
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  insight-db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${INSIGHT_DB_USER:-insight}
+      POSTGRES_PASSWORD: ${INSIGHT_DB_PASSWORD:-insight_dev_password}
+      POSTGRES_DB: ${INSIGHT_DB_NAME:-sixthsense_insight}
+    ports: ["${INSIGHT_DB_PORT:-5433}:5432"]
+    volumes: [insight-db-data:/var/lib/postgresql/data]
+    networks: [insight]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]  # ephemeral by design (presence, timers)
+    ports: ["6379:6379"]
+    networks: [core]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports: ["4222:4222", "8222:8222"]
+    volumes: [nats-data:/data]
+    networks: [core]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+networks:
+  core: {}
+  insight: {}
+
+volumes:
+  core-db-data: {}
+  insight-db-data: {}
+  nats-data: {}
