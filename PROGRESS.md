@@ -19,6 +19,10 @@
 
 ---
 
+## 2026-11-11 — CI paused
+- CI and Dependabot moved to `infra/ci-paused/` at Sumeet's request. Run checks locally (README → Check your setup).
+- Before pausing, CI ran on GitHub: backend, insight and mobile passed; dashboard (pnpm setup), Trivy (bad tag) and Semgrep (18 findings) failed. Fixes are listed in `infra/ci-paused/README.md`.
+
 ## 2026-11-11 — Team handoff
 - Added `CLAUDE.md` (auto-loaded project context for Claude Code), a README team guide with example prompts, and the status table above.
 - README: added "Check your setup" (tool versions, flutter doctor, project checks).

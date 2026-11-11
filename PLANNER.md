@@ -108,7 +108,7 @@ External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · F
 | Insight ML | HDBSCAN / ST-DBSCAN, sentence-transformers (multilingual) | MVP (NLP later) |
 | Dashboard / T&S | **Next.js (TS) + MapLibre** | MVP |
 | Tooling | uv, ruff, pytest · pnpm, eslint · Docker Compose | MVP |
-| CI | GitHub Actions + Semgrep + Trivy + Dependabot | MVP |
+| CI | GitHub Actions + Semgrep + Trivy + Dependabot | **Paused** (`infra/ci-paused/`); local checks for now |
 | Cloud | AWS Mumbai (ECS Fargate, RDS, KMS, S3 Object Lock), Terraform | **Later** (local-first now) |
 | Observability | OpenTelemetry + Grafana/Prometheus + Sentry (PII scrub) | Later |
 | Vendors | KYC aggregator, liveness SDK, DLT-registered CPaaS | Pick in W1–2 (P3/P2) |

@@ -194,9 +194,9 @@
         {
           "id": "P2-W0-ci",
           "title": "GitHub Actions: lint/test, Semgrep, Trivy",
-          "status": "done",
+          "status": "blocked",
           "week": 0,
-          "notes": "ci.yml: backend/insight uv lint+test, dashboard lint+build, mobile (auto-enabled when pubspec exists), Semgrep, Trivy. dependabot.yml. Not yet run on GitHub"
+          "notes": "PAUSED by user (no CI/CD for now). Configs in infra/ci-paused/ with known fixes: pnpm package_json_file, trivy tag v0.33.1, 18 semgrep findings (uv/dependabot cooldown, SHA-pinned actions). backend/insight/mobile jobs passed on GitHub before pausing"
         },
         {
           "id": "P2-W1-otp-device-auth",
@@ -427,6 +427,11 @@
       "date": "2026-11-11",
       "decision": "Commits and PRs show only Sumeet as author; no Claude co-author lines",
       "why": "User request"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "CI/CD and Dependabot paused; run checks locally",
+      "why": "User: no CI/CD hassle for now"
     }
   ],
   "blockers": [
@@ -453,7 +458,7 @@
     }
   ],
   "next_steps": [
-    "Merge PR #1 (setup/foundation -> main) once CI is green",
+    "Merge PR #1 (setup/foundation -> main); no CI checks run while CI is paused",
     "Assign lane owners in progress.json (lanes.P*.owner)",
     "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
     "Sumeet: Android cmdline-tools + sudo xcodebuild -runFirstLaunch, then flutter doctor --android-licenses",
