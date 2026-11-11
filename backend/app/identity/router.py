@@ -206,6 +206,17 @@ class CurrentSession:
     device_id: uuid.UUID
 
 
+def session_from_token(settings: Settings, redis: Redis, token: str) -> CurrentSession | None:
+    """Look up a live access token. Used by the bearer dependency and the relay WebSocket."""
+    if not token:
+        return None
+    value = redis.get(f"at:{security.keyed_hash(settings.token_secret, 'access', token)}")
+    if value is None:
+        return None
+    account_id, device_id = value.decode().split(":")
+    return CurrentSession(uuid.UUID(account_id), uuid.UUID(device_id))
+
+
 def get_current_session(
     settings: SettingsDep,
     redis: RedisDep,
@@ -213,13 +224,10 @@ def get_current_session(
 ) -> CurrentSession:
     """Dependency for protected endpoints (contacts, journeys...): `Authorization: Bearer <t>`."""
     scheme, _, token = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not token:
+    session = session_from_token(settings, redis, token) if scheme.lower() == "bearer" else None
+    if session is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
-    value = redis.get(f"at:{security.keyed_hash(settings.token_secret, 'access', token)}")
-    if value is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
-    account_id, device_id = value.decode().split(":")
-    return CurrentSession(uuid.UUID(account_id), uuid.UUID(device_id))
+    return session
 
 
 CurrentSessionDep = Annotated[CurrentSession, Depends(get_current_session)]
