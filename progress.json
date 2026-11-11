@@ -1,7 +1,7 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-11",
-  "updated_by": "sumeet",
+  "updated_by": "shruj",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
@@ -231,9 +231,9 @@
         {
           "id": "P2-W1-demo-telegram-live",
           "title": "Demo: bot token in .env, real Telegram alert end to end, fix bugs",
-          "status": "todo",
+          "status": "done",
           "week": 1,
-          "notes": "sumeet: assigned to shruj"
+          "notes": "shruj: Real Telegram alerts proven with @Sixtysensebot: SOS alert in 4 s (verification code matched the app); missed check-in alert in 126 s with demo timers, then All clear. Repeatable: backend/scripts/demo_telegram_check.py. Fixed: Telegram connect timeout 20 s + 3 connect retries (slow/reset TLS on our Wi-Fi), resolver no longer gets 'another contact confirmed' all-clear, token/username trimmed, tests use their own DB and never real bot keys. 182 tests pass. Branch p2/demo-telegram-live (merge into demo)."
         },
         {
           "id": "P2-W0-monorepo",
@@ -721,6 +721,18 @@
       "decision": "Phone-number code over Twilio WhatsApp is future scope",
       "why": "Free sandbox works for testing but every number must join first; not needed for the demo",
       "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Only one machine runs the worker with the demo bot token; PUBLIC_BASE_URL must be the server's Wi-Fi IP or tunnel URL during the demo",
+      "why": "Telegram getUpdates hands each message to whichever poller asks first; phones can't open localhost links",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Backend tests run against their own database (<core db>_test) and blank out Telegram/FCM keys",
+      "why": "Leftover dev data made tests flaky; tests must never reach real services",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -758,9 +770,10 @@
     }
   ],
   "next_steps": [
+    "sumeet: merge p2/demo-telegram-live into demo; on the demo laptop set PUBLIC_BASE_URL to the Wi-Fi IP/tunnel, run API with --host 0.0.0.0, run the worker on that laptop only",
+    "shruj: help tanisha with P1-W1-demo-api-wiring (server on shruj's laptop: http://192.168.1.9:8000 on the same Wi-Fi)",
     "sumeet: create Telegram bot with @BotFather, send token + username to shruj (not in git)",
     "sumeet: push demo branch; run docker + backend on laptop; give tanisha the laptop IP (same Wi-Fi) or a free cloudflared tunnel URL",
-    "shruj: put TELEGRAM_BOT_TOKEN/USERNAME in .env, prove a real Telegram alert arrives for SOS and missed check-in",
     "tanisha: on demo branch, connect sign-up (/auth/otp/request, /auth/otp/verify, device key), contacts (invite + Get alerts on Telegram), journey (/journeys, heartbeat, check-in, sos, end)",
     "jival: demo script + slides",
     "after demo: resume 12-week plan (see earlier next steps in PROGRESS.md)"
