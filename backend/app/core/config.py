@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     env: str = "dev"
     core_database_url: str = (
-        "postgresql+psycopg://core:core_dev_password@localhost:5432/sixthsense_core"
+        "postgresql+psycopg://core:core_dev_password@localhost:5434/sixthsense_core"
     )
     redis_url: str = "redis://localhost:6379/0"
     nats_url: str = "nats://localhost:4222"

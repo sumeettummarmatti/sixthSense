@@ -180,16 +180,16 @@
         {
           "id": "P2-W0-local-stack",
           "title": "docker-compose: core PG+PostGIS, insight PG+PostGIS, Redis, NATS",
-          "status": "in_progress",
+          "status": "done",
           "week": 0,
-          "notes": "infra/docker-compose.yml written (2x PostGIS on separate networks, Redis, NATS). Not started yet: waiting for user OK to run containers"
+          "notes": "Verified: 4 services healthy; core-db moved to host port 5434 (5432 clashes with local Postgres); alembic 0001 (PostGIS 3.4.3) applied on both DBs"
         },
         {
           "id": "P2-W0-backend-skeleton",
           "title": "FastAPI modular monolith skeleton + Alembic + PII-scrub logging",
           "status": "done",
           "week": 0,
-          "notes": "FastAPI app factory, 10 module routers, settings, SQLAlchemy, Alembic 0001 postgis, PII-scrub logging. 11 tests pass, ruff clean. Alembic upgrade not run yet (needs DB)"
+          "notes": "FastAPI app factory, 10 module routers, settings, SQLAlchemy, Alembic 0001 postgis, PII-scrub logging. 11 tests pass, ruff clean. Alembic upgrade not run yet (needs DB). alembic.ini needed prepend_sys_path = . (fixed); upgrade head verified; /healthz + /docs return 200"
         },
         {
           "id": "P2-W0-ci",
@@ -318,7 +318,7 @@
           "title": "Insight FastAPI service on separate DB",
           "status": "done",
           "week": 0,
-          "notes": "Separate service, insight DB only; RiskLabel enum (no 'safe'); k/m threshold fn; zone-isolation tests. 14 tests pass"
+          "notes": "Separate service, insight DB only; RiskLabel enum (no 'safe'); k/m threshold fn; zone-isolation tests. 14 tests pass. alembic upgrade head verified on insight-db; /healthz + /docs return 200"
         },
         {
           "id": "P4-W0-dashboard-shell",
@@ -432,6 +432,11 @@
       "date": "2026-11-11",
       "decision": "No CI/CD or Dependabot for now (removed); run checks locally",
       "why": "User: set up later"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Core DB host port 5434 (insight 5433)",
+      "why": "5432 is commonly taken by a local Postgres (it is on Sumeet's Mac)"
     }
   ],
   "blockers": [
@@ -461,7 +466,6 @@
     "Merge PR #1 (setup/foundation -> main); no CI checks run while CI is paused",
     "Assign lane owners in progress.json (lanes.P*.owner)",
     "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
-    "Sumeet: Android cmdline-tools + sudo xcodebuild -runFirstLaunch, then flutter doctor --android-licenses",
-    "Start Docker stack, run alembic upgrade head on both DBs, curl /healthz"
+    "Sumeet: Android cmdline-tools + sudo xcodebuild -runFirstLaunch, then flutter doctor --android-licenses"
   ]
 }

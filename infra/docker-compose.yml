@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${CORE_DB_USER:-core}
       POSTGRES_PASSWORD: ${CORE_DB_PASSWORD:-core_dev_password}
       POSTGRES_DB: ${CORE_DB_NAME:-sixthsense_core}
-    ports: ["${CORE_DB_PORT:-5432}:5432"]
+    ports: ["${CORE_DB_PORT:-5434}:5432"]
     volumes: [core-db-data:/var/lib/postgresql/data]
     networks: [core]
     healthcheck:

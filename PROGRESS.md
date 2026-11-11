@@ -10,7 +10,7 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile | Flutter shell + theme | Finish toolchain (`flutter doctor` green) → `P1-W1-signup-contacts-ui` |
-| P2 Safety Core | Repo, backend skeleton, Docker stack file, CI | Run stack + migrations → `P2-W1-otp-device-auth` |
+| P2 Safety Core | Repo, backend skeleton, local databases running + migrated | `P2-W1-otp-device-auth` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
@@ -21,7 +21,8 @@
 
 ## 2026-11-11 — README setup guide
 - Rewrote README as a step-by-step "set up from scratch" guide (Homebrew → tools → mobile toolchain → clone → deps → databases), plus daily run commands, a check-everything block and a troubleshooting table.
-- Not yet tested end to end: step 6 (Docker databases + `alembic upgrade head`), because the containers haven't been started on Sumeet's Mac.
+- Tested step 6 end to end: all 4 services healthy, migrations applied on both databases, both APIs answer `/healthz` and `/docs`.
+- Fixes found by testing: core database moved to port **5434** (5432 clashes with a local Postgres); `alembic.ini` needed `prepend_sys_path = .`.
 
 ## 2026-11-11 — CI removed
 - Removed the CI workflow and Dependabot at Sumeet's request; CI/CD will be set up later. Run checks locally (README → Check your setup).

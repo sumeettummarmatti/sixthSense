@@ -33,7 +33,7 @@ SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and chil
 | `dashboard/` | Next.js 15 + MapLibre, pnpm 10.18 via corepack | P4 |
 | `routing-engine/` | Valhalla (not started by default) | P4 |
 | `contracts/openapi.yaml` | Shared API contract; change by PR | All |
-| `infra/docker-compose.yml` | core-db :5432, insight-db :5433, redis :6379, nats :4222 | P2 |
+| `infra/docker-compose.yml` | core-db :5434, insight-db :5433, redis :6379, nats :4222 | P2 |
 
 ## Commands
 ```bash

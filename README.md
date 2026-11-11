@@ -124,7 +124,7 @@ docker compose -f infra/docker-compose.yml up -d --wait
 (cd insight && uv run alembic upgrade head)
 ```
 
-This starts four services in the background: the **core database** (user data, port 5432), the **insight database** (anonymous reports only, port 5433), **Redis** (6379) and **NATS** (4222).
+This starts four services in the background: the **core database** (user data, port 5434), the **insight database** (anonymous reports only, port 5433), **Redis** (6379) and **NATS** (4222).
 
 ✅ You should see: `docker compose -f infra/docker-compose.yml ps` lists 4 services, each `healthy`.
 
@@ -180,7 +180,7 @@ The test counts grow as features are added; what matters is that nothing says `f
 |---|---|
 | `command not found: brew` (or `flutter`, `uv`, ...) | Close Terminal and open a new window. If still missing, re-run the two `echo` lines from step 1. |
 | `Cannot connect to the Docker daemon` | Open Docker from Applications and wait until it says it is running. |
-| `port is already allocated` / `address already in use` | Something else uses that port. A local Postgres is common: `brew services stop postgresql@17` (or your version). Or find it with `lsof -i :5432`. |
+| `port is already allocated` / `address already in use` | Something else uses that port. Find what is using it with `lsof -i :<port>`. Our databases use 5434 and 5433 so they do not clash with a local Postgres on 5432. |
 | `corepack pnpm` fails with `Cannot find module ... pnpm.cjs` | Always run pnpm from inside `dashboard/`; it is pinned to `10.18.0` there. Newer pnpm 12 is broken with corepack on some machines. |
 | `flutter doctor`: *cmdline-tools component is missing* | Redo step 3, Android, items 2–3 (SDK Manager → SDK Tools). |
 | `flutter doctor`: *Unable to get list of installed Simulator runtimes* | Run the three `sudo xcodebuild` / `xcodebuild` lines in step 3, iOS. |
