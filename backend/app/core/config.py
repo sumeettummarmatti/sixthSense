@@ -1,6 +1,9 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_SECRET_PREFIX = "dev-only-"  # noqa: S105  (marker, not a secret)
 
 
 class Settings(BaseSettings):
@@ -14,6 +17,33 @@ class Settings(BaseSettings):
     )
     redis_url: str = "redis://localhost:6379/0"
     nats_url: str = "nats://localhost:4222"
+
+    # Sign-in (P2-W1). Accounts are keyed by HMAC(otp_pepper, email); tokens and codes are
+    # stored as HMAC(token_secret, value), so a Redis dump reveals neither.
+    otp_pepper: str = "dev-only-pepper-change-me"
+    token_secret: str = "dev-only-token-secret-change-me"  # noqa: S105  (rejected outside dev)
+    otp_ttl_seconds: int = 600
+    otp_max_attempts: int = 5
+    otp_requests_per_email: int = 3
+    otp_requests_per_ip: int = 10
+    otp_rate_window_seconds: int = 600
+    access_token_ttl_seconds: int = 900
+    device_challenge_ttl_seconds: int = 120
+
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_starttls: bool = False
+    smtp_from: str = "SixthSense <no-reply@sixthsense.local>"
+
+    @model_validator(mode="after")
+    def _no_dev_secrets_outside_dev(self) -> "Settings":
+        if self.env not in ("dev", "test"):
+            for name in ("otp_pepper", "token_secret"):
+                if getattr(self, name).startswith(_DEV_SECRET_PREFIX):
+                    raise ValueError(f"{name.upper()} must be a real secret when ENV={self.env}")
+        return self
 
 
 @lru_cache

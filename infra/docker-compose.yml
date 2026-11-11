@@ -57,6 +57,18 @@ services:
       timeout: 3s
       retries: 20
 
+  mailpit:
+    # Local dev only: catches every email the Core API sends (sign-in codes). Nothing leaves
+    # the machine. SMTP on :1025, web inbox on http://localhost:8025.
+    image: axllent/mailpit:v1.27
+    ports: ["1025:1025", "8025:8025"]
+    networks: [core]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/livez"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 networks:
   core: {}
   insight: {}
