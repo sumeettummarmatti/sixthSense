@@ -302,4 +302,7 @@ def test_dev_secrets_refused_outside_dev() -> None:
         Settings(env="prod")
     with pytest.raises(ValueError, match="DATA_KEY"):
         Settings(env="prod", otp_pepper="real-pepper", token_secret="real-secret")
-    Settings(env="prod", otp_pepper="real-pepper", token_secret="real-secret", data_key="real-key")
+    real = {"otp_pepper": "p", "token_secret": "t", "data_key": "d"}
+    with pytest.raises(ValueError, match="ALERT_SIGNING_KEY"):
+        Settings(env="prod", **real)
+    Settings(env="prod", **real, alert_signing_key="cmVhbC1rZXk=")

@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     ladder_cycle_seconds: int = 300  # then repeat the ladder every 5 minutes
     ladder_max_cycles: int = 12  # for about an hour, or until someone acknowledges
 
+    # Signed alerts (P2-W6): base64 32-byte Ed25519 seed. The previous key stays published
+    # after a rotation so apps holding older alerts can still verify them.
+    alert_signing_key: str = "dev-only-alert-signing-key"
+    alert_signing_key_previous: str = ""
+
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_username: str = ""
@@ -58,7 +63,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _no_dev_secrets_outside_dev(self) -> "Settings":
         if self.env not in ("dev", "test"):
-            for name in ("otp_pepper", "token_secret", "data_key"):
+            for name in ("otp_pepper", "token_secret", "data_key", "alert_signing_key"):
                 if getattr(self, name).startswith(_DEV_SECRET_PREFIX):
                     raise ValueError(f"{name.upper()} must be a real secret when ENV={self.env}")
         return self
