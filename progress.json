@@ -1,0 +1,792 @@
+{
+  "project": "sixthsense",
+  "updated_at": "2026-11-12",
+  "updated_by": "sumeet",
+  "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
+  "platform": "android-first (iOS later: P1-LATER-ios-port)",
+  "team": {
+    "sumeet": "lead + demo server",
+    "tanisha": "P1 Mobile",
+    "shruj": "P2 Safety Core",
+    "jival": "demo script + slides"
+  },
+  "update_rule": "Prefix every notes field, decision ('by') and PROGRESS.md heading with your name: sumeet: / tanisha: / shruj: / jival:",
+  "status_values": [
+    "todo",
+    "in_progress",
+    "blocked",
+    "done"
+  ],
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Setup: monorepo, local stack, skeletons, CI green",
+      "weeks": "0",
+      "status": "in_progress"
+    },
+    {
+      "id": "M1",
+      "title": "Foundation: sign up + add contacts",
+      "weeks": "1-2",
+      "status": "todo"
+    },
+    {
+      "id": "M2",
+      "title": "Journey + escalation: missed check-in reaches contact even offline",
+      "weeks": "3-4",
+      "status": "todo"
+    },
+    {
+      "id": "M3",
+      "title": "Verification + E2E location",
+      "weeks": "5-6",
+      "status": "todo"
+    },
+    {
+      "id": "M4",
+      "title": "Walk With Me end-to-end, nothing left behind",
+      "weeks": "7-8",
+      "status": "todo"
+    },
+    {
+      "id": "M5",
+      "title": "Reports + routing + campus dashboard",
+      "weeks": "9-10",
+      "status": "todo"
+    },
+    {
+      "id": "M6",
+      "title": "Red-team week",
+      "weeks": "11",
+      "status": "todo"
+    },
+    {
+      "id": "M7",
+      "title": "Campus pilot + external pentest",
+      "weeks": "12",
+      "status": "todo"
+    }
+  ],
+  "lanes": {
+    "ALL": {
+      "owner": "team",
+      "tasks": [
+        {
+          "id": "ALL-W1-demo-branch-server",
+          "title": "Demo: Telegram bot, merge into demo branch, run server on laptop, phone reaches it",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "sumeet: demo branch created from p2/signed-alerts (includes all P1 + P2 work) sumeet: 2026-11-12 merged Tanisha's app wiring + Shruj's Telegram demo + real-email option into demo; backend 185 tests, flutter analyze clean, 11 tests pass."
+        },
+        {
+          "id": "ALL-W1-demo-real-email",
+          "title": "Demo: sign-in codes go to real inboxes (team Gmail SMTP) instead of Mailpit",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "sumeet: code ready on p2/demo-real-email (verified TLS, SMTP_SSL option, scripts/send_test_email.py, 3 tests). Waiting for the team Gmail + App password in .env, then one real test email. sumeet: parked for now; demo uses Mailpit until the team Gmail is set up."
+        },
+        {
+          "id": "ALL-W1-demo-script-slides",
+          "title": "Demo: script + slides, rehearse",
+          "status": "todo",
+          "week": 1,
+          "notes": "sumeet: assigned to jival"
+        },
+        {
+          "id": "ALL-W0-planner",
+          "title": "Read docs, write PLANNER.md + progress tracking",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: PLANNER.md, progress.json, PROGRESS.md created"
+        },
+        {
+          "id": "ALL-W1-api-contract",
+          "title": "Agree + write contracts/openapi.yaml",
+          "status": "todo",
+          "week": 1,
+          "notes": ""
+        },
+        {
+          "id": "ALL-W11-red-team",
+          "title": "Red-team week: stalk after walk, fake companion, poison reports, spoof alerts",
+          "status": "todo",
+          "week": 11,
+          "notes": ""
+        },
+        {
+          "id": "ALL-W12-pilot-pentest",
+          "title": "Campus pilot (APK shared directly) + in-house security test (OWASP ZAP, MobSF)",
+          "status": "todo",
+          "week": 12,
+          "notes": ""
+        },
+        {
+          "id": "ALL-W0-colour-system",
+          "title": "Colour palette + Flutter theme + dashboard tokens",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: mobile/lib/core/theme/app_theme.dart, dashboard/src/app/globals.css. Fonts (Urbanist + Atkinson Hyperlegible) not bundled yet: bundle as assets, don't fetch at runtime"
+        },
+        {
+          "id": "ALL-W0-team-handoff",
+          "title": "CLAUDE.md, README team guide, push to GitHub",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: setup/foundation pushed; PR #1 https://github.com/sumeettummarmatti/sixthSense/pull/1"
+        }
+      ]
+    },
+    "P1": {
+      "owner": "tanisha",
+      "tasks": [
+        {
+          "id": "P1-W1-demo-api-wiring",
+          "title": "Demo: connect sign-up (email code + device key), contacts + Get alerts on Telegram, journey, SOS to the server; test on real phone",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "tanisha: sign-in, device key, add-contact invite, Get alerts on Telegram, journey/heartbeat/check-in/SOS/end wired. sumeet (on Tanisha's behalf): added accept invite (paste link -> POST /contacts/invites/accept) in onboarding and on the Plan a journey screen, invite label = owner's email prefix; live-checked against the API. Left: run the full 2-phone demo on real phones."
+        },
+        {
+          "id": "P1-W0-flutter-shell",
+          "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: Flutter 3.47.9; mobile/ shell (core/, features/, Lamplight theme); analyze + test pass. Android first (ios/ kept, not built). flutter doctor Android ✓; emulator Medium_Phone_API_37.0; first debug APK built (~30 min first time: Gradle 9.3.1, NDK 28.2, SDK Platform 36 downloaded) and runs on the emulator. Gradle wrapper download timed out from Java once; fixed by manual download (README troubleshooting). Handed over to tanisha"
+        },
+        {
+          "id": "P1-W0-android-device",
+          "title": "Emulator (Device Manager) + run on a real Android phone via USB debugging",
+          "status": "in_progress",
+          "week": 0,
+          "notes": "tanisha: Built, installed, and launched the app on Medium_Phone_API_37.0 (emulator-5554). Physical Android phone USB-debugging verification is deferred at Tanisha's request."
+        },
+        {
+          "id": "P1-W1-signup-contacts-ui",
+          "title": "Sign-up (email code) + trusted contacts screens",
+          "status": "done",
+          "week": 1,
+          "notes": "tanisha: Phone entry, verification-code and trusted-contact screens implemented as a local UI flow. API/OTP delivery and durable contact sync await the shared contract and P2 endpoints. | sumeet: sign-in switched from phone number to email (free, PLANNER §3b); contacts keep phone numbers for on-device SMS. Test: onboarding_email_test.dart"
+        },
+        {
+          "id": "P1-W3-journey-ui-timers",
+          "title": "Journey screens + on-phone timers",
+          "status": "done",
+          "week": 3,
+          "notes": "tanisha: Journey setup, active countdown, check-in due state, and reset flow implemented. Timer uses device-local time and refreshes on app resume. Android service/alarm integration is tracked in P1-W3-android-foreground-service. Flutter journey screen/PIN restoration after force-stop remains future work."
+        },
+        {
+          "id": "P1-W3-android-foreground-service",
+          "title": "Foreground service + exact alarms for journey timers; battery-optimisation exemption",
+          "status": "done",
+          "week": 3,
+          "notes": "tanisha: Added Android foreground service, ongoing notification, one-shot exact alarms, notification/exact-alarm permission handling, optional battery-optimization exemption, and alarm rescheduling after reboot. Flutter analyze/test and Android emulator build/run pass. Tanisha manually tested the journey timer flow on the emulator and reports it is working well so far. Physical-device checks are deferred at Tanisha's request."
+        },
+        {
+          "id": "P1-W4-sos-duress-pin",
+          "title": "SOS, covert SOS, duress PIN",
+          "status": "done",
+          "week": 4,
+          "notes": "tanisha: Added visible SOS request UI, hidden in-app long-press covert SOS gesture, normal/duress PIN check-in using the same obscured screen, and silent coercion handler after three wrong PINs. Prototype only: no contacts/emergency alerts are sent and PINs are not persisted. Android volume-button/Quick Settings/widget triggers are tracked separately. flutter analyze clean; widget tests pass."
+        },
+        {
+          "id": "P1-W4-android-sos-triggers",
+          "title": "Covert SOS: volume-button pattern, Quick Settings tile, widget",
+          "status": "done",
+          "week": 4,
+          "notes": "tanisha: Added foreground Volume Up → Volume Down → Volume Up pattern, Quick Settings tile, and home-screen widget; each posts a local-only SOS notification. Flutter analyze/test and Android debug APK build pass. Manual trigger steps are documented in mobile/README.md; notification display and launcher/tile interaction remain to be manually checked."
+        },
+        {
+          "id": "P1-W5-sms-fallback-lowbattery",
+          "title": "Offline SMS fallback (SmsManager, auto-send from user's plan) + low-battery mode",
+          "status": "done",
+          "week": 5,
+          "notes": "tanisha: Added opt-in journey-scoped SMS fallback with runtime SMS/location permission, Android Keystore-encrypted recipient, offline SOS/duress/missed-check-in SMS, and a one-time <=10% battery SMS with SMS routing for later alerts. Flutter analyze/test and Android debug APK build pass. Real-carrier SMS and low-battery checks are documented in mobile/README.md and remain unverified without a physical SIM phone. sumeet (on Tanisha's behalf, 2026-11-12, branch p1/demo-offline-fixes): missed check-in now prompts first and texts only 4 min after the deadline (server grace 2 + prompt 2) unless she checks in; after a reboot the service and timer come back and a deadline missed while off still prompts then texts; low-battery SMS is retried if it fails. Compiles; not yet tested on a real phone."
+        },
+        {
+          "id": "P1-W6-e2e-location",
+          "title": "E2E encrypted live location",
+          "status": "in_progress",
+          "week": 6,
+          "notes": "tanisha: Added and tested a versioned per-recipient E2E envelope: X25519 + HKDF-SHA256 + AES-256-GCM + Ed25519 signature, with context binding and replay watermark checks. Flutter analyze/test and Android debug APK build pass. Live GPS publishing and relay integration await P2-W1 device-key provisioning, P2-W2 authenticated contact-key lookup, and P2-W5 ciphertext relay."
+        },
+        {
+          "id": "P1-W7-walk-screens-handshake-chat",
+          "title": "Walk screens, handshake code, masked chat, liveness selfie",
+          "status": "done",
+          "week": 7,
+          "notes": "tanisha: Added traveller/companion Walk With Me preview screens, public meeting point, sample profile, 4-digit handshake code screen, local masked chat with phone-number rejection, companion on-duty toggle, random pose prompt, and camera selfie capture. Android FLAG_SECURE protects the flow; selfie bytes stay in memory and the temporary capture is deleted. Analyze, 7 Flutter tests, and Android debug build pass. This is UI only: real matching, shared handshake, remote chat, and liveness verification await P3 services."
+        },
+        {
+          "id": "P1-W9-map-routes-report-blur",
+          "title": "Map + routes + report screen + on-device location blur",
+          "status": "done",
+          "week": 9,
+          "notes": "tanisha: Added the MapLibre/OpenFreeMap map and route screen, on-demand current-location centering, and an explicit Insufficient data/no route recommendation state pending P4 services. Added category-only report UI and on-device planar-Laplace geo-noise (100 m expected radial offset) plus a two-hour local time bucket; report payload contains only the noisy coordinates, category, and time bucket. No upload occurs until the P4 endpoint exists. Analyze, all 10 tests, Android debug build, git diff check, and plist validation pass; manual map/location checks are documented."
+        },
+        {
+          "id": "P1-LATER-ios-port",
+          "title": "iOS: Swift modules, local-notification check-ins, App Intents SOS, pre-filled SMS (no auto-SMS on iOS)",
+          "status": "todo",
+          "week": "later",
+          "notes": "sumeet: paused; Android first. Needs a Mac; $99 Apple account for real distribution"
+        }
+      ]
+    },
+    "P2": {
+      "owner": "shruj",
+      "tasks": [
+        {
+          "id": "P2-W1-demo-telegram-live",
+          "title": "Demo: bot token in .env, real Telegram alert end to end, fix bugs",
+          "status": "done",
+          "week": 1,
+          "notes": "shruj: Real Telegram alerts proven with @Sixtysensebot: SOS alert in 4 s (verification code matched the app); missed check-in alert in 126 s with demo timers, then All clear. Repeatable: backend/scripts/demo_telegram_check.py. Fixed: Telegram connect timeout 20 s + 3 connect retries (slow/reset TLS on our Wi-Fi), resolver no longer gets 'another contact confirmed' all-clear, token/username trimmed, tests use their own DB and never real bot keys. 182 tests pass. Branch p2/demo-telegram-live (merge into demo)."
+        },
+        {
+          "id": "P2-W0-monorepo",
+          "title": "Monorepo layout, root files, README",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: Root files (.gitignore, .editorconfig, .env.example), README, contracts/ skeleton, routing-engine stub"
+        },
+        {
+          "id": "P2-W0-local-stack",
+          "title": "docker-compose: core PG+PostGIS, insight PG+PostGIS, Redis, NATS",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: Verified: 4 services healthy; core-db moved to host port 5434 (5432 clashes with local Postgres); alembic 0001 (PostGIS 3.4.3) applied on both DBs"
+        },
+        {
+          "id": "P2-W0-backend-skeleton",
+          "title": "FastAPI modular monolith skeleton + Alembic + PII-scrub logging",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: FastAPI app factory, 10 module routers, settings, SQLAlchemy, Alembic 0001 postgis, PII-scrub logging. 11 tests pass, ruff clean. Alembic upgrade not run yet (needs DB). alembic.ini needed prepend_sys_path = . (fixed); upgrade head verified; /healthz + /docs return 200"
+        },
+        {
+          "id": "P2-W0-ci",
+          "title": "GitHub Actions: lint/test, Semgrep, Trivy",
+          "status": "todo",
+          "week": "later",
+          "notes": "sumeet: Removed at user's request; set up later. Run checks locally until then"
+        },
+        {
+          "id": "P2-W1-otp-device-auth",
+          "title": "Email OTP (college email) + device-bound keys",
+          "status": "done",
+          "week": 1,
+          "notes": "shruj: Email-code sign-in + device-bound keys in backend/app/identity. POST /auth/otp/request (6-digit code, only its HMAC in Redis, 10-min TTL, 3/email + 10/IP per 10 min, always 202), POST /auth/otp/verify (5 attempts, constant-time, single use; creates Tier 0 account keyed by HMAC(OTP_PEPPER, email) and registers the EC P-256 Keystore key), POST /auth/device/challenge + /auth/device/verify (SHA256withECDSA over 'sixthsense-device-auth-v1|device_id|nonce'). 15-min opaque access tokens in Redis; get_current_session dependency for protected endpoints. Migration 0002 (core DB only): accounts, devices, append-only audit_events (DB trigger blocks UPDATE/DELETE). Mailpit added to docker-compose (inbox :8025); real sending via SMTP settings in .env. contracts/openapi.yaml has the 4 endpoints. 34 tests pass, ruff clean; live run against real Redis + Mailpit OK. Not done yet: device revoke endpoint, proxy-aware client IP for rate limits (needed once behind a load balancer)."
+        },
+        {
+          "id": "P2-W2-trusted-contacts",
+          "title": "Trusted contacts add/list/silent remove",
+          "status": "done",
+          "week": 2,
+          "notes": "shruj: New contacts module (backend/app/contacts). Invite-link flow: POST /contacts/invites (one-time link, token after '#', 48 h, max 5 contacts incl. pending, 10 invites/h), POST /contacts/invites/accept (contact signs in and accepts; idempotent, no self-invite), GET /contacts (owner's own links only, no contact details), DELETE /contacts/{id} (silent: row deleted, nothing sent), GET /contacts/{id}/keys (accepted contact's device E2E keys, owner only). PUT /auth/device/e2e-keys uploads X25519 + Ed25519 public keys for the P1-W6 envelope. Server never stores contact phone numbers or names. Migration 0003 (core DB). contracts/openapi.yaml updated. 66 tests pass, ruff clean; live run OK. Needs Tanisha: invite share sheet + deep link, local name/number mapped to contact_link_id, E2E key upload after sign-in. Branch p2/trusted-contacts (stacked on p2/email-otp-device-keys)."
+        },
+        {
+          "id": "P2-W3-journey-state-machine",
+          "title": "Journey state machine + protocol config",
+          "status": "done",
+          "week": 3,
+          "notes": "shruj: backend/app/journey: pure state machine (state.py: active -> check_in_due -> private_prompt -> contact_alert -> full_escalation -> resolved, heartbeat loss, SOS, duress) + protocol settings + 9 endpoints (GET/PUT /journeys/protocol, POST /journeys, GET /journeys/current, POST /journeys/{id}/heartbeat|check-in|prompt|sos|arrive|end). Phone runs timers and checks the PIN; server mirrors as watchdog and applies due timer steps on every read/event. Duress PIN and covert SOS escalate but the phone keeps seeing 'active' (and 'resolved' after arrive/end). Real PIN never cancels a full escalation. No location/destination stored; journeys purged 7 days after ending. service.run_watchdog + purge_expired ready for W4 to schedule. Migration 0004 (core DB). 112 tests pass, ruff clean; live run OK. Branch p2/journey-state-machine."
+        },
+        {
+          "id": "P2-W4-watchdog-alert-ladder",
+          "title": "Heartbeat watchdog + FCM push → Telegram bot → email ladder, idempotent",
+          "status": "done",
+          "week": 4,
+          "notes": "shruj: Arq worker (uv run arq app.worker.WorkerSettings) ticks every 5 s: journey watchdog, open/close escalations, send due alerts, all-clears, Telegram linking; nightly purge (journeys 7 d, escalations 90 d). Escalation = one open row per (journey, level); all accepted contacts (or the protocol's chosen ones) alerted in parallel; each walks FCM push -> Telegram -> email one minute apart, skipping channels not set up, repeating every 5 min for ~1 h until someone acknowledges. Contact endpoints: GET /escalations/active, POST /escalations/{id}/ack | resolve | raise, POST /escalations/ack (link, no sign-in) + tap-to-confirm page. Ack pauses the auto-upgrade of a missed check-in; raise = can't reach them. Channel setup: /notifications/push-token, /notifications/telegram/link (getUpdates polling, no public URL needed), /notifications/email (must equal own sign-in email). FCM token, Telegram chat id and email encrypted with DATA_KEY. Covert alarms say 'do NOT call their phone'. No location in alerts. Server can't dial 112 (phone does). Migration 0005. 149 tests pass, ruff clean; live worker run: SOS email in <1 s via Mailpit, ack by link, resolve. Real FCM/Telegram need FCM_PROJECT_ID + FCM_SERVICE_ACCOUNT_FILE and TELEGRAM_BOT_TOKEN + TELEGRAM_BOT_USERNAME in .env (not yet created). Branch p2/watchdog-alert-ladder."
+        },
+        {
+          "id": "P2-W5-location-relay",
+          "title": "E2E ciphertext location relay (WebSocket)",
+          "status": "done",
+          "week": 5,
+          "notes": "shruj: WebSocket /relay/ws (backend/app/relay). Auth by first frame (token never in URL/logs), re-checked on every frame, close 4401 on expiry. Traveller sends Tanisha's LiveLocationEnvelope JSON unchanged; server reads only session_id / sender_key_id / recipient_key_id: session must be her open journey (incl. silent alarm), sender key must be the device's current E2E key, each recipient key must belong to an accepted contact on the journey's alert list. Envelopes forwarded with the sender's Ed25519 key; offline recipients dropped, nothing queued or stored (ADR-3). Limits: 1-10 envelopes/frame, 10 frames/5 s, 2 KB per field. In-process hub (single API process for the pilot). 172 tests pass, ruff clean; live run: delivered in 22 ms, no token in access log. Branch p2/location-relay."
+        },
+        {
+          "id": "P2-W6-signed-alerts",
+          "title": "Signed alerts",
+          "status": "done",
+          "week": 6,
+          "notes": "shruj: Push alerts carry the alert as canonical JSON (alert), an Ed25519 signature (sig) and key id (kid); app verifies with the public key from GET /notifications/signing-keys (no sign-in; bundle it in the app). Telegram/email alerts carry a per-contact verification code (e.g. 7KQ2-9M4D) that GET /escalations/active also shows; mismatch = fake. ALERT_SIGNING_KEY (base64 32-byte seed, refused outside dev if default) with ALERT_SIGNING_KEY_PREVIOUS for rotation. Not covered: the phone's own offline SMS (contacts may not have the app). 178 tests pass, ruff clean; live: email code matched the app. Branch p2/signed-alerts."
+        },
+        {
+          "id": "P2-W7-responder-alerts",
+          "title": "Connect responder alerts (via P3 matching)",
+          "status": "todo",
+          "week": 7,
+          "notes": ""
+        },
+        {
+          "id": "P2-W9-load-test-monitoring",
+          "title": "Load test alerts + monitoring",
+          "status": "todo",
+          "week": 9,
+          "notes": ""
+        },
+        {
+          "id": "P2-LATER-whatsapp-phone-otp",
+          "title": "Future: phone-number code over Twilio WhatsApp as 2nd sign-up check (store only a keyed hash of the number)",
+          "status": "todo",
+          "week": "later",
+          "notes": "sumeet: future scope; Twilio sandbox needs each number to send join code first"
+        },
+        {
+          "id": "P2-LATER-fcm-push",
+          "title": "Future: Firebase push alerts (code exists; needs Firebase project)",
+          "status": "todo",
+          "week": "later",
+          "notes": "sumeet: skipped for demo"
+        }
+      ]
+    },
+    "P3": {
+      "owner": "Trust (TBD)",
+      "tasks": [
+        {
+          "id": "P3-W1-vendor-selection",
+          "title": "Free verification design: college email + security sign-off, ML Kit face check",
+          "status": "todo",
+          "week": 1,
+          "notes": "sumeet: no paid KYC/liveness vendors (₹0 budget)"
+        },
+        {
+          "id": "P3-W3-tier1-verification",
+          "title": "Tier 1: Aadhaar app/DigiLocker + liveness, delete-after-verify, dedupe hash",
+          "status": "blocked",
+          "week": 3,
+          "notes": "sumeet: deferred; Aadhaar/DigiLocker KYC needs paid vendor/registration. Pilot uses Tier 2 only"
+        },
+        {
+          "id": "P3-W4-tier2-campus",
+          "title": "Tier 2: college SSO/email + security sign-off",
+          "status": "todo",
+          "week": 4,
+          "notes": ""
+        },
+        {
+          "id": "P3-W5-matching-rules",
+          "title": "Matching: radius, caps, no re-pair 14d, filters",
+          "status": "todo",
+          "week": 5,
+          "notes": ""
+        },
+        {
+          "id": "P3-W7-walk-lifecycle",
+          "title": "Walk lifecycle, handshake, public meeting/drop points",
+          "status": "todo",
+          "week": 7,
+          "notes": ""
+        },
+        {
+          "id": "P3-W8-close-wipe-escrow",
+          "title": "Close + wipe, chat expiry, 2-of-2 escrow, 30-day shred",
+          "status": "todo",
+          "week": 8,
+          "notes": ""
+        },
+        {
+          "id": "P3-W9-complaints-ts-console",
+          "title": "Complaints, suspension, T&S console",
+          "status": "todo",
+          "week": 9,
+          "notes": ""
+        }
+      ]
+    },
+    "P4": {
+      "owner": "Insight (TBD)",
+      "tasks": [
+        {
+          "id": "P4-W0-insight-skeleton",
+          "title": "Insight FastAPI service on separate DB",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: Separate service, insight DB only; RiskLabel enum (no 'safe'); k/m threshold fn; zone-isolation tests. 14 tests pass. alembic upgrade head verified on insight-db; /healthz + /docs return 200"
+        },
+        {
+          "id": "P4-W0-dashboard-shell",
+          "title": "Next.js + MapLibre dashboard shell",
+          "status": "done",
+          "week": 0,
+          "notes": "sumeet: Next.js 15.5.4 + MapLibre 5.9 map page; pnpm 10.18.0 pinned (pnpm 12 corepack broken locally). lint + build pass"
+        },
+        {
+          "id": "P4-W1-report-model-separate-db",
+          "title": "Report data model in insight DB",
+          "status": "todo",
+          "week": 1,
+          "notes": ""
+        },
+        {
+          "id": "P4-W3-report-intake-filters",
+          "title": "Report intake, PII filters, rate limits",
+          "status": "todo",
+          "week": 3,
+          "notes": ""
+        },
+        {
+          "id": "P4-W5-clustering-threshold",
+          "title": "Clustering + k=5/m=3 threshold",
+          "status": "todo",
+          "week": 5,
+          "notes": ""
+        },
+        {
+          "id": "P4-W6-risk-labels",
+          "title": "Three evidence labels, time-of-day aware",
+          "status": "todo",
+          "week": 6,
+          "notes": ""
+        },
+        {
+          "id": "P4-W7-valhalla-safety-costing",
+          "title": "Valhalla + safety costing",
+          "status": "todo",
+          "week": 7,
+          "notes": ""
+        },
+        {
+          "id": "P4-W9-campus-dashboard-before-after",
+          "title": "Campus dashboard: clusters, mark fixed, before/after",
+          "status": "todo",
+          "week": 9,
+          "notes": ""
+        }
+      ]
+    }
+  },
+  "decisions": [
+    {
+      "date": "2026-11-11",
+      "decision": "Code name 'sixthsense' (docs keep 'SafeThread')",
+      "why": "Matches repo and logo",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "4-person lanes P1-P4",
+      "why": "Matches team split doc",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Local-first setup; cloud/Terraform later",
+      "why": "Ship skeleton fast without cloud cost",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "progress.json = source of truth, PROGRESS.md = human log",
+      "why": "Fast for Claude to parse, readable for humans",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Not adopting xtool (xtool-org/xtool)",
+      "why": "Builds SwiftPM-only iOS apps without Xcode; cannot build Flutter apps. Xcode 26.4.1 already installed on the Mac. Revisit only if a Linux/Windows teammate must build a native Swift iOS app",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Android SDK via Android Studio (user installs), not brew CLI tools",
+      "why": "User preference; includes emulator",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "pnpm pinned to 10.18.0 via packageManager",
+      "why": "corepack + pnpm 12 fails with MODULE_NOT_FOUND on this machine",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Python 3.12 pinned for backend/insight (system has 3.14)",
+      "why": "ML deps (hdbscan, torch) lag on newest Python",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Flutter uses Android Studio SDK at ~/Library/Android/sdk (brew android-commandlinetools is unused)",
+      "why": "User installed Android Studio",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Colour system 'Lamplight Lavender' sampled from logo; no green anywhere; red only for SOS/strong evidence; night mode after sunset",
+      "why": "Soothing, matches brand; green implies 'safe' (rule 5). Preview https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Commits and PRs show only Sumeet as author; no Claude co-author lines",
+      "why": "User request",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "No CI/CD or Dependabot for now (removed); run checks locally",
+      "why": "User: set up later",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Core DB host port 5434 (insight 5433)",
+      "why": "5432 is commonly taken by a local Postgres (it is on Sumeet's Mac)",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Build iOS only for now; Android later (P1-LATER-android-port). mobile/android/ kept, not built",
+      "why": "Team priority. iOS limits handled per PLANNER §3a",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "iOS offline fallback = server watchdog SMS + pre-filled SMS/one-tap 112 on the phone; covert SOS via App Intents",
+      "why": "iOS forbids silent SMS and hardware-button access",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Every progress update is name-prefixed (sumeet:/tanisha:/shruj:/jival:)",
+      "why": "Tell who did what across 4 people",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Tanisha owns P1 Mobile",
+      "why": "Team assignment",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Zero budget: free substitutes for everything paid (free Apple ID signing, Telegram bot + email alerts, email OTP, Tier-2 campus verification only, Apple Vision face check, OpenFreeMap, Oracle Always Free hosting, in-house pentest)",
+      "why": "Team has no budget",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Switch to Android first; iOS later (P1-LATER-ios-port). Replaces the earlier iOS-only decision",
+      "why": "Free to ship to unlimited testers (APK), auto SMS + FCM + FLAG_SECURE possible, matches India's low-end Android user base",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Sign-in uses an email code (college email on campus), not phone/SMS; trusted contacts keep phone numbers for on-device SMS",
+      "why": "Email is free; SMS OTP costs money (₹0 budget)",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Shruj owns P2 Safety Core; starts on branch p2/otp-device-auth",
+      "why": "Team assignment",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Access tokens are opaque random tokens stored hashed in Redis (15 min), renewed by the device challenge; no JWT",
+      "why": "Instantly revocable, no new dependency; the device key is the long-lived credential",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Accounts keyed by HMAC-SHA256(OTP_PEPPER, lowercased trimmed email); no plaintext email stored. Codes, nonces, tokens and IPs only appear in Redis as HMAC(TOKEN_SECRET, ...)",
+      "why": "Rule 2: never store what we don't need. Changing OTP_PEPPER orphans all accounts, so set it once per environment",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Mailpit catches sign-in emails locally; real sending is plain SMTP from .env (e.g. Gmail app password)",
+      "why": "₹0 budget: no paid email/OTP service",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "audit_events table in the core DB is append-only, enforced by a DB trigger; rows hold internal IDs only",
+      "why": "Rule 7 until WORM object storage exists (no S3 Object Lock on the free plan)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Contacts are added by a one-time invite link the owner shares from their own phone; the server links two accounts only when the contact signs in and accepts. Contact phone numbers and names stay on the owner's phone (for offline SMS)",
+      "why": "Rule 2 (store nothing we don't need) and ₹0 (no server SMS). Server-sent invites would leak who protects whom to a third party",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Contacts get no list of the people they watch over; they only receive alerts (W4)",
+      "why": "Rule 4, and it keeps removal truly silent",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Devices publish separate X25519 + Ed25519 public keys (PUT /auth/device/e2e-keys) for E2E location; the P-256 Keystore key is for sign-in only",
+      "why": "Tanisha's P1-W6 envelope uses X25519 + Ed25519, which the Android Keystore P-256 key can't provide",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Journey PIN is checked on the phone; the server only receives check-in result 'ok' or 'duress' and returns identical responses",
+      "why": "PINs never leave the phone; a coercer watching the screen sees nothing different (HLD §4 Journey)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Covert escalations (duress PIN, covert SOS) are shown to the phone as 'active', and as 'resolved' after arrive/end, while the real state stays full_escalation",
+      "why": "Refusing 'arrive' during a duress alarm would reveal it to whoever holds the phone",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "A real PIN never cancels a full escalation; only contacts/responders resolve it (W4)",
+      "why": "A coercer could force the real PIN after a duress PIN",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Journeys copy the protocol timers at start; the phone must send heartbeats at least every heartbeat_timeout_min / 2 (default timeout 10 min)",
+      "why": "Mid-journey settings edits can't move deadlines; server watchdog needs a liveness signal (no location)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Alert ladder: all contacts in parallel; each gets FCM push -> Telegram -> email one minute apart (skipping channels not set up), repeated every 5 min for ~1 h; first acknowledgement stops it for everyone",
+      "why": "Free channels only (₹0); never wait on one channel; parallel escalation (HLD F3)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "A contact's acknowledgement pauses the automatic contact_alert -> full_escalation upgrade; the contact then resolves ('safe') or raises the alarm",
+      "why": "HLD upgrades on 'danger / no answer'; an ack is an answer, and repeated urgent alerts after someone is handling it cause confusion",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Contacts opt in to alert email only with their own sign-in email (HMAC match); FCM tokens, Telegram chat ids and alert emails are stored encrypted with DATA_KEY",
+      "why": "Email channel needs a deliverable address; matching the sign-in email stops alerts being pointed at someone else's inbox",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Telegram via getUpdates polling in the worker, not a webhook",
+      "why": "Works on a laptop or free VM with no public HTTPS URL",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Silent-alarm (covert) alerts tell contacts not to call the person's phone; alerts never include location",
+      "why": "A call could tip off a coercer; live location is E2E only (rule 2, ADR-3)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Relay WebSocket authenticates with the first frame, not a URL query/header, and re-checks the token on every frame",
+      "why": "Tokens in URLs end up in access logs; re-checking lets revoked/expired sessions stop receiving immediately",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Relay keeps connections in one in-process hub and drops envelopes for offline recipients",
+      "why": "Pilot runs one API process; nothing may be queued or stored (ADR-3). Multiple API processes will need Redis pub/sub (also unpersisted)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Location keeps relaying during a silent alarm even after the phone was shown 'resolved'",
+      "why": "Contacts need her location most during a coerced situation; the app must keep sending covertly",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Push alerts are Ed25519-signed (canonical JSON + sig + kid); Telegram/email alerts carry a per-contact verification code that the app shows on the same alert",
+      "why": "Apps can verify signatures automatically; people can't, but they can compare a short code against the app. Per-contact codes mean one leaked code can't fake another contact's alerts",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "The phone's offline SMS is not signed",
+      "why": "Contacts may not have the app to verify; revisit if all contacts install it",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "2-day demo is the priority; 12-week plan paused",
+      "why": "Need a working end-to-end demo in 2 days",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Demo: sign-up by email code only; alerts to contacts by Telegram bot only; no app lock; no Firebase push",
+      "why": "Already built and free; least work for 2 days",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Phone-number code over Twilio WhatsApp is future scope",
+      "why": "Free sandbox works for testing but every number must join first; not needed for the demo",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Only one machine runs the worker with the demo bot token; PUBLIC_BASE_URL must be the server's Wi-Fi IP or tunnel URL during the demo",
+      "why": "Telegram getUpdates hands each message to whichever poller asks first; phones can't open localhost links",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Backend tests run against their own database (<core db>_test) and blank out Telegram/FCM keys",
+      "why": "Leftover dev data made tests flaky; tests must never reach real services",
+      "by": "shruj"
+    }
+  ],
+  "blockers": [
+    {
+      "id": "B2",
+      "title": "Legal review (DPDP children, UIDAI registration, liability)",
+      "affects": [
+        "P3-W3-tier1-verification"
+      ],
+      "by": "sumeet"
+    },
+    {
+      "id": "B3",
+      "title": "Campus MoU + security liaison",
+      "affects": [
+        "ALL-W12-pilot-pentest"
+      ],
+      "by": "sumeet"
+    },
+    {
+      "id": "B4",
+      "title": "Battery savers on Xiaomi/Oppo/Vivo/Realme/Samsung can kill journey timers; need a test phone from one of these",
+      "affects": [
+        "P1-W3-android-foreground-service"
+      ],
+      "by": "sumeet"
+    },
+    {
+      "id": "B5",
+      "title": "Demo needs a Telegram bot token from @BotFather (Firebase push is future scope)",
+      "affects": [
+        "P2-W1-demo-telegram-live"
+      ],
+      "by": "sumeet"
+    }
+  ],
+  "next_steps": [
+    "sumeet/tanisha: full 2-phone run: owner signs up + adds contact -> contact signs up, pastes invite link, taps Get alerts on Telegram -> owner starts journey + SOS -> Telegram alert arrives (API + worker on one laptop)",
+    "tanisha/sumeet: on a real phone with a SIM, test p1/demo-offline-fixes: airplane mode + missed check-in (SMS ~4 min after due), reboot mid-journey, low battery",
+    "sumeet: create team Gmail App password, put it in .env, run: cd backend && uv run python scripts/send_test_email.py <your email>",
+    "sumeet: merge p2/demo-telegram-live into demo; on the demo laptop set PUBLIC_BASE_URL to the Wi-Fi IP/tunnel, run API with --host 0.0.0.0, run the worker on that laptop only",
+    "shruj: help tanisha with P1-W1-demo-api-wiring (server on shruj's laptop: http://192.168.1.9:8000 on the same Wi-Fi)",
+    "sumeet: create Telegram bot with @BotFather, send token + username to shruj (not in git)",
+    "sumeet: push demo branch; run docker + backend on laptop; give tanisha the laptop IP (same Wi-Fi) or a free cloudflared tunnel URL",
+    "tanisha: on demo branch, connect sign-up (/auth/otp/request, /auth/otp/verify, device key), contacts (invite + Get alerts on Telegram), journey (/journeys, heartbeat, check-in, sos, end)",
+    "jival: demo script + slides",
+    "after demo: resume 12-week plan (see earlier next steps in PROGRESS.md)"
+  ],
+  "budget": "zero: free tools/services only (PLANNER §3b)"
+}

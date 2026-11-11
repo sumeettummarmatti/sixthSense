@@ -1,0 +1,1027 @@
+openapi: 3.1.0
+info:
+  title: SixthSense API
+  version: 0.6.0
+  description: >
+    Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
+    Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
+servers:
+  - url: http://localhost:8000
+    description: Core (local)
+  - url: http://localhost:8001
+    description: Insight (local)
+tags:
+  - {name: auth, description: "OTP, device binding, sessions (P2)"}
+  - {name: verification, description: "Tiers 1-3, liveness, institution, police clearance, vouch (P3)"}
+  - {name: contacts, description: "Trusted contacts add / silent remove / list (P2)"}
+  - {name: journey, description: "Plan, start, heartbeat, check-in, PIN, SOS, arrive (P2)"}
+  - {name: escalation, description: "Acknowledge, status for contacts (P2)"}
+  - {name: walk, description: "Request, accept, confirm, handshake, end, complain (P3)"}
+  - {name: responder, description: "On/off duty, presence (P3)"}
+  - {name: reports, description: "Anonymous submit, published clusters (P4, Insight)"}
+  - {name: routing, description: "Route with caution level (P4)"}
+  - {name: dashboard, description: "Clusters, mark addressed, metrics (P4)"}
+  - {name: realtime, description: "WebSocket: ciphertext relay, alerts, walk updates (P2)"}
+paths:
+  /healthz:
+    get:
+      tags: [ops]
+      summary: Liveness check (both services)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+                  service: {type: string, enum: [core, insight]}
+  /auth/otp/request:
+    post:
+      tags: [auth]
+      summary: Email a 6-digit sign-in code
+      description: >
+        Sign-in and sign-up are the same flow. Always returns 202 {"status":"sent"} for any valid
+        address, whether or not an account exists. The code expires in 10 minutes and works once;
+        a new request replaces the previous code. Limits: 3 requests per email and 10 per IP
+        per 10 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/OtpRequest"}
+            example: {email: priya@college.edu}
+      responses:
+        "202":
+          description: Code sent (same response for every address)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OtpRequestAccepted"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+        "429":
+          description: "Rate limited (detail: rate_limited). Retry-After header in seconds."
+          headers:
+            Retry-After: {schema: {type: integer, example: 600}}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+              example: {detail: rate_limited}
+  /auth/otp/verify:
+    post:
+      tags: [auth]
+      summary: Check the emailed code and bind this phone's Keystore key
+      description: >
+        Max 5 attempts per code, then it locks (429) until a new code is requested. On success the
+        account is created if new (Tier 0, no ID needed) and this device's EC P-256 public key is
+        registered. Keep `device_id`: later sign-ins use /auth/device/* instead of email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/OtpVerify"}
+            example:
+              email: priya@college.edu
+              code: "042917"
+              device_public_key: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Session"}
+        "400":
+          description: "Wrong, expired or already-used code (detail: invalid_or_expired_code)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "403":
+          description: "Account suspended (detail: account_suspended)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "This device key is registered to another account or revoked (detail: device_key_in_use)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "422":
+          description: "Bad input, or device key is not EC P-256 (detail: invalid_device_key). The code is not used up."
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "429":
+          description: "Too many wrong attempts (detail: too_many_attempts). Request a new code."
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /auth/device/challenge:
+    post:
+      tags: [auth]
+      summary: Get a single-use nonce for the phone to sign
+      description: Valid for 120 seconds. Issued for any device_id (no probing for valid IDs).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DeviceChallengeRequest"}
+      responses:
+        "200":
+          description: Nonce to sign
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DeviceChallenge"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+  /auth/device/verify:
+    post:
+      tags: [auth]
+      summary: Sign in with the Keystore key (no email code)
+      description: >
+        Sign the UTF-8 bytes of `sixthsense-device-auth-v1|<device_id>|<nonce>` with the device's
+        Keystore key using SHA256withECDSA, and send the DER signature base64-encoded. The nonce
+        works once. Use this whenever the access token expires (every 15 minutes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DeviceVerify"}
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Session"}
+        "401":
+          description: "Bad/expired/used nonce, wrong signature, revoked device or suspended account (detail: device_auth_failed)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+  /auth/device/e2e-keys:
+    put:
+      tags: [auth]
+      summary: Publish this device's E2E location keys
+      description: >
+        Upload the raw 32-byte X25519 (key agreement) and Ed25519 (signing) public keys used by the
+        live-location envelope (P1-W6). These are separate from the P-256 sign-in key. Uploading
+        again replaces them and returns a new key_id. Call after every sign-in on a new install.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/E2EKeysUpload"}
+      responses:
+        "200":
+          description: Keys stored
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/E2EKeys"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "422":
+          description: "Not base64, not 32 bytes, or an all-zero X25519 key (detail: invalid_e2e_key)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts/invites:
+    post:
+      tags: [contacts]
+      summary: Create a one-time invite link to share from the phone
+      description: >
+        The owner shares `invite_url` with the phone's share sheet (WhatsApp, SMS...). The server
+        never sees the contact's name or phone number: keep those on the phone, mapped to
+        `contact_link_id`. The token is after '#', so it is never sent to a web server. Expires in
+        48 h. Max 5 contacts (accepted + pending) and 10 invites per hour.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/InviteCreate"}
+            example: {owner_label: Priya}
+      responses:
+        "201":
+          description: Invite created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Invite"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "409":
+          description: "Already 5 contacts/pending invites (detail: contact_limit_reached)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+        "429":
+          description: "Too many invites this hour (detail: rate_limited)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts/invites/accept:
+    post:
+      tags: [contacts]
+      summary: Accept an invite (called by the contact, signed in)
+      description: Accepting the same invite again returns 200 and changes nothing.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/InviteAccept"}
+      responses:
+        "200":
+          description: You are now this person's trusted contact
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/InviteAccepted"}
+        "400":
+          description: "Your own invite (detail: cannot_add_self)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Unknown, expired, cancelled or already used by someone else (detail: invite_invalid)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts:
+    get:
+      tags: [contacts]
+      summary: List my trusted contacts (pending and accepted)
+      description: >
+        Only the owner's own links. Contacts get an empty list for people they watch over
+        (rule 4: nothing outside an active journey or alert). No contact details are returned.
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: My contacts
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ContactList"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /contacts/{link_id}:
+    delete:
+      tags: [contacts]
+      summary: Remove a contact or cancel a pending invite (silent)
+      description: The contact is never told. Their access ends immediately.
+      security: [{bearer: []}]
+      parameters:
+        - {name: link_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "204": {description: Removed}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not one of my contacts (detail: contact_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts/{link_id}/keys:
+    get:
+      tags: [contacts]
+      summary: E2E public keys of an accepted contact's devices
+      description: Use these to encrypt live location to each of the contact's devices (P1-W6).
+      security: [{bearer: []}]
+      parameters:
+        - {name: link_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: One entry per active device that uploaded keys (can be empty)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ContactKeys"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my contact, or not accepted yet (detail: contact_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/protocol:
+    get:
+      tags: [journey]
+      summary: My journey settings (defaults if never set)
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProtocolSettings"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+    put:
+      tags: [journey]
+      summary: Save my journey settings
+      description: >
+        Applies to journeys started afterwards; a running journey keeps the timers it started with.
+        The phone must run the same timers locally (ADR-2).
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProtocolSettings"}
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProtocolSettings"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "422":
+          description: "Out-of-range timer, or alert_contact_ids has an id that is not an accepted contact of mine (detail: unknown_contact)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys:
+    post:
+      tags: [journey]
+      summary: Start a journey
+      description: >
+        Copies the current protocol. No destination or location is sent: those stay on the phone.
+        One open journey at a time.
+      security: [{bearer: []}]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/JourneyStart"}
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "409":
+          description: "A journey is already open (detail: journey_already_open)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/current:
+    get:
+      tags: [journey]
+      summary: My open journey, with any timer steps the server has applied
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: Open journey
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "No open journey (detail: no_open_journey)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/heartbeat:
+    post:
+      tags: [journey]
+      summary: Still here (no location)
+      description: >
+        Send at least every heartbeat_timeout_min / 2 minutes while the journey is open, or the server alerts contacts.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/check-in:
+    post:
+      tags: [journey]
+      summary: Report a PIN check-in (real or duress)
+      description: >
+        The PIN is checked on the phone and never sent. 'ok' and 'duress' get exactly the same response; duress silently starts a full escalation and the journey keeps looking normal to the phone.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CheckIn"}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/prompt:
+    post:
+      tags: [journey]
+      summary: The phone missed a check-in and is showing the private PIN prompt
+      description: >
+        Moves the journey to private_prompt and restarts the prompt window (prompt_timeout_min).
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/sos:
+    post:
+      tags: [journey]
+      summary: SOS
+      description: >
+        Full escalation now. With covert=true the phone keeps being shown a normal journey.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/Sos"}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/arrive:
+    post:
+      tags: [journey]
+      summary: Arrived
+      description: >
+        Ends the journey (outcome arrived). Not allowed while contacts are being alerted. After a duress PIN or covert SOS it shows 'resolved' but the escalation continues.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/end:
+    post:
+      tags: [journey]
+      summary: End the journey early
+      description: >
+        Same as arrive, with outcome ended.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /notifications/signing-keys:
+    get:
+      tags: [notification]
+      summary: Public keys that sign push alerts (no sign-in)
+      description: |
+        Push alerts carry FCM data fields: `alert` (canonical JSON: sorted keys, no spaces, UTF-8),
+        `sig` (base64 Ed25519 signature over the exact `alert` string bytes) and `kid` (key id).
+        The app verifies `sig` with the key whose key_id = kid, then trusts the JSON:
+        {v, type: "alert", escalation_id, level, covert, owner_label, opened_at, issued_at, code}.
+        Bundle the current key in the app and refresh from here; after a rotation the previous key
+        stays listed. Telegram/email alerts carry `code`, which GET /escalations/active also shows
+        as verification_code: if they differ, the message is fake.
+      responses:
+        "200":
+          description: Current key first, then the previous one after a rotation
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SigningKeys"}
+  /notifications/channels:
+    get:
+      tags: [notification]
+      summary: Which alert channels I have set up (as a contact)
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChannelStatus"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /notifications/push-token:
+    put:
+      tags: [notification]
+      summary: Save this device's FCM token (send after sign-in and on FCM token refresh)
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PushToken"}
+      responses:
+        "204": {description: Saved (encrypted)}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+    delete:
+      tags: [notification]
+      summary: Stop push alerts on this device
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Removed}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /notifications/telegram/link:
+    post:
+      tags: [notification]
+      summary: Get a one-time t.me link to receive alerts on Telegram
+      description: Open it and press Start in Telegram. Valid 10 minutes.
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TelegramLink"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "409":
+          description: "No Telegram bot configured on the server (detail: telegram_not_configured)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /notifications/telegram:
+    delete:
+      tags: [notification]
+      summary: Stop Telegram alerts
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Unlinked}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /notifications/email:
+    put:
+      tags: [notification]
+      summary: Opt in to alert emails (must be your own sign-in email)
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AlertEmail"}
+      responses:
+        "204": {description: Saved (encrypted)}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "422":
+          description: "Not your sign-in email (detail: email_must_match_sign_in)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+    delete:
+      tags: [notification]
+      summary: Stop alert emails
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Removed}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escalations/active:
+    get:
+      tags: [escalation]
+      summary: Alerts I'm a recipient of that are still open (as a contact)
+      description: Nothing is visible once an alert closes (rule 4). The owner never sees this list.
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ActiveEscalations"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escalations/{escalation_id}/ack:
+    post:
+      tags: [escalation]
+      summary: I'm on it
+      description: >
+        Stops further alerts to every contact. For a missed check-in it also pauses the automatic
+        upgrade to a full escalation: resolve it or raise the alarm next.
+      security: [{bearer: []}]
+      parameters:
+        - {name: escalation_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Acknowledged"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not open or not a recipient (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /escalations/{escalation_id}/resolve:
+    post:
+      tags: [escalation]
+      summary: They're safe
+      description: >
+        A missed check-in goes back to a normal journey; a full escalation (including a silent
+        alarm) ends the journey. Other alerted contacts get an all-clear.
+      security: [{bearer: []}]
+      parameters:
+        - {name: escalation_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Resolved"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not open or not a recipient (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Nothing to resolve (detail: nothing_to_resolve)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /escalations/{escalation_id}/raise:
+    post:
+      tags: [escalation]
+      summary: I can't reach them, raise the alarm
+      description: Turns a missed check-in into a full escalation; every contact gets an urgent alert.
+      security: [{bearer: []}]
+      parameters:
+        - {name: escalation_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Raised"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not open or not a recipient (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Nothing to raise (detail: nothing_to_raise)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /escalations/ack:
+    post:
+      tags: [escalation]
+      summary: I'm on it, from the link in a Telegram message or email (no sign-in)
+      description: >
+        The link is PUBLIC_BASE_URL/escalations/ack#<token>; a small page there posts the token
+        here when the contact taps the button. The token never reaches server logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/LinkAck"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Acknowledged"}
+        "404":
+          description: "Unknown token or alert already closed (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /relay/ws:
+    get:
+      tags: [realtime]
+      summary: "WebSocket: end-to-end encrypted live location (ciphertext only, nothing stored)"
+      description: |
+        Open a WebSocket (ws:// locally, wss:// in the pilot). JSON text frames.
+
+        1. First frame, within 10 s: {"type": "auth", "access_token": "<token>"} -> {"type": "ready"}.
+           Never put the token in the URL. When the token expires the server sends
+           {"type": "error", "detail": "token_expired"} and closes with code 4401; reconnect with a
+           fresh token (POST /auth/device/challenge + /auth/device/verify). Bad auth also closes 4401.
+        2. Traveller sends, during an open journey (including a silent alarm):
+           {"type": "location", "envelopes": [<LiveLocationEnvelope.toJson()>, ...]}, one envelope
+           per recipient device (keys from GET /contacts/{link_id}/keys), 1-10 per frame, at most
+           10 frames per 5 s. session_id must be the journey id; sender_key_id must be this device's
+           current key_id from PUT /auth/device/e2e-keys.
+           Reply: {"type": "sent", "delivered": n, "offline": n, "not_allowed": n}. Offline means the
+           contact wasn't connected and the envelope was dropped (never queued or stored).
+           Errors: bad_envelopes, bad_envelope, unsupported_version, mixed_sessions, no_open_journey,
+           stale_sender_key (re-fetch your key_id), rate_limited.
+        3. Contact receives (only during that traveller's open journey or alert, and only if on the
+           alert list): {"type": "location", "envelope": {...unchanged...},
+           "sender": {"key_id": "<uuid>", "ed25519_public_key": "<base64>"}}. Verify with
+           LiveLocationCipher.decrypt using the sender block as the verification key.
+        4. Either side: {"type": "ping"} -> {"type": "pong"}. Send a ping every ~30 s to keep the
+           connection alive and notice an expired token early.
+      responses:
+        "101": {description: Switching protocols to WebSocket}
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: "Access token from /auth/otp/verify or /auth/device/verify. Send as Authorization: Bearer <token>."
+  responses:
+    ValidationError:
+      description: Request body failed validation
+    NotAuthenticated:
+      description: "Missing, expired or unknown access token (detail: not_authenticated)"
+  schemas:
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail: {type: string}
+    OtpRequest:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+    OtpRequestAccepted:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [sent]}
+    OtpVerify:
+      type: object
+      required: [email, code, device_public_key]
+      properties:
+        email: {type: string, format: email}
+        code: {type: string, pattern: "^\\d{6}$", description: 6 digits, keep leading zeros}
+        device_public_key:
+          type: string
+          maxLength: 512
+          description: >
+            Base64 (standard, with padding) X.509 SubjectPublicKeyInfo DER of an EC P-256 key
+            generated in the Android Keystore (`keyStore.getCertificate(alias).publicKey.encoded`).
+    DeviceChallengeRequest:
+      type: object
+      required: [device_id]
+      properties:
+        device_id: {type: string, format: uuid}
+    DeviceChallenge:
+      type: object
+      required: [nonce, expires_in]
+      properties:
+        nonce: {type: string}
+        expires_in: {type: integer, example: 120}
+    DeviceVerify:
+      type: object
+      required: [device_id, nonce, signature]
+      properties:
+        device_id: {type: string, format: uuid}
+        nonce: {type: string, maxLength: 128}
+        signature:
+          type: string
+          maxLength: 256
+          description: "Base64 DER ECDSA signature (SHA256withECDSA) over sixthsense-device-auth-v1|<device_id>|<nonce>"
+    Session:
+      type: object
+      required: [access_token, token_type, expires_in, account_id, device_id]
+      properties:
+        access_token: {type: string}
+        token_type: {type: string, enum: [bearer]}
+        expires_in: {type: integer, example: 900, description: seconds}
+        account_id: {type: string, format: uuid}
+        device_id: {type: string, format: uuid, description: Store this on the phone}
+    E2EKeysUpload:
+      type: object
+      required: [x25519_public_key, ed25519_public_key]
+      properties:
+        x25519_public_key: {type: string, maxLength: 64, description: Base64 raw 32-byte X25519 public key}
+        ed25519_public_key: {type: string, maxLength: 64, description: Base64 raw 32-byte Ed25519 public key}
+    E2EKeys:
+      type: object
+      required: [key_id, x25519_public_key, ed25519_public_key]
+      properties:
+        key_id: {type: string, format: uuid}
+        x25519_public_key: {type: string}
+        ed25519_public_key: {type: string}
+    InviteCreate:
+      type: object
+      required: [owner_label]
+      properties:
+        owner_label: {type: string, minLength: 1, maxLength: 40, description: "How the contact sees you in alerts, e.g. Priya"}
+    Invite:
+      type: object
+      required: [contact_link_id, invite_token, invite_url, expires_at]
+      properties:
+        contact_link_id: {type: string, format: uuid, description: Store on the phone next to the contact's name and number}
+        invite_token: {type: string}
+        invite_url: {type: string, example: "https://sixthsense.app/invite#<token>"}
+        expires_at: {type: string, format: date-time}
+    InviteAccept:
+      type: object
+      required: [invite_token]
+      properties:
+        invite_token: {type: string, maxLength: 128, description: The part of the link after '#'}
+    InviteAccepted:
+      type: object
+      required: [owner_label]
+      properties:
+        owner_label: {type: string}
+    ContactLink:
+      type: object
+      required: [id, status, created_at, accepted_at, invite_expires_at]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [pending, accepted]}
+        created_at: {type: string, format: date-time}
+        accepted_at: {type: [string, "null"], format: date-time}
+        invite_expires_at: {type: [string, "null"], format: date-time, description: Only for pending invites}
+    ContactList:
+      type: object
+      required: [contacts]
+      properties:
+        contacts: {type: array, items: {$ref: "#/components/schemas/ContactLink"}}
+    ContactKey:
+      type: object
+      required: [key_id, x25519_public_key, ed25519_public_key]
+      properties:
+        key_id: {type: string, format: uuid}
+        x25519_public_key: {type: string}
+        ed25519_public_key: {type: string}
+    ContactKeys:
+      type: object
+      required: [contact_link_id, keys]
+      properties:
+        contact_link_id: {type: string, format: uuid}
+        keys: {type: array, items: {$ref: "#/components/schemas/ContactKey"}}
+    ProtocolSettings:
+      type: object
+      properties:
+        check_in_interval_min: {type: integer, minimum: 1, maximum: 240, default: 15}
+        check_in_grace_min: {type: integer, minimum: 0, maximum: 30, default: 2, description: "T1: check-in due -> private prompt"}
+        prompt_timeout_min: {type: integer, minimum: 1, maximum: 30, default: 2, description: "T2: private prompt -> contacts alerted"}
+        contact_response_min: {type: integer, minimum: 1, maximum: 60, default: 5, description: "Contacts alerted -> full escalation"}
+        heartbeat_timeout_min: {type: integer, minimum: 2, maximum: 120, default: 10, description: "Silent phone -> contacts alerted"}
+        auto_112: {type: boolean, default: false}
+        alert_contact_ids:
+          type: [array, "null"]
+          maxItems: 5
+          items: {type: string, format: uuid}
+          description: Trusted contact link ids to alert; null = all accepted contacts
+    JourneyStart:
+      type: object
+      properties:
+        check_in_interval_min: {type: [integer, "null"], minimum: 1, maximum: 240, description: Override for this journey}
+    CheckIn:
+      type: object
+      required: [result]
+      properties:
+        result: {type: string, enum: [ok, duress], description: Which PIN the phone accepted}
+    Sos:
+      type: object
+      properties:
+        covert: {type: boolean, default: false}
+    JourneyView:
+      type: object
+      required: [id, state, outcome, started_at, next_check_in_at, timers]
+      properties:
+        id: {type: string, format: uuid}
+        state:
+          type: string
+          enum: [active, check_in_due, private_prompt, contact_alert, full_escalation, resolved]
+          description: A covert escalation is shown as active (or resolved after arrive/end)
+        outcome: {type: [string, "null"], enum: [arrived, ended, resolved_by_contact, null]}
+        started_at: {type: string, format: date-time}
+        next_check_in_at: {type: string, format: date-time}
+        timers: {$ref: "#/components/schemas/ProtocolSettings"}
+    ChannelStatus:
+      type: object
+      required: [push, telegram, email, push_available, telegram_available]
+      properties:
+        push: {type: boolean, description: This device has sent its FCM token}
+        telegram: {type: boolean}
+        email: {type: boolean}
+        push_available: {type: boolean, description: Server has FCM configured}
+        telegram_available: {type: boolean, description: Server has a Telegram bot configured}
+    PushToken:
+      type: object
+      required: [fcm_token]
+      properties:
+        fcm_token: {type: string, maxLength: 4096}
+    TelegramLink:
+      type: object
+      required: [url, expires_in]
+      properties:
+        url: {type: string, example: "https://t.me/sixthsense_bot?start=<token>"}
+        expires_in: {type: integer, example: 600}
+    AlertEmail:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+    ActiveEscalation:
+      type: object
+      required: [id, owner_label, level, covert, opened_at, acknowledged, verification_code]
+      properties:
+        id: {type: string, format: uuid}
+        owner_label: {type: string}
+        level: {type: string, enum: [contact_alert, full_escalation]}
+        covert: {type: boolean, description: "Silent alarm: do NOT call their phone"}
+        opened_at: {type: string, format: date-time}
+        acknowledged: {type: boolean}
+        verification_code: {type: string, example: 7KQ2-9M4D, description: "Same code as in the Telegram/email alert; if they differ, that message is fake"}
+    ActiveEscalations:
+      type: object
+      required: [escalations]
+      properties:
+        escalations: {type: array, items: {$ref: "#/components/schemas/ActiveEscalation"}}
+    LinkAck:
+      type: object
+      required: [token]
+      properties:
+        token: {type: string, maxLength: 128}
+    Acknowledged:
+      type: object
+      required: [owner_label, acknowledged]
+      properties:
+        owner_label: {type: string}
+        acknowledged: {type: boolean}
+    Resolved:
+      type: object
+      required: [journey_state]
+      properties:
+        journey_state: {type: string, enum: [active, resolved]}
+    Raised:
+      type: object
+      required: [journey_state]
+      properties:
+        journey_state: {type: string, enum: [full_escalation]}
+    SigningKey:
+      type: object
+      required: [key_id, alg, ed25519_public_key]
+      properties:
+        key_id: {type: string}
+        alg: {type: string, enum: [Ed25519]}
+        ed25519_public_key: {type: string, description: Base64 raw 32-byte public key}
+    SigningKeys:
+      type: object
+      required: [keys]
+      properties:
+        keys: {type: array, items: {$ref: "#/components/schemas/SigningKey"}}

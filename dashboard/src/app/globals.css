@@ -1,0 +1,49 @@
+/* "Lamplight Lavender": colours sampled from the SixthSense logo.
+   Preview: https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz
+   Red is only for "Strong evidence of concern"; there is no green ("safe") anywhere. */
+:root {
+  --background: #f7f0fd; /* Mist */
+  --foreground: #2e2658; /* Ink */
+  --panel: #fdf9fa; /* Lamp */
+  --border: #dcd1f6; /* Haze */
+  --glow: #ebddfa; /* Glow */
+  --muted: #6e6790; /* Muted */
+  --accent: #7c55c6; /* Lavender */
+  --accent-strong: #4c3892; /* Deep violet */
+
+  --evidence-strong: #c8364b;
+  --evidence-some: #c08a2e;
+  --evidence-insufficient: #9a95b2;
+  --addressed: #2f7d78;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #17132b; /* Night */
+    --foreground: #eee8fa; /* Moonlight */
+    --panel: #211c3a;
+    --border: #332c54;
+    --glow: #2a2347;
+    --muted: #a9a2c6;
+    --accent: #a98bea;
+    --accent-strong: #c4adf2;
+
+    --evidence-strong: #e0566a;
+    --evidence-some: #d9a24a;
+    --evidence-insufficient: #a9a2c6;
+    --addressed: #5db3ac;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
