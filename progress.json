@@ -147,6 +147,13 @@
           "notes": "tanisha: sign-in, device key, add-contact invite, Get alerts on Telegram, journey/heartbeat/check-in/SOS/end wired. sumeet (on Tanisha's behalf): added accept invite (paste link -> POST /contacts/invites/accept) in onboarding and on the Plan a journey screen, invite label = owner's email prefix; live-checked against the API. Left: run the full 2-phone demo on real phones."
         },
         {
+          "id": "P1-W1-demo-contact-alert-screen",
+          "title": "Demo: contact's alert screen (open alerts, verification code, I'm on it / they're OK / raise alarm) + home banner",
+          "status": "done",
+          "week": 1,
+          "notes": "sumeet (on Tanisha's behalf): GET /escalations/active polled every 5-10 s; red only for full alerts; silent alarm says don't call; live-checked SOS -> contact sees it -> ack -> resolve -> gone."
+        },
+        {
           "id": "P1-W0-flutter-shell",
           "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
           "status": "done",
@@ -740,6 +747,12 @@
       "decision": "Backend tests run against their own database (<core db>_test) and blank out Telegram/FCM keys",
       "why": "Leftover dev data made tests flaky; tests must never reach real services",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-12",
+      "decision": "main holds the demo build (PR #2 merged: all P1 + P2 work); team branches off main from now on",
+      "why": "One branch for everyone before the demo",
+      "by": "sumeet"
     }
   ],
   "blockers": [
@@ -777,6 +790,7 @@
     }
   ],
   "next_steps": [
+    "sumeet: merge p1/contact-alert-screen into main (PR) before the 2-phone run",
     "sumeet/tanisha: full 2-phone run: owner signs up + adds contact -> contact signs up, pastes invite link, taps Get alerts on Telegram -> owner starts journey + SOS -> Telegram alert arrives (API + worker on one laptop)",
     "tanisha/sumeet: on a real phone with a SIM, test p1/demo-offline-fixes: airplane mode + missed check-in (SMS ~4 min after due), reboot mid-journey, low battery",
     "sumeet: create team Gmail App password, put it in .env, run: cd backend && uv run python scripts/send_test_email.py <your email>",

@@ -7,6 +7,7 @@ import '../../core/api/device_identity.dart';
 import '../../core/journey/journey_runtime.dart';
 import '../../core/theme/app_theme.dart';
 import '../contacts/contact_alerts.dart';
+import '../contacts/contact_alerts_screen.dart';
 import '../walk/walk_flow.dart';
 import '../map/map_route_screen.dart';
 
@@ -532,6 +533,15 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
             icon: const Icon(Icons.link_rounded),
           ),
           IconButton(
+            tooltip: 'People you support',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ContactAlertsScreen(api: widget.api),
+              ),
+            ),
+            icon: const Icon(Icons.volunteer_activism_outlined),
+          ),
+          IconButton(
             tooltip: 'Get alerts on Telegram',
             onPressed: () => linkTelegramFlow(context, widget.api),
             icon: const Icon(Icons.notifications_active_outlined),
@@ -545,6 +555,7 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               children: [
+                ContactAlertBanner(api: widget.api),
                 Text(
                   'A little check-in goes a long way.',
                   style: text.headlineMedium,
