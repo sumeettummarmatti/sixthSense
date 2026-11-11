@@ -98,9 +98,9 @@
         {
           "id": "P1-W0-flutter-shell",
           "title": "Install Flutter, create app shell (features/, core/)",
-          "status": "blocked",
+          "status": "in_progress",
           "week": 0,
-          "notes": "brew install flutter running; user installing Android Studio. Then: sdk config, licenses, cocoapods, flutter create"
+          "notes": "Flutter 3.47.9 + CocoaPods 1.17 installed; mobile/ created (in.sixthsense.sixthsense_app, android+ios), core/ + features/ folders, themed shell; analyze + test pass. Remaining: Android cmdline-tools (Studio SDK Manager), Xcode runFirstLaunch/license (user sudo in Terminal), android licenses, flutter doctor green"
         },
         {
           "id": "P1-W1-signup-contacts-ui",
@@ -398,12 +398,17 @@
       "date": "2026-11-11",
       "decision": "Python 3.12 pinned for backend/insight (system has 3.14)",
       "why": "ML deps (hdbscan, torch) lag on newest Python"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Flutter uses Android Studio SDK at ~/Library/Android/sdk (brew android-commandlinetools is unused)",
+      "why": "User installed Android Studio"
     }
   ],
   "blockers": [
     {
       "id": "B1",
-      "title": "Flutter + Android Studio install in progress; Xcode first-launch/license needs user sudo",
+      "title": "flutter doctor: Android cmdline-tools missing; Xcode simulator runtimes need sudo xcodebuild -runFirstLaunch (user, in Terminal.app)",
       "affects": [
         "P1-W0-flutter-shell"
       ]
@@ -424,8 +429,8 @@
     }
   ],
   "next_steps": [
-    "User: finish Android Studio setup (SDK Command-line Tools) + run sudo xcodebuild -runFirstLaunch / -license accept",
-    "Then Claude: flutter config --android-sdk, accept licenses, cocoapods, flutter create mobile/, flutter test",
+    "User: Android Studio SDK Manager -> SDK Command-line Tools; Terminal.app: sudo xcodebuild -runFirstLaunch && sudo xcodebuild -license accept; then flutter doctor --android-licenses",
+    "Claude: re-run flutter doctor until green, mark P1-W0-flutter-shell done",
     "Get user OK to start Docker containers, then alembic upgrade head on both DBs + curl /healthz",
     "Push setup/foundation and open PR (needs user OK); confirm CI green",
     "Start ALL-W1-api-contract"
