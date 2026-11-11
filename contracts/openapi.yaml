@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SixthSense API
-  version: 0.5.0
+  version: 0.6.0
   description: >
     Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
     Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
@@ -540,6 +540,24 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
+  /notifications/signing-keys:
+    get:
+      tags: [notification]
+      summary: Public keys that sign push alerts (no sign-in)
+      description: |
+        Push alerts carry FCM data fields: `alert` (canonical JSON: sorted keys, no spaces, UTF-8),
+        `sig` (base64 Ed25519 signature over the exact `alert` string bytes) and `kid` (key id).
+        The app verifies `sig` with the key whose key_id = kid, then trusts the JSON:
+        {v, type: "alert", escalation_id, level, covert, owner_label, opened_at, issued_at, code}.
+        Bundle the current key in the app and refresh from here; after a rotation the previous key
+        stays listed. Telegram/email alerts carry `code`, which GET /escalations/active also shows
+        as verification_code: if they differ, the message is fake.
+      responses:
+        "200":
+          description: Current key first, then the previous one after a rotation
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SigningKeys"}
   /notifications/channels:
     get:
       tags: [notification]
@@ -960,7 +978,7 @@ components:
         email: {type: string, format: email}
     ActiveEscalation:
       type: object
-      required: [id, owner_label, level, covert, opened_at, acknowledged]
+      required: [id, owner_label, level, covert, opened_at, acknowledged, verification_code]
       properties:
         id: {type: string, format: uuid}
         owner_label: {type: string}
@@ -968,6 +986,7 @@ components:
         covert: {type: boolean, description: "Silent alarm: do NOT call their phone"}
         opened_at: {type: string, format: date-time}
         acknowledged: {type: boolean}
+        verification_code: {type: string, example: 7KQ2-9M4D, description: "Same code as in the Telegram/email alert; if they differ, that message is fake"}
     ActiveEscalations:
       type: object
       required: [escalations]
@@ -994,3 +1013,15 @@ components:
       required: [journey_state]
       properties:
         journey_state: {type: string, enum: [full_escalation]}
+    SigningKey:
+      type: object
+      required: [key_id, alg, ed25519_public_key]
+      properties:
+        key_id: {type: string}
+        alg: {type: string, enum: [Ed25519]}
+        ed25519_public_key: {type: string, description: Base64 raw 32-byte public key}
+    SigningKeys:
+      type: object
+      required: [keys]
+      properties:
+        keys: {type: array, items: {$ref: "#/components/schemas/SigningKey"}}
