@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_starttls: bool = False
+    # Implicit TLS from the first byte (port 465). Use either this or STARTTLS (587), not both.
+    smtp_ssl: bool = False
     smtp_from: str = "SixthSense <no-reply@sixthsense.local>"
 
     @model_validator(mode="after")

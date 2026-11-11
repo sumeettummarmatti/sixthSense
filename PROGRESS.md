@@ -12,13 +12,35 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
-| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`); **encrypted location relay** (`P2-W5`); **signed alerts** (`P2-W6`) | Firebase + Telegram keys; `P2-W7-responder-alerts` needs P3 matching |
+| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`); **encrypted location relay** (`P2-W5`); **signed alerts** (`P2-W6`); **demo: real Telegram alerts proven** (`P2-W1-demo-telegram-live`) | Help Tanisha wire the app (`P1-W1-demo-api-wiring`); merge `p2/demo-telegram-live` into `demo` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
+
+## 2026-11-11 — sumeet: Real email for sign-in codes (branch p2/demo-real-email)
+- sumeet: New branch `p2/demo-real-email` on top of Shruj's `p2/demo-telegram-live`. Goal: sign-in codes reach real inboxes for the demo, not Mailpit.
+- sumeet: Shruj's mailer already spoke plain SMTP. Added: **verified TLS** (smtplib's default skips certificate checks), an `SMTP_SSL` option for port 465, and `backend/scripts/send_test_email.py <address>`, which sends one test email and explains common errors.
+- sumeet: `.env.example` now has a step-by-step Gmail App password block. Mailpit stays the default for development, so Tanisha and Shruj need no change.
+- sumeet: Note: Shruj's `scripts/demo_telegram_check.py` reads codes from Mailpit, so start the API with `SMTP_HOST=localhost SMTP_PORT=1025 SMTP_STARTTLS=false` when running it.
+- sumeet: Checks: ruff clean, 185 tests pass (3 new mailer tests: verified STARTTLS, implicit SSL, failure logs only the error type).
+- sumeet: Next: put the team Gmail + App password in `.env` and send one real test email.
+
+## 2026-11-11 — shruj: Real Telegram alerts work (demo)
+- shruj: `P2-W1-demo-telegram-live` **done.** With Sumeet's bot (`@Sixtysensebot`) in my `.env` (not in git), a real Telegram alert reached a contact's phone for **both** demo cases:
+  - **SOS:** "URGENT: Priya may need help now" arrived 4 s after the SOS, with a verification code that matched the app.
+  - **Missed check-in:** "Priya missed a safety check-in" arrived 126 s after starting a journey with demo timers (1-min check-in, no grace, 1-min prompt), then "All clear" when she checked in.
+- shruj: Repeatable check for rehearsals: `cd backend && uv run python scripts/demo_telegram_check.py` (API + worker running). It prints a Telegram link; press Start and it runs both cases.
+- shruj: **Fixed (found while testing):**
+  - On our Wi-Fi, opening a connection to Telegram takes ~8 s and sometimes gets reset. The Telegram sender now waits up to 20 s to connect and retries 3 times. It only retries when connecting fails, so nobody gets the same alert twice.
+  - The contact who taps "They're safe" was also sent "All clear: another trusted contact confirmed…". Now only the other contacts get it.
+  - Stray spaces in the token, or an `@` in the bot username in `.env`, no longer break things.
+  - Tests now use their own database (`sixthsense_core_test`, made automatically) and never use real Telegram/Firebase keys from `.env`. Old test data in the dev database was making tests fail.
+- shruj: **For the demo (Sumeet):** only ONE laptop may run the worker with the bot token, or the two steal each other's Telegram messages and "Start" links fail. Set `PUBLIC_BASE_URL` to the laptop's Wi-Fi IP (e.g. `http://192.168.1.9:8000`) or the tunnel URL, or the "I'm on it" links in alerts won't open on phones. Start the API with `--host 0.0.0.0` so phones on the Wi-Fi can reach it. Use short demo timers via `PUT /journeys/protocol` for the missed check-in.
+- shruj: Checks: ruff clean, 182 tests pass. Branch `p2/demo-telegram-live` (from `demo`); merge it into `demo`.
+- **Next:** help Tanisha when her app calls fail (`P1-W1-demo-api-wiring`).
 
 ## 2026-11-11 — sumeet: 2-day demo plan
 - sumeet: **New priority: a working demo in 2 days.** The 12-week plan is paused. Plan is in `PLANNER.md` §0.

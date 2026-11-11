@@ -1,5 +1,6 @@
 import logging
 import smtplib
+import ssl
 from email.message import EmailMessage
 from functools import lru_cache
 
@@ -28,10 +29,18 @@ class SmtpMailer:
         message["To"] = to
         message["Subject"] = subject
         message.set_content(body)
+        # Verified TLS: smtplib's default context skips certificate checks.
+        tls = ssl.create_default_context()
         try:
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-                if settings.smtp_starttls:
-                    smtp.starttls()
+            if settings.smtp_ssl:
+                connection = smtplib.SMTP_SSL(
+                    settings.smtp_host, settings.smtp_port, timeout=10, context=tls
+                )
+            else:
+                connection = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10)
+            with connection as smtp:
+                if settings.smtp_starttls and not settings.smtp_ssl:
+                    smtp.starttls(context=tls)
                 if settings.smtp_username:
                     smtp.login(settings.smtp_username, settings.smtp_password)
                 smtp.send_message(message)

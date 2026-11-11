@@ -79,7 +79,8 @@ def telegram_link(
     session: CurrentSessionDep, settings: SettingsDep, redis: RedisDep, senders: SendersDep
 ) -> schemas.TelegramLink:
     """A one-time t.me link. Opening it and pressing Start links that chat to this account."""
-    if not senders.telegram.configured() or not settings.telegram_bot_username:
+    bot_username = settings.telegram_bot_username.strip().lstrip("@")
+    if not senders.telegram.configured() or not bot_username:
         raise HTTPException(status.HTTP_409_CONFLICT, "telegram_not_configured")
     token = security.new_token()
     redis.set(
@@ -88,7 +89,7 @@ def telegram_link(
         ex=TELEGRAM_LINK_TTL,
     )
     return schemas.TelegramLink(
-        url=f"https://t.me/{settings.telegram_bot_username}?start={token}",
+        url=f"https://t.me/{bot_username}?start={token}",
         expires_in=TELEGRAM_LINK_TTL,
     )
 

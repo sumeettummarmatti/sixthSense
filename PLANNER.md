@@ -15,7 +15,7 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 
 | In the demo | How | Status |
 |---|---|---|
-| Sign-up | Email code (`/auth/otp/*`), then silent device-key sign-in | Server done; app not connected yet |
+| Sign-up | Email code (`/auth/otp/*`) sent to a **real inbox** via a team Gmail (free SMTP), then silent device-key sign-in | Server done; Gmail setup `ALL-W1-demo-real-email`; app not connected yet |
 | Alerts to contacts | **Telegram bot only** (free) | Server code done; needs bot token |
 | Offline | Phone sends SMS itself (SmsManager) | Done in app |
 | Server | Runs on Sumeet's laptop; phone on same Wi-Fi, or a free Cloudflare tunnel | To do |
@@ -25,6 +25,7 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 
 | Who | Task ID | Job |
 |---|---|---|
+| sumeet | `ALL-W1-demo-real-email` | Team Gmail App password in `.env`; `scripts/send_test_email.py` proves real codes arrive |
 | sumeet | `ALL-W1-demo-branch-server` | Create Telegram bot (@BotFather), merge into `demo`, run server on laptop, phone reaches it |
 | shruj | `P2-W1-demo-telegram-live` | Put bot token in `.env`, prove a real Telegram alert arrives end to end, fix bugs |
 | tanisha | `P1-W1-demo-api-wiring` | Connect sign-up, contacts (+ "Get alerts on Telegram"), journey and SOS to the server; test on a real phone |

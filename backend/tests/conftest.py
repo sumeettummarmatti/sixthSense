@@ -1,17 +1,53 @@
-"""Shared fixtures. Identity tests need the local core-db running (README step 6);
-Redis is faked in memory and emails are captured instead of sent."""
+"""Shared fixtures. Tests need the local core-db running (README step 6) but use their own
+database, `<core db>_test`, created and migrated here, so data from manual runs in the dev
+database can never leak into a test. Redis is faked in memory and emails are captured."""
 
+import os
 from collections.abc import Iterator
 
-import fakeredis
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
+from sqlalchemy.engine import make_url
 
-from app.core.db import engine, get_db
-from app.core.redis import get_redis
-from app.identity.mailer import get_mailer
-from app.main import app
+from app.core.config import Settings
+
+_dev_url = make_url(Settings().core_database_url)
+_test_url = _dev_url.set(database=f"{_dev_url.database}_test")
+os.environ["CORE_DATABASE_URL"] = _test_url.render_as_string(hide_password=False)
+# Tests never talk to real Telegram/Firebase, whatever a developer's .env holds.
+for _name in (
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_BOT_USERNAME",
+    "FCM_PROJECT_ID",
+    "FCM_SERVICE_ACCOUNT_FILE",
+):
+    os.environ[_name] = ""
+
+
+def _create_and_migrate_test_db() -> None:
+    import psycopg
+    from alembic import command
+    from alembic.config import Config
+
+    admin = _dev_url.set(drivername="postgresql", database="postgres")
+    with psycopg.connect(admin.render_as_string(hide_password=False), autocommit=True) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", (_test_url.database,)
+        ).fetchone()
+        if not exists:
+            conn.execute(f'CREATE DATABASE "{_test_url.database}"')
+    command.upgrade(Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini")), "head")
+
+
+_create_and_migrate_test_db()
+
+import fakeredis  # noqa: E402
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from app.core.db import engine, get_db  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
+from app.identity.mailer import get_mailer  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 class FakeMailer:
