@@ -300,4 +300,6 @@ def test_audit_log_is_append_only(client, mailer, db) -> None:
 def test_dev_secrets_refused_outside_dev() -> None:
     with pytest.raises(ValueError, match="OTP_PEPPER"):
         Settings(env="prod")
-    Settings(env="prod", otp_pepper="real-pepper", token_secret="real-secret")
+    with pytest.raises(ValueError, match="DATA_KEY"):
+        Settings(env="prod", otp_pepper="real-pepper", token_secret="real-secret")
+    Settings(env="prod", otp_pepper="real-pepper", token_secret="real-secret", data_key="real-key")

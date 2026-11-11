@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     contact_invites_per_hour: int = 10
     invite_base_url: str = "https://sixthsense.app/invite"
 
+    # Alerts (P2-W4). DATA_KEY encrypts the few things we must keep to reach a contact
+    # (FCM token, Telegram chat id, opt-in alert email). All channels are free.
+    data_key: str = "dev-only-data-key-change-me"
+    public_base_url: str = "http://localhost:8000"  # where contacts open acknowledgement links
+    fcm_project_id: str = ""
+    fcm_service_account_file: str = ""  # path to the Firebase service-account JSON (never commit)
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = ""
+    ladder_step_seconds: int = 60  # push -> telegram -> email, one step per minute
+    ladder_cycle_seconds: int = 300  # then repeat the ladder every 5 minutes
+    ladder_max_cycles: int = 12  # for about an hour, or until someone acknowledges
+
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_username: str = ""
@@ -46,7 +58,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _no_dev_secrets_outside_dev(self) -> "Settings":
         if self.env not in ("dev", "test"):
-            for name in ("otp_pepper", "token_secret"):
+            for name in ("otp_pepper", "token_secret", "data_key"):
                 if getattr(self, name).startswith(_DEV_SECRET_PREFIX):
                     raise ValueError(f"{name.upper()} must be a real secret when ENV={self.env}")
         return self
