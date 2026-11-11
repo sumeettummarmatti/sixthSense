@@ -12,13 +12,26 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
-| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`) | Firebase + Telegram keys, then `P2-W5-location-relay` |
+| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`); **encrypted location relay** (`P2-W5`) | Firebase + Telegram keys, then `P2-W6-signed-alerts` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. sumeet, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+
+## 2026-11-11 — shruj: Encrypted location relay
+- Shruj: Built `P2-W5-location-relay` on branch `p2/location-relay` (stacked on `p2/watchdog-alert-ladder`). This is what Tanisha's location encryption (`P1-W6`) was waiting on.
+- Shruj: **One WebSocket, `/relay/ws`.** The phone signs in with its first message (the token never goes in the URL, so it never lands in logs) and the token is re-checked on every message; when it expires the socket closes with code 4401 and the app reconnects.
+- Shruj: **The server can't read locations.** The traveller sends her encrypted envelopes exactly as Tanisha's code produces them. The server only looks at the plain routing fields and checks: it's her own open journey, the sender key is her phone's current key, and each recipient is an accepted contact on the journey's alert list. Then it forwards the envelope unchanged, with her signing key attached so the contact's phone can verify it.
+- Shruj: **Nothing is stored or queued** (ADR-3). If a contact isn't connected, that update is simply dropped. Strangers and removed contacts get nothing.
+- Shruj: Location keeps flowing during a silent alarm, even after her phone was shown "resolved": that's when contacts need it most.
+- Shruj: Limits: 1–10 envelopes per message, 10 messages per 5 seconds.
+- Shruj: Connections live in the one API process, which fits the single pilot server; several API processes would need Redis pub/sub later (noted as a decision).
+- Shruj: `contracts/openapi.yaml` documents the WebSocket protocol step by step (`/relay/ws`).
+- Shruj: Checks: ruff clean, 172 tests pass (23 new). Live run over a real WebSocket: the contact got the envelope in 22 ms, unchanged; no token in the server's access log.
+- **Needs Tanisha:** open `/relay/ws`, send the auth frame, send one envelope per contact device key (from `GET /contacts/{id}/keys`) every few seconds during a journey, keep sending during a silent alarm, ping every ~30 s, and decrypt incoming frames with the attached sender key.
+- **Next:** `P2-W6-signed-alerts`.
 
 ## 2026-11-11 — shruj: Watchdog + alert ladder
 - Shruj: Built `P2-W4-watchdog-alert-ladder` on branch `p2/watchdog-alert-ladder` (stacked on `p2/journey-state-machine`). The backend now actually alerts contacts.

@@ -266,9 +266,9 @@
         {
           "id": "P2-W5-location-relay",
           "title": "E2E ciphertext location relay (WebSocket)",
-          "status": "todo",
+          "status": "done",
           "week": 5,
-          "notes": ""
+          "notes": "shruj: WebSocket /relay/ws (backend/app/relay). Auth by first frame (token never in URL/logs), re-checked on every frame, close 4401 on expiry. Traveller sends Tanisha's LiveLocationEnvelope JSON unchanged; server reads only session_id / sender_key_id / recipient_key_id: session must be her open journey (incl. silent alarm), sender key must be the device's current E2E key, each recipient key must belong to an accepted contact on the journey's alert list. Envelopes forwarded with the sender's Ed25519 key; offline recipients dropped, nothing queued or stored (ADR-3). Limits: 1-10 envelopes/frame, 10 frames/5 s, 2 KB per field. In-process hub (single API process for the pilot). 172 tests pass, ruff clean; live run: delivered in 22 ms, no token in access log. Branch p2/location-relay."
         },
         {
           "id": "P2-W6-signed-alerts",
@@ -631,6 +631,24 @@
       "decision": "Silent-alarm (covert) alerts tell contacts not to call the person's phone; alerts never include location",
       "why": "A call could tip off a coercer; live location is E2E only (rule 2, ADR-3)",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Relay WebSocket authenticates with the first frame, not a URL query/header, and re-checks the token on every frame",
+      "why": "Tokens in URLs end up in access logs; re-checking lets revoked/expired sessions stop receiving immediately",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Relay keeps connections in one in-process hub and drops envelopes for offline recipients",
+      "why": "Pilot runs one API process; nothing may be queued or stored (ADR-3). Multiple API processes will need Redis pub/sub (also unpersisted)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Location keeps relaying during a silent alarm even after the phone was shown 'resolved'",
+      "why": "Contacts need her location most during a coerced situation; the app must keep sending covertly",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -671,7 +689,8 @@
     "tanisha: connect onboarding to /auth/otp/request + /auth/otp/verify and add Keystore device sign-in (see contracts/openapi.yaml, PROGRESS.md 'shruj: Email OTP + device auth')",
     "tanisha: contacts screen -> invite link via share sheet + deep link to accept; keep name/number on the phone keyed by contact_link_id; upload E2E keys after sign-in (contracts/openapi.yaml)",
     "tanisha: wire journey screens to /journeys (start, heartbeat every <=5 min, check-in ok/duress, prompt, sos, arrive/end); see contracts/openapi.yaml",
-    "shruj: create Firebase project + Telegram bot (free) and put keys in .env; then P2-W5-location-relay",
+    "shruj: P2-W6-signed-alerts",
+    "tanisha: P1-W6 integration: open /relay/ws, auth frame, send envelopes per contact key (GET /contacts/{id}/keys), keep sending during a silent alarm; decrypt incoming frames with the attached sender key",
     "tanisha: contact side of alerts: send FCM token (PUT /notifications/push-token), 'Get alerts on Telegram' button, alert screen with I'm on it / They're safe / Raise alarm (see contracts/openapi.yaml)",
     "sumeet: merge PR #1 (setup/foundation -> main)",
     "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
