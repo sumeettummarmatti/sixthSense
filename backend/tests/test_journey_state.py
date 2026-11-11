@@ -163,3 +163,40 @@ def test_no_events_after_resolved() -> None:
     journey = new_journey(State.RESOLVED)
     with pytest.raises(InvalidTransition):
         apply_event(journey, Event.CHECK_IN_OK, TIMERS, T0)
+
+
+def test_contact_confirms_safe_during_contact_alert_returns_to_active() -> None:
+    journey = new_journey(State.CONTACT_ALERT)
+    now = T0 + minutes(20)
+    apply_event(journey, Event.CONTACT_CONFIRMED_SAFE, TIMERS, now)
+    assert journey.state == State.ACTIVE
+    assert journey.next_check_in_at == now + minutes(15)
+    assert journey.last_heartbeat_at == now
+
+
+def test_contact_resolves_full_escalation_even_after_covert_fake_end() -> None:
+    journey = new_journey()
+    apply_event(journey, Event.CHECK_IN_DURESS, TIMERS, T0)
+    apply_event(journey, Event.END, TIMERS, T0 + minutes(1))
+    apply_event(journey, Event.CONTACT_CONFIRMED_SAFE, TIMERS, T0 + minutes(5))
+    assert journey.state == State.RESOLVED
+    assert journey.outcome == Outcome.RESOLVED_BY_CONTACT
+
+
+def test_contact_cannot_resolve_when_no_alert() -> None:
+    with pytest.raises(InvalidTransition):
+        apply_event(new_journey(), Event.CONTACT_CONFIRMED_SAFE, TIMERS, T0)
+
+
+def test_acknowledged_contact_alert_does_not_upgrade_by_itself() -> None:
+    journey = new_journey(State.CONTACT_ALERT)
+    journey.alert_acknowledged_at = T0
+    assert not advance_by_time(journey, TIMERS, T0 + minutes(60))
+    apply_event(journey, Event.CONTACT_RAISED_ALARM, TIMERS, T0 + minutes(61))
+    assert journey.state == State.FULL_ESCALATION
+    assert journey.alert_acknowledged_at is None
+
+
+def test_raise_alarm_needs_an_alert() -> None:
+    with pytest.raises(InvalidTransition):
+        apply_event(new_journey(), Event.CONTACT_RAISED_ALARM, TIMERS, T0)

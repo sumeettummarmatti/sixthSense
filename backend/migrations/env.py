@@ -7,8 +7,10 @@ from app.contacts import models as contact_models  # noqa: F401  (registers mode
 from app.core import audit  # noqa: F401
 from app.core.config import get_settings
 from app.core.db import Base
+from app.escalation import models as escalation_models  # noqa: F401
 from app.identity import models  # noqa: F401
 from app.journey import models as journey_models  # noqa: F401
+from app.notification import models as notification_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

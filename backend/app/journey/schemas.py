@@ -42,7 +42,7 @@ class JourneyView(BaseModel):
     state: Literal[
         "active", "check_in_due", "private_prompt", "contact_alert", "full_escalation", "resolved"
     ]
-    outcome: Literal["arrived", "ended"] | None
+    outcome: Literal["arrived", "ended", "resolved_by_contact"] | None
     started_at: datetime
     next_check_in_at: datetime
     timers: ProtocolSettings

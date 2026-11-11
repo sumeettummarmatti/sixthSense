@@ -7,11 +7,14 @@ phone has gone quiet (called by the W4 watchdog job). Nothing here stores locati
     active          --check-in time-->         check_in_due
     check_in_due    --grace T1 passes-->       private_prompt
     private_prompt  --prompt T2 passes-->      contact_alert
-    contact_alert   --no answer-->             full_escalation
+    contact_alert   --no answer-->             full_escalation  (paused once a contact acks)
+    contact_alert   --contact raises alarm-->  full_escalation
     open states     --heartbeat lost-->        contact_alert
     any state       --SOS / duress PIN-->      full_escalation
     open states     --real PIN-->              active    (also from contact_alert)
     open states     --arrive / end-->          resolved
+    contact_alert   --contact confirms safe--> active
+    full_escalation --contact confirms safe--> resolved
     (open states = active, check_in_due, private_prompt)
 
 A duress PIN or covert SOS sets `covert`: the journey escalates, but the owner's phone keeps
@@ -41,11 +44,14 @@ class Event(StrEnum):
     COVERT_SOS = "covert_sos"
     ARRIVE = "arrive"
     END = "end"
+    CONTACT_CONFIRMED_SAFE = "contact_confirmed_safe"  # a trusted contact resolved the alert
+    CONTACT_RAISED_ALARM = "contact_raised_alarm"  # a contact couldn't reach them
 
 
 class Outcome(StrEnum):
     ARRIVED = "arrived"
     ENDED = "ended"
+    RESOLVED_BY_CONTACT = "resolved_by_contact"
 
 
 OPEN_STATES = frozenset({State.ACTIVE, State.CHECK_IN_DUE, State.PRIVATE_PROMPT})
@@ -72,6 +78,7 @@ class JourneyState:
     state_changed_at: datetime
     outcome: Outcome | None = None  # for a covert journey: what the phone was shown
     cover_ended_at: datetime | None = None  # covert journey the phone believes is over
+    alert_acknowledged_at: datetime | None = None  # a contact said "I'm on it" (contact_alert)
 
 
 class InvalidTransition(ValueError):
@@ -81,15 +88,37 @@ class InvalidTransition(ValueError):
 def _set(journey: JourneyState, state: State, now: datetime) -> None:
     journey.state = state
     journey.state_changed_at = now
+    if state != State.CONTACT_ALERT:
+        journey.alert_acknowledged_at = None
 
 
 def apply_event(journey: JourneyState, event: Event, timers: Timers, now: datetime) -> None:
     """Apply a phone event in place. Raises InvalidTransition if it makes no sense now."""
     interval = timedelta(minutes=timers.check_in_interval)
-    journey.last_heartbeat_at = now
+
+    if event == Event.CONTACT_CONFIRMED_SAFE:
+        # From a contact, not the phone, so a covert journey the phone thinks is over still counts.
+        if journey.state == State.CONTACT_ALERT:
+            journey.next_check_in_at = now + interval
+            journey.last_heartbeat_at = now  # fresh window before the watchdog looks again
+            _set(journey, State.ACTIVE, now)
+        elif journey.state == State.FULL_ESCALATION:
+            journey.outcome = Outcome.RESOLVED_BY_CONTACT
+            _set(journey, State.RESOLVED, now)
+        else:
+            raise InvalidTransition("no alert to resolve")
+        return
+
+    if event == Event.CONTACT_RAISED_ALARM:
+        if journey.state == State.CONTACT_ALERT:
+            _set(journey, State.FULL_ESCALATION, now)
+        elif journey.state != State.FULL_ESCALATION:
+            raise InvalidTransition("no alert to raise")
+        return
 
     if journey.state == State.RESOLVED or journey.cover_ended_at is not None:
         raise InvalidTransition("journey is over")
+    journey.last_heartbeat_at = now
 
     if event in (Event.CHECK_IN_OK, Event.CHECK_IN_DURESS):
         # Both PINs move the visible deadline the same way, so the phone shows the same thing.
@@ -158,7 +187,8 @@ def _next_timed_step(journey: JourneyState, timers: Timers) -> tuple[State, date
     elif state == State.PRIVATE_PROMPT:
         prompt_started = max(due + minutes(timers.check_in_grace), journey.state_changed_at)
         candidates.append((State.CONTACT_ALERT, prompt_started + minutes(timers.prompt_timeout)))
-    elif state == State.CONTACT_ALERT:
+    elif state == State.CONTACT_ALERT and journey.alert_acknowledged_at is None:
+        # Someone said "I'm on it": they resolve it or raise the alarm; the timer waits.
         at = journey.state_changed_at + minutes(timers.contact_response)
         candidates.append((State.FULL_ESCALATION, at))
     return min(candidates, key=lambda step: step[1], default=None)

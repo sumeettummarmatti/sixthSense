@@ -89,6 +89,7 @@ class Journey(TimerColumns, Base):
     state_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cover_ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    alert_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     def to_state(self) -> JourneyState:
         return JourneyState(
@@ -99,6 +100,7 @@ class Journey(TimerColumns, Base):
             state_changed_at=self.state_changed_at,
             outcome=Outcome(self.outcome) if self.outcome else None,
             cover_ended_at=self.cover_ended_at,
+            alert_acknowledged_at=self.alert_acknowledged_at,
         )
 
     def load_state(self, journey: JourneyState) -> None:
@@ -109,5 +111,6 @@ class Journey(TimerColumns, Base):
         self.state_changed_at = journey.state_changed_at
         self.outcome = journey.outcome.value if journey.outcome else None
         self.cover_ended_at = journey.cover_ended_at
+        self.alert_acknowledged_at = journey.alert_acknowledged_at
         if journey.state == State.RESOLVED and self.ended_at is None:
             self.ended_at = journey.state_changed_at
