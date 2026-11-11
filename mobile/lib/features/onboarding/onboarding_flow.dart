@@ -98,9 +98,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     try {
       // The contact sees this name when they accept. Email prefix for the demo.
       final email = _emailController.text.trim();
-      final ownerLabel = email.contains('@')
+      final prefix = email.contains('@')
           ? email.substring(0, email.indexOf('@'))
-          : 'A SixthSense user';
+          : '';
+      // Server allows 1-40 characters.
+      final ownerLabel = prefix.isEmpty
+          ? 'A SixthSense user'
+          : prefix.substring(0, prefix.length.clamp(0, 40));
       final invite = await widget.api.createInvite(ownerLabel);
       final linkedContact = TrustedContactDraft(
         name: contact.name,
