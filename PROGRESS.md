@@ -2,6 +2,27 @@
 
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 
+## Status at a glance (updated 2026-11-11)
+
+**Phase:** M0 Setup → next **M1 Foundation** (weeks 1–2: sign up + add contacts)
+
+| Lane | Done | Up next |
+|---|---|---|
+| ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
+| P1 Mobile | Flutter shell + theme | Finish toolchain (`flutter doctor` green) → `P1-W1-signup-contacts-ui` |
+| P2 Safety Core | Repo, backend skeleton, Docker stack file, CI | Run stack + migrations → `P2-W1-otp-device-auth` |
+| P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
+| P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
+
+**Blockers:** Android cmdline-tools + Xcode first launch on Sumeet's Mac · legal review (DPDP, UIDAI) · campus MoU.
+**Lane owners:** not assigned yet. Put your name in `progress.json` → `lanes.P*.owner`.
+
+---
+
+## 2026-11-11 — Team handoff
+- Added `CLAUDE.md` (auto-loaded project context for Claude Code), a README team guide with example prompts, and the status table above.
+- Pushed `setup/foundation` to GitHub and opened a PR.
+
 ## 2026-11-11 — Colour system
 - "Lamplight Lavender" palette sampled from the logo; preview: https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz
 - Applied to Flutter (`mobile/lib/core/theme/app_theme.dart`, light + night ColorScheme) and dashboard (`globals.css` tokens, colour-coded evidence legend).

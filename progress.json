@@ -96,6 +96,13 @@
           "status": "done",
           "week": 0,
           "notes": "mobile/lib/core/theme/app_theme.dart, dashboard/src/app/globals.css. Fonts (Urbanist + Atkinson Hyperlegible) not bundled yet: bundle as assets, don't fetch at runtime"
+        },
+        {
+          "id": "ALL-W0-team-handoff",
+          "title": "CLAUDE.md, README team guide, push to GitHub",
+          "status": "done",
+          "week": 0,
+          "notes": "setup/foundation pushed + PR opened"
         }
       ]
     },
@@ -441,10 +448,10 @@
     }
   ],
   "next_steps": [
-    "User: Android Studio SDK Manager -> SDK Command-line Tools; Terminal.app: sudo xcodebuild -runFirstLaunch && sudo xcodebuild -license accept; then flutter doctor --android-licenses",
-    "Claude: re-run flutter doctor until green, mark P1-W0-flutter-shell done",
-    "Get user OK to start Docker containers, then alembic upgrade head on both DBs + curl /healthz",
-    "Push setup/foundation and open PR (needs user OK); confirm CI green",
-    "Start ALL-W1-api-contract"
+    "Merge setup/foundation PR into main once CI is green",
+    "Assign lane owners in progress.json (lanes.P*.owner)",
+    "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
+    "Sumeet: Android cmdline-tools + sudo xcodebuild -runFirstLaunch, then flutter doctor --android-licenses",
+    "Start Docker stack, run alembic upgrade head on both DBs, curl /healthz"
   ]
 }
