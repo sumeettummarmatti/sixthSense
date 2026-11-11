@@ -51,13 +51,18 @@ class JourneyTimerService : Service() {
             )
             .putBoolean(
                 KEY_SMS_FALLBACK_ENABLED,
-                intent?.getBooleanExtra(EXTRA_SMS_FALLBACK_ENABLED, false)
-                    ?: preferences.getBoolean(KEY_SMS_FALLBACK_ENABLED, false),
+                // A resume after reboot carries no extras: keep the saved choice.
+                if (intent?.hasExtra(EXTRA_SMS_FALLBACK_ENABLED) == true) {
+                    intent.getBooleanExtra(EXTRA_SMS_FALLBACK_ENABLED, false)
+                } else {
+                    preferences.getBoolean(KEY_SMS_FALLBACK_ENABLED, false)
+                },
             )
             .apply {
-                if (isNewJourney) {
+                if (isNewJourney && intent?.getBooleanExtra(EXTRA_IS_CHECK_IN, false) != true) {
                     putBoolean(KEY_LOW_BATTERY_MODE, false)
                     putBoolean(KEY_LOW_BATTERY_SMS_SENT, false)
+                    putLong(KEY_LOW_BATTERY_LAST_ATTEMPT, 0L)
                 }
             }
             .apply()
@@ -116,7 +121,7 @@ class JourneyTimerService : Service() {
                 val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
                 val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
                 if (level >= 0 && scale > 0 && level * 100 / scale <= LOW_BATTERY_PERCENT) {
-                    if (OfflineSafetyDispatcher.sendLowBatteryOnce(this@JourneyTimerService)) {
+                    if (OfflineSafetyDispatcher.onLowBattery(this@JourneyTimerService)) {
                         val notification = buildNotification()
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                             startForeground(
@@ -140,9 +145,11 @@ class JourneyTimerService : Service() {
     companion object {
         const val ACTION_START = "in.sixthsense.sixthsense_app.START_JOURNEY_TIMER"
         const val ACTION_STOP = "in.sixthsense.sixthsense_app.STOP_JOURNEY_TIMER"
+        const val ACTION_RESUME = "in.sixthsense.sixthsense_app.RESUME_JOURNEY_TIMER"
         const val EXTRA_DEADLINE = "deadline_millis"
         const val EXTRA_SMS_NUMBERS = "sms_numbers"
         const val EXTRA_SMS_FALLBACK_ENABLED = "sms_fallback_enabled"
+        const val EXTRA_IS_CHECK_IN = "is_check_in"
         const val PREFERENCES_NAME = "journey_timer"
         const val KEY_ACTIVE = "active"
         const val KEY_DEADLINE = "deadline_millis"
@@ -150,6 +157,7 @@ class JourneyTimerService : Service() {
         const val KEY_SMS_FALLBACK_ENABLED = "sms_fallback_enabled"
         const val KEY_LOW_BATTERY_MODE = "low_battery_mode"
         const val KEY_LOW_BATTERY_SMS_SENT = "low_battery_sms_sent"
+        const val KEY_LOW_BATTERY_LAST_ATTEMPT = "low_battery_last_attempt"
         private const val LOW_BATTERY_PERCENT = 10
     }
 }

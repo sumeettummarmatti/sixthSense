@@ -46,7 +46,13 @@ class MainActivity : FlutterActivity() {
                         if (deadlineMillis == null) {
                             result.error("invalid_journey", "Journey details are missing.", null)
                         } else {
-                            startOrUpdateJourney(deadlineMillis, smsNumbers, smsFallbackEnabled, result)
+                            startOrUpdateJourney(
+                                deadlineMillis,
+                                smsNumbers,
+                                smsFallbackEnabled,
+                                isCheckIn = call.method == "checkIn",
+                                result = result,
+                            )
                         }
                     }
                     "endJourney" -> {
@@ -163,6 +169,7 @@ class MainActivity : FlutterActivity() {
         deadlineMillis: Long,
         smsNumbers: List<String>,
         smsFallbackEnabled: Boolean,
+        isCheckIn: Boolean,
         result: MethodChannel.Result,
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -236,6 +243,7 @@ class MainActivity : FlutterActivity() {
                 ArrayList(smsNumbers),
             )
             .putExtra(JourneyTimerService.EXTRA_SMS_FALLBACK_ENABLED, smsFallbackEnabled)
+            .putExtra(JourneyTimerService.EXTRA_IS_CHECK_IN, isCheckIn)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {

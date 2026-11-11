@@ -20,6 +20,13 @@
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
 
+## 2026-11-12 — sumeet: Offline safety fixes (on Tanisha's behalf, branch `p1/demo-offline-fixes`)
+- sumeet: **Missed check-in no longer texts straight away.** At the deadline the phone shows the private "check-in due" prompt; only if she still hasn't checked in 4 minutes later (server's grace 2 min + prompt 2 min) does it send the offline SMS. Checking in cancels it. A stale alarm can't fire after a check-in (it checks the deadline it was set for).
+- sumeet: **After a reboot** the journey service comes back (not just the alarm), with the saved SMS setting kept. If the check-in time passed while the phone was off, it prompts right away and texts 2 minutes later if she doesn't check in.
+- sumeet: **Low-battery SMS** no longer counts as sent when it failed; it retries every 2 minutes until it goes out. Checking in no longer resets low-battery mode.
+- sumeet: If exact alarms get revoked, the escalation still fires (inexact alarm) rather than being skipped.
+- sumeet: Checks: debug APK builds (Kotlin compiles), `flutter analyze` clean, 13 Flutter tests, 185 backend tests. **Not yet tested on a real phone with a SIM** (must-do list).
+
 ## 2026-11-12 — sumeet: Accept invite in the app (on Tanisha's behalf)
 - sumeet: The contact's phone can now become a contact: **"I got an invite link"** in setup, and a link icon on the *Plan a journey* screen. Paste the invite link; the app sends the part after `#` to `POST /contacts/invites/accept`, then offers **Get alerts on Telegram**. A Telegram icon sits next to it for later.
 - sumeet: The invite now carries the owner's email prefix as their name (was "SixthSense user"), so the contact knows who invited them.

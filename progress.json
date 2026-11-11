@@ -200,7 +200,7 @@
           "title": "Offline SMS fallback (SmsManager, auto-send from user's plan) + low-battery mode",
           "status": "done",
           "week": 5,
-          "notes": "tanisha: Added opt-in journey-scoped SMS fallback with runtime SMS/location permission, Android Keystore-encrypted recipient, offline SOS/duress/missed-check-in SMS, and a one-time <=10% battery SMS with SMS routing for later alerts. Flutter analyze/test and Android debug APK build pass. Real-carrier SMS and low-battery checks are documented in mobile/README.md and remain unverified without a physical SIM phone."
+          "notes": "tanisha: Added opt-in journey-scoped SMS fallback with runtime SMS/location permission, Android Keystore-encrypted recipient, offline SOS/duress/missed-check-in SMS, and a one-time <=10% battery SMS with SMS routing for later alerts. Flutter analyze/test and Android debug APK build pass. Real-carrier SMS and low-battery checks are documented in mobile/README.md and remain unverified without a physical SIM phone. sumeet (on Tanisha's behalf, 2026-11-12, branch p1/demo-offline-fixes): missed check-in now prompts first and texts only 4 min after the deadline (server grace 2 + prompt 2) unless she checks in; after a reboot the service and timer come back and a deadline missed while off still prompts then texts; low-battery SMS is retried if it fails. Compiles; not yet tested on a real phone."
         },
         {
           "id": "P1-W6-e2e-location",
@@ -778,6 +778,7 @@
   ],
   "next_steps": [
     "sumeet/tanisha: full 2-phone run: owner signs up + adds contact -> contact signs up, pastes invite link, taps Get alerts on Telegram -> owner starts journey + SOS -> Telegram alert arrives (API + worker on one laptop)",
+    "tanisha/sumeet: on a real phone with a SIM, test p1/demo-offline-fixes: airplane mode + missed check-in (SMS ~4 min after due), reboot mid-journey, low battery",
     "sumeet: create team Gmail App password, put it in .env, run: cd backend && uv run python scripts/send_test_email.py <your email>",
     "sumeet: merge p2/demo-telegram-live into demo; on the demo laptop set PUBLIC_BASE_URL to the Wi-Fi IP/tunnel, run API with --host 0.0.0.0, run the worker on that laptop only",
     "shruj: help tanisha with P1-W1-demo-api-wiring (server on shruj's laptop: http://192.168.1.9:8000 on the same Wi-Fi)",

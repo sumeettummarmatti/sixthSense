@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 internal object OfflineSafetyDispatcher {
     private const val TAG = "SixthSenseSms"
     private const val MAX_LOCATION_AGE_MILLIS = 30 * 60 * 1000L
+    private const val LOW_BATTERY_RETRY_MILLIS = 2 * 60 * 1000L
 
     fun isOffline(context: Context): Boolean {
         val manager = context.getSystemService(ConnectivityManager::class.java)
@@ -32,17 +33,32 @@ internal object OfflineSafetyDispatcher {
         return if (lowBatteryMode || isOffline(context)) send(context, reason) else false
     }
 
-    fun sendLowBatteryOnce(context: Context): Boolean {
+    /**
+     * Turns on low-battery mode and texts contacts once. Returns true only when the mode
+     * was just turned on (so the notification text changes). If the SMS could not be sent,
+     * it is retried on later battery updates, at most every [LOW_BATTERY_RETRY_MILLIS].
+     */
+    fun onLowBattery(context: Context): Boolean {
         val preferences = journeyPreferences(context)
         if (!preferences.getBoolean(JourneyTimerService.KEY_ACTIVE, false) ||
-            !preferences.getBoolean(JourneyTimerService.KEY_SMS_FALLBACK_ENABLED, false) ||
-            preferences.getBoolean(JourneyTimerService.KEY_LOW_BATTERY_MODE, false)
+            !preferences.getBoolean(JourneyTimerService.KEY_SMS_FALLBACK_ENABLED, false)
         ) return false
 
-        preferences.edit().putBoolean(JourneyTimerService.KEY_LOW_BATTERY_MODE, true).apply()
-        val sent = send(context, "Battery at 10% or lower. Low-battery mode is on")
-        if (sent) preferences.edit().putBoolean(JourneyTimerService.KEY_LOW_BATTERY_SMS_SENT, true).apply()
-        return true
+        val modeJustTurnedOn =
+            !preferences.getBoolean(JourneyTimerService.KEY_LOW_BATTERY_MODE, false)
+        if (modeJustTurnedOn) {
+            preferences.edit().putBoolean(JourneyTimerService.KEY_LOW_BATTERY_MODE, true).apply()
+        }
+        val alreadySent = preferences.getBoolean(JourneyTimerService.KEY_LOW_BATTERY_SMS_SENT, false)
+        val lastAttempt = preferences.getLong(JourneyTimerService.KEY_LOW_BATTERY_LAST_ATTEMPT, 0L)
+        val now = System.currentTimeMillis()
+        if (!alreadySent && now - lastAttempt >= LOW_BATTERY_RETRY_MILLIS) {
+            preferences.edit().putLong(JourneyTimerService.KEY_LOW_BATTERY_LAST_ATTEMPT, now).apply()
+            if (send(context, "Battery at 10% or lower. Low-battery mode is on")) {
+                preferences.edit().putBoolean(JourneyTimerService.KEY_LOW_BATTERY_SMS_SENT, true).apply()
+            }
+        }
+        return modeJustTurnedOn
     }
 
     fun sendMissedCheckIn(context: Context) {
