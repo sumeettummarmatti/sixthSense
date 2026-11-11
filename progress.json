@@ -1,7 +1,7 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-11",
-  "updated_by": "shruj",
+  "updated_by": "sumeet",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
@@ -77,6 +77,13 @@
           "status": "in_progress",
           "week": 1,
           "notes": "sumeet: demo branch created from p2/signed-alerts (includes all P1 + P2 work)"
+        },
+        {
+          "id": "ALL-W1-demo-real-email",
+          "title": "Demo: sign-in codes go to real inboxes (team Gmail SMTP) instead of Mailpit",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "sumeet: code ready on p2/demo-real-email (verified TLS, SMTP_SSL option, scripts/send_test_email.py, 3 tests). Waiting for the team Gmail + App password in .env, then one real test email."
         },
         {
           "id": "ALL-W1-demo-script-slides",
@@ -770,6 +777,7 @@
     }
   ],
   "next_steps": [
+    "sumeet: create team Gmail App password, put it in .env, run: cd backend && uv run python scripts/send_test_email.py <your email>",
     "sumeet: merge p2/demo-telegram-live into demo; on the demo laptop set PUBLIC_BASE_URL to the Wi-Fi IP/tunnel, run API with --host 0.0.0.0, run the worker on that laptop only",
     "shruj: help tanisha with P1-W1-demo-api-wiring (server on shruj's laptop: http://192.168.1.9:8000 on the same Wi-Fi)",
     "sumeet: create Telegram bot with @BotFather, send token + username to shruj (not in git)",

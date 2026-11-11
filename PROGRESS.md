@@ -20,6 +20,14 @@
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
 
+## 2026-11-11 — sumeet: Real email for sign-in codes (branch p2/demo-real-email)
+- sumeet: New branch `p2/demo-real-email` on top of Shruj's `p2/demo-telegram-live`. Goal: sign-in codes reach real inboxes for the demo, not Mailpit.
+- sumeet: Shruj's mailer already spoke plain SMTP. Added: **verified TLS** (smtplib's default skips certificate checks), an `SMTP_SSL` option for port 465, and `backend/scripts/send_test_email.py <address>`, which sends one test email and explains common errors.
+- sumeet: `.env.example` now has a step-by-step Gmail App password block. Mailpit stays the default for development, so Tanisha and Shruj need no change.
+- sumeet: Note: Shruj's `scripts/demo_telegram_check.py` reads codes from Mailpit, so start the API with `SMTP_HOST=localhost SMTP_PORT=1025 SMTP_STARTTLS=false` when running it.
+- sumeet: Checks: ruff clean, 185 tests pass (3 new mailer tests: verified STARTTLS, implicit SSL, failure logs only the error type).
+- sumeet: Next: put the team Gmail + App password in `.env` and send one real test email.
+
 ## 2026-11-11 — shruj: Real Telegram alerts work (demo)
 - shruj: `P2-W1-demo-telegram-live` **done.** With Sumeet's bot (`@Sixtysensebot`) in my `.env` (not in git), a real Telegram alert reached a contact's phone for **both** demo cases:
   - **SOS:** "URGENT: Priya may need help now" arrived 4 s after the SOS, with a verification code that matched the app.
