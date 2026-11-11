@@ -8,6 +8,7 @@ from app.core import audit  # noqa: F401
 from app.core.config import get_settings
 from app.core.db import Base
 from app.identity import models  # noqa: F401
+from app.journey import models as journey_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
