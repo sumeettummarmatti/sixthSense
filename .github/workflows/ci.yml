@@ -48,7 +48,6 @@ jobs:
   mobile:
     name: mobile (analyze + test)
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('mobile/pubspec.yaml') != '' }}
     defaults:
       run:
         working-directory: mobile
