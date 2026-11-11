@@ -137,6 +137,7 @@ Open **one Terminal tab per app** (⌘ + T for a new tab). In each tab, `cd ~/De
 |---|---|---|---|
 | 1 | Databases (once; they keep running) | `docker compose -f infra/docker-compose.yml up -d --wait` | — |
 | 2 | Core API | `cd backend && uv run uvicorn app.main:app --reload --port 8000` | http://localhost:8000/docs |
+| 2b | Core worker (alerts) | `cd backend && uv run arq app.worker.WorkerSettings` | runs every 5 s: watchdog + alerts. Emails land in http://localhost:8025 |
 | 3 | Insight API | `cd insight && uv run uvicorn app.main:app --reload --port 8001` | http://localhost:8001/docs |
 | 4 | Dashboard | `cd dashboard && corepack pnpm dev` | http://localhost:3000 |
 | 5 | Mobile app | `flutter emulators --launch <name>` (see `flutter emulators`), then `cd mobile && flutter run` | opens on the emulator or your USB phone |
@@ -152,7 +153,7 @@ Open **one Terminal tab per app** (⌘ + T for a new tab). In each tab, `cd ~/De
 Run this from the `sixthSense` folder before opening a pull request (there is no CI yet, so this is our safety net).
 
 ```bash
-(cd backend   && uv run ruff check . && uv run pytest -q)                # "All checks passed!"  then "11 passed"
+(cd backend   && uv run ruff check . && uv run pytest -q)                # "All checks passed!"  then "149 passed"
 (cd insight   && uv run ruff check . && uv run pytest -q)                # "All checks passed!"  then "14 passed"
 (cd dashboard && corepack pnpm lint && corepack pnpm build)              # no errors, then "Compiled successfully"
 (cd mobile    && flutter analyze && flutter test)                        # "No issues found!"    then "All tests passed!"

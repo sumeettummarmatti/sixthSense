@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SixthSense API
-  version: 0.3.0
+  version: 0.4.0
   description: >
     Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
     Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
@@ -540,6 +540,199 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
+  /notifications/channels:
+    get:
+      tags: [notification]
+      summary: Which alert channels I have set up (as a contact)
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChannelStatus"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /notifications/push-token:
+    put:
+      tags: [notification]
+      summary: Save this device's FCM token (send after sign-in and on FCM token refresh)
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PushToken"}
+      responses:
+        "204": {description: Saved (encrypted)}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+    delete:
+      tags: [notification]
+      summary: Stop push alerts on this device
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Removed}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /notifications/telegram/link:
+    post:
+      tags: [notification]
+      summary: Get a one-time t.me link to receive alerts on Telegram
+      description: Open it and press Start in Telegram. Valid 10 minutes.
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TelegramLink"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "409":
+          description: "No Telegram bot configured on the server (detail: telegram_not_configured)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /notifications/telegram:
+    delete:
+      tags: [notification]
+      summary: Stop Telegram alerts
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Unlinked}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /notifications/email:
+    put:
+      tags: [notification]
+      summary: Opt in to alert emails (must be your own sign-in email)
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AlertEmail"}
+      responses:
+        "204": {description: Saved (encrypted)}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "422":
+          description: "Not your sign-in email (detail: email_must_match_sign_in)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+    delete:
+      tags: [notification]
+      summary: Stop alert emails
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Removed}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escalations/active:
+    get:
+      tags: [escalation]
+      summary: Alerts I'm a recipient of that are still open (as a contact)
+      description: Nothing is visible once an alert closes (rule 4). The owner never sees this list.
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ActiveEscalations"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escalations/{escalation_id}/ack:
+    post:
+      tags: [escalation]
+      summary: I'm on it
+      description: >
+        Stops further alerts to every contact. For a missed check-in it also pauses the automatic
+        upgrade to a full escalation: resolve it or raise the alarm next.
+      security: [{bearer: []}]
+      parameters:
+        - {name: escalation_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Acknowledged"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not open or not a recipient (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /escalations/{escalation_id}/resolve:
+    post:
+      tags: [escalation]
+      summary: They're safe
+      description: >
+        A missed check-in goes back to a normal journey; a full escalation (including a silent
+        alarm) ends the journey. Other alerted contacts get an all-clear.
+      security: [{bearer: []}]
+      parameters:
+        - {name: escalation_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Resolved"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not open or not a recipient (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Nothing to resolve (detail: nothing_to_resolve)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /escalations/{escalation_id}/raise:
+    post:
+      tags: [escalation]
+      summary: I can't reach them, raise the alarm
+      description: Turns a missed check-in into a full escalation; every contact gets an urgent alert.
+      security: [{bearer: []}]
+      parameters:
+        - {name: escalation_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Raised"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not open or not a recipient (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Nothing to raise (detail: nothing_to_raise)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /escalations/ack:
+    post:
+      tags: [escalation]
+      summary: I'm on it, from the link in a Telegram message or email (no sign-in)
+      description: >
+        The link is PUBLIC_BASE_URL/escalations/ack#<token>; a small page there posts the token
+        here when the contact taps the button. The token never reaches server logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/LinkAck"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Acknowledged"}
+        "404":
+          description: "Unknown token or alert already closed (detail: escalation_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
 components:
   securitySchemes:
     bearer:
@@ -708,7 +901,68 @@ components:
           type: string
           enum: [active, check_in_due, private_prompt, contact_alert, full_escalation, resolved]
           description: A covert escalation is shown as active (or resolved after arrive/end)
-        outcome: {type: [string, "null"], enum: [arrived, ended, null]}
+        outcome: {type: [string, "null"], enum: [arrived, ended, resolved_by_contact, null]}
         started_at: {type: string, format: date-time}
         next_check_in_at: {type: string, format: date-time}
         timers: {$ref: "#/components/schemas/ProtocolSettings"}
+    ChannelStatus:
+      type: object
+      required: [push, telegram, email, push_available, telegram_available]
+      properties:
+        push: {type: boolean, description: This device has sent its FCM token}
+        telegram: {type: boolean}
+        email: {type: boolean}
+        push_available: {type: boolean, description: Server has FCM configured}
+        telegram_available: {type: boolean, description: Server has a Telegram bot configured}
+    PushToken:
+      type: object
+      required: [fcm_token]
+      properties:
+        fcm_token: {type: string, maxLength: 4096}
+    TelegramLink:
+      type: object
+      required: [url, expires_in]
+      properties:
+        url: {type: string, example: "https://t.me/sixthsense_bot?start=<token>"}
+        expires_in: {type: integer, example: 600}
+    AlertEmail:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+    ActiveEscalation:
+      type: object
+      required: [id, owner_label, level, covert, opened_at, acknowledged]
+      properties:
+        id: {type: string, format: uuid}
+        owner_label: {type: string}
+        level: {type: string, enum: [contact_alert, full_escalation]}
+        covert: {type: boolean, description: "Silent alarm: do NOT call their phone"}
+        opened_at: {type: string, format: date-time}
+        acknowledged: {type: boolean}
+    ActiveEscalations:
+      type: object
+      required: [escalations]
+      properties:
+        escalations: {type: array, items: {$ref: "#/components/schemas/ActiveEscalation"}}
+    LinkAck:
+      type: object
+      required: [token]
+      properties:
+        token: {type: string, maxLength: 128}
+    Acknowledged:
+      type: object
+      required: [owner_label, acknowledged]
+      properties:
+        owner_label: {type: string}
+        acknowledged: {type: boolean}
+    Resolved:
+      type: object
+      required: [journey_state]
+      properties:
+        journey_state: {type: string, enum: [active, resolved]}
+    Raised:
+      type: object
+      required: [journey_state]
+      properties:
+        journey_state: {type: string, enum: [full_escalation]}
