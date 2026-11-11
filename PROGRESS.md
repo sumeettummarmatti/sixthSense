@@ -12,13 +12,29 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
-| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`) | `P2-W2-trusted-contacts` |
+| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`) | `P2-W3-journey-state-machine` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. sumeet, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+
+## 2026-11-11 — shruj: Trusted contacts
+- Shruj: Built `P2-W2-trusted-contacts` in a new `backend/app/contacts/` module, on branch `p2/trusted-contacts` (stacked on `p2/email-otp-device-keys`, so it can be built before that PR merges).
+- Shruj: **How you add a contact:** the app saves the contact's name and number on the phone only (for offline SMS), creates an invite link, and shares it with the phone's share button (WhatsApp, SMS...). The contact opens it, signs in with an email code and accepts. The server never sees the contact's name or phone number, and never emails them.
+  - `POST /contacts/invites`: one-time link, valid 48 h. Max 5 contacts (accepted + pending), 10 invites per hour. The token sits after `#` in the link so it never reaches a web server.
+  - `POST /contacts/invites/accept`: the contact accepts. Accepting twice is harmless; you can't add yourself.
+  - `GET /contacts`: the owner's own list (pending/accepted). No contact details: the phone matches each `contact_link_id` to its saved name and number.
+  - `DELETE /contacts/{id}`: **silent** removal (or cancel a pending invite). The row is deleted and nothing is sent to the contact.
+  - `GET /contacts/{id}/keys`: an accepted contact's device keys, for Tanisha's location encryption. Owner only.
+  - `PUT /auth/device/e2e-keys`: each phone uploads its X25519 + Ed25519 public keys (her encryption needs these; the sign-in key can't do it).
+- Shruj: Rule 4: contacts get **no** list of the people they watch over. They'll only receive alerts (W4). This also keeps removal truly silent.
+- Shruj: Migration `0003` (core DB only): `trusted_contacts` and `device_e2e_keys`. `contracts/openapi.yaml` now has all 10 endpoints.
+- Shruj: Checks: ruff clean, 66 tests pass (32 new: sign-in required everywhere, invite/accept/list, expired/reused/unknown invites, self-invite, limit, rate limit, silent removal, contact sees nothing, key access rules, revoked devices, nothing in logs). Live run against real Redis + Mailpit OK.
+- Shruj: **After pulling:** `cd backend && uv run alembic upgrade head`.
+- **Needs Tanisha:** contacts screen → share invite link + open it in the app to accept; store name/number keyed by `contact_link_id`; upload E2E keys after sign-in. The invite URL base (`https://sixthsense.app/invite`) is a placeholder until we pick a deep-link domain (`INVITE_BASE_URL` in `.env`).
+- **Next:** `P2-W3-journey-state-machine`.
 
 ## 2026-11-11 — shruj: Email OTP + device auth
 - Shruj: Built `P2-W1-otp-device-auth` in `backend/app/identity/`. Sign in with a 6-digit email code once per phone; after that the phone signs in with its Android Keystore key.

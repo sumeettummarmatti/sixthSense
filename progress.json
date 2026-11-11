@@ -245,9 +245,9 @@
         {
           "id": "P2-W2-trusted-contacts",
           "title": "Trusted contacts add/list/silent remove",
-          "status": "todo",
+          "status": "done",
           "week": 2,
-          "notes": ""
+          "notes": "shruj: New contacts module (backend/app/contacts). Invite-link flow: POST /contacts/invites (one-time link, token after '#', 48 h, max 5 contacts incl. pending, 10 invites/h), POST /contacts/invites/accept (contact signs in and accepts; idempotent, no self-invite), GET /contacts (owner's own links only, no contact details), DELETE /contacts/{id} (silent: row deleted, nothing sent), GET /contacts/{id}/keys (accepted contact's device E2E keys, owner only). PUT /auth/device/e2e-keys uploads X25519 + Ed25519 public keys for the P1-W6 envelope. Server never stores contact phone numbers or names. Migration 0003 (core DB). contracts/openapi.yaml updated. 66 tests pass, ruff clean; live run OK. Needs Tanisha: invite share sheet + deep link, local name/number mapped to contact_link_id, E2E key upload after sign-in. Branch p2/trusted-contacts (stacked on p2/email-otp-device-keys)."
         },
         {
           "id": "P2-W3-journey-state-machine",
@@ -559,6 +559,24 @@
       "decision": "audit_events table in the core DB is append-only, enforced by a DB trigger; rows hold internal IDs only",
       "why": "Rule 7 until WORM object storage exists (no S3 Object Lock on the free plan)",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Contacts are added by a one-time invite link the owner shares from their own phone; the server links two accounts only when the contact signs in and accepts. Contact phone numbers and names stay on the owner's phone (for offline SMS)",
+      "why": "Rule 2 (store nothing we don't need) and ₹0 (no server SMS). Server-sent invites would leak who protects whom to a third party",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Contacts get no list of the people they watch over; they only receive alerts (W4)",
+      "why": "Rule 4, and it keeps removal truly silent",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Devices publish separate X25519 + Ed25519 public keys (PUT /auth/device/e2e-keys) for E2E location; the P-256 Keystore key is for sign-in only",
+      "why": "Tanisha's P1-W6 envelope uses X25519 + Ed25519, which the Android Keystore P-256 key can't provide",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -589,7 +607,8 @@
   ],
   "next_steps": [
     "tanisha: connect onboarding to /auth/otp/request + /auth/otp/verify and add Keystore device sign-in (see contracts/openapi.yaml, PROGRESS.md 'shruj: Email OTP + device auth')",
-    "shruj: P2-W2-trusted-contacts (uses get_current_session; includes contact public-key lookup for P1-W6)",
+    "tanisha: contacts screen -> invite link via share sheet + deep link to accept; keep name/number on the phone keyed by contact_link_id; upload E2E keys after sign-in (contracts/openapi.yaml)",
+    "shruj: P2-W3-journey-state-machine",
     "sumeet: merge PR #1 (setup/foundation -> main)",
     "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
