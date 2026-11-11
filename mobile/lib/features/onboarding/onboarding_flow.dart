@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../journey/journey_flow.dart';
 
-/// Local UI flow for P1-W1. OTP delivery and contact sync are connected when
-/// the shared auth and contacts API contract is ready.
+/// Local UI flow for P1-W1. Sign-in uses an email code (free; PLANNER §3b),
+/// not SMS. Code delivery and contact sync are connected when the shared auth
+/// and contacts API contract is ready (P2-W1-otp-device-auth).
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key});
 
@@ -12,22 +13,22 @@ class OnboardingFlow extends StatefulWidget {
 }
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _codeController = TextEditingController();
   final _contacts = <TrustedContactDraft>[];
-  var _step = OnboardingStep.phone;
+  var _step = OnboardingStep.email;
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _emailController.dispose();
     _codeController.dispose();
     super.dispose();
   }
 
   void _continueToCode() {
-    if (_phoneController.text.trim().replaceAll(RegExp(r'\D'), '').length <
-        10) {
-      _showMessage('Enter a valid phone number to continue.');
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+        .hasMatch(_emailController.text.trim())) {
+      _showMessage('Enter a valid email address to continue.');
       return;
     }
     setState(() => _step = OnboardingStep.code);
@@ -79,7 +80,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                 children: [
                   _TopBar(
                     step: _step,
-                    onBack: _step == OnboardingStep.phone
+                    onBack: _step == OnboardingStep.email
                         ? null
                         : () => setState(
                             () =>
@@ -91,16 +92,16 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
                       child: switch (_step) {
-                        OnboardingStep.phone => _PhoneStep(
-                          key: const ValueKey('phone'),
-                          controller: _phoneController,
+                        OnboardingStep.email => _EmailStep(
+                          key: const ValueKey('email'),
+                          controller: _emailController,
                           onContinue: _continueToCode,
                           text: text,
                         ),
                         OnboardingStep.code => _CodeStep(
                           key: const ValueKey('code'),
                           controller: _codeController,
-                          phone: _phoneController.text.trim(),
+                          email: _emailController.text.trim(),
                           onContinue: _verifyCode,
                           text: text,
                         ),
@@ -137,7 +138,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 }
 
-enum OnboardingStep { phone, code, contacts }
+enum OnboardingStep { email, code, contacts }
 
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.step, required this.onBack});
@@ -181,8 +182,8 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _PhoneStep extends StatelessWidget {
-  const _PhoneStep({
+class _EmailStep extends StatelessWidget {
+  const _EmailStep({
     super.key,
     required this.controller,
     required this.onContinue,
@@ -212,19 +213,20 @@ class _PhoneStep extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          'Sign in with your phone number. You never need an ID to use protection.',
+          'Sign in with your email. Use your college email on campus. You never need an ID to use protection.',
           style: text.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 30),
-        Text('Phone number', style: text.titleSmall),
+        Text('Email', style: text.titleSmall),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
-          keyboardType: TextInputType.phone,
-          autofillHints: const [AutofillHints.telephoneNumber],
+          keyboardType: TextInputType.emailAddress,
+          autocorrect: false,
+          autofillHints: const [AutofillHints.email],
           decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.phone_iphone_rounded),
-            hintText: '+91 98765 43210',
+            prefixIcon: Icon(Icons.mail_outline_rounded),
+            hintText: 'name@college.edu.in',
             border: OutlineInputBorder(),
           ),
         ),
@@ -240,13 +242,13 @@ class _CodeStep extends StatelessWidget {
   const _CodeStep({
     super.key,
     required this.controller,
-    required this.phone,
+    required this.email,
     required this.onContinue,
     required this.text,
   });
 
   final TextEditingController controller;
-  final String phone;
+  final String email;
   final VoidCallback onContinue;
   final TextTheme text;
 
@@ -263,7 +265,7 @@ class _CodeStep extends StatelessWidget {
         Text('Check your messages', style: text.headlineMedium),
         const SizedBox(height: 12),
         Text(
-          'Enter the verification code sent to $phone.',
+          'Enter the verification code we emailed to $email.',
           style: text.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 28),

@@ -25,7 +25,7 @@ SixthSense turns what people already sense about risk into **early, private, ver
 
 | # | Feature | MVP (campus) |
 |---|---|---|
-| F1 | Onboarding & trust tiers (OTP for all; ID+liveness only for companions) | ✅ |
+| F1 | Onboarding & trust tiers (email OTP for all; ID+liveness only for companions) | ✅ |
 | F2 | Journey protocol (check-ins → private prompt → contact → full escalation; duress PIN; covert SOS) | ✅ |
 | F3 | Parallel escalation (contacts + 112 + responders at once; push → SMS → voice until ACK) | ✅ |
 | F4 | Trusted contacts (E2E live location only during journeys; silent removal) | ✅ |

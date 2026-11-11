@@ -1,13 +1,13 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-11",
-  "updated_by": "tanisha",
+  "updated_by": "sumeet",
   "current_phase": "M0-setup",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
     "sumeet": "lead (lane TBD)",
     "tanisha": "P1 Mobile",
-    "shruj": "TBD",
+    "shruj": "P2 Safety Core",
     "jival": "TBD"
   },
   "update_rule": "Prefix every notes field, decision ('by') and PROGRESS.md heading with your name: sumeet: / tanisha: / shruj: / jival:",
@@ -123,7 +123,7 @@
           "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
           "status": "done",
           "week": 0,
-          "notes": "sumeet: Flutter 3.47.9; mobile/ shell with core/ + features/ + theme; analyze + test pass. Android first (ios/ kept, not built). flutter doctor: Android toolchain \u2713 (licenses no longer needed with new Android CLI). Emulator Medium_Phone_API_37.0 boots. Gradle 9.3.1 wrapper download timed out from Java; fetched manually (sha256 verified) into ~/.gradle/wrapper/dists. Remaining: first flutter build apk (downloading Android libs) + run on emulator. Handing over to tanisha"
+          "notes": "sumeet: Flutter 3.47.9; mobile/ shell (core/, features/, Lamplight theme); analyze + test pass. Android first (ios/ kept, not built). flutter doctor Android ✓; emulator Medium_Phone_API_37.0; first debug APK built (~30 min first time: Gradle 9.3.1, NDK 28.2, SDK Platform 36 downloaded) and runs on the emulator. Gradle wrapper download timed out from Java once; fixed by manual download (README troubleshooting). Handed over to tanisha"
         },
         {
           "id": "P1-W0-android-device",
@@ -134,10 +134,10 @@
         },
         {
           "id": "P1-W1-signup-contacts-ui",
-          "title": "Sign-up (OTP) + trusted contacts screens",
+          "title": "Sign-up (email code) + trusted contacts screens",
           "status": "done",
           "week": 1,
-          "notes": "tanisha: Phone entry, verification-code and trusted-contact screens implemented as a local UI flow. API/OTP delivery and durable contact sync await the shared contract and P2 endpoints."
+          "notes": "tanisha: Phone entry, verification-code and trusted-contact screens implemented as a local UI flow. API/OTP delivery and durable contact sync await the shared contract and P2 endpoints. | sumeet: sign-in switched from phone number to email (free, PLANNER §3b); contacts keep phone numbers for on-device SMS. Test: onboarding_email_test.dart"
         },
         {
           "id": "P1-W3-journey-ui-timers",
@@ -165,7 +165,7 @@
           "title": "Covert SOS: volume-button pattern, Quick Settings tile, widget",
           "status": "done",
           "week": 4,
-          "notes": "tanisha: Added foreground Volume Up \u2192 Volume Down \u2192 Volume Up pattern, Quick Settings tile, and home-screen widget; each posts a local-only SOS notification. Flutter analyze/test and Android debug APK build pass. Manual trigger steps are documented in mobile/README.md; notification display and launcher/tile interaction remain to be manually checked."
+          "notes": "tanisha: Added foreground Volume Up → Volume Down → Volume Up pattern, Quick Settings tile, and home-screen widget; each posts a local-only SOS notification. Flutter analyze/test and Android debug APK build pass. Manual trigger steps are documented in mobile/README.md; notification display and launcher/tile interaction remain to be manually checked."
         },
         {
           "id": "P1-W5-sms-fallback-lowbattery",
@@ -205,7 +205,7 @@
       ]
     },
     "P2": {
-      "owner": "Safety Core (TBD)",
+      "owner": "shruj",
       "tasks": [
         {
           "id": "P2-W0-monorepo",
@@ -258,7 +258,7 @@
         },
         {
           "id": "P2-W4-watchdog-alert-ladder",
-          "title": "Heartbeat watchdog + FCM push \u2192 Telegram bot \u2192 email ladder, idempotent",
+          "title": "Heartbeat watchdog + FCM push → Telegram bot → email ladder, idempotent",
           "status": "todo",
           "week": 4,
           "notes": "sumeet: free channels only (no CPaaS SMS/voice). SMS comes from the user's phone (P1-W5)"
@@ -301,7 +301,7 @@
           "title": "Free verification design: college email + security sign-off, ML Kit face check",
           "status": "todo",
           "week": 1,
-          "notes": "sumeet: no paid KYC/liveness vendors (\u20b90 budget)"
+          "notes": "sumeet: no paid KYC/liveness vendors (₹0 budget)"
         },
         {
           "id": "P3-W3-tier1-verification",
@@ -491,7 +491,7 @@
     {
       "date": "2026-11-11",
       "decision": "Build iOS only for now; Android later (P1-LATER-android-port). mobile/android/ kept, not built",
-      "why": "Team priority. iOS limits handled per PLANNER \u00a73a",
+      "why": "Team priority. iOS limits handled per PLANNER §3a",
       "by": "sumeet"
     },
     {
@@ -523,17 +523,21 @@
       "decision": "Switch to Android first; iOS later (P1-LATER-ios-port). Replaces the earlier iOS-only decision",
       "why": "Free to ship to unlimited testers (APK), auto SMS + FCM + FLAG_SECURE possible, matches India's low-end Android user base",
       "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Sign-in uses an email code (college email on campus), not phone/SMS; trusted contacts keep phone numbers for on-device SMS",
+      "why": "Email is free; SMS OTP costs money (₹0 budget)",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Shruj owns P2 Safety Core; starts on branch p2/otp-device-auth",
+      "why": "Team assignment",
+      "by": "sumeet"
     }
   ],
   "blockers": [
-    {
-      "id": "B1",
-      "title": "Sumeet's Mac: first Android build had Java download timeouts; Gradle wrapper fixed manually; build verification pending",
-      "affects": [
-        "P1-W0-flutter-shell"
-      ],
-      "by": "sumeet"
-    },
     {
       "id": "B2",
       "title": "Legal review (DPDP children, UIDAI registration, liability)",
@@ -560,6 +564,7 @@
     }
   ],
   "next_steps": [
+    "shruj: start P2-W1-otp-device-auth on branch p2/otp-device-auth (email code + device-bound keys; see PLANNER §3b)",
     "sumeet: merge PR #1 (setup/foundation -> main)",
     "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
@@ -567,5 +572,5 @@
     "P1/P2: connect the onboarding and trusted-contact screens to the agreed auth and contacts APIs",
     "P1-W6-e2e-location: integrate client envelope when P2 device keys, contact-key lookup, and relay are ready"
   ],
-  "budget": "zero: free tools/services only (PLANNER \u00a73b)"
+  "budget": "zero: free tools/services only (PLANNER §3b)"
 }

@@ -116,9 +116,10 @@ To add the tile, open Quick Settings, choose **Edit**, and drag **SixthSense
 SOS** into the active tiles. To add the widget, long-press the launcher home
 screen, open **Widgets**, find SixthSense, and place the **SOS** widget.
 
-The onboarding phone and verification-code screens are local UI only: any
-10-digit phone number and any code of at least four characters pass the screen;
-no SMS is sent or verified. Trusted contacts can be skipped with **Do this
+The onboarding email and verification-code screens are local UI only: any
+valid-looking email address and any code of at least four characters pass the
+screen; no email is sent or verified yet (that is `P2-W1-otp-device-auth`).
+Sign-in uses **email, not SMS**, because email codes are free (PLANNER §3b). Trusted contacts can be skipped with **Do this
 later**.
 
 ### Manual Android verification
