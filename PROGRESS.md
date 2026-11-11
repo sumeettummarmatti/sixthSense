@@ -16,10 +16,24 @@
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
-**Blockers:** Xcode first launch + iOS simulator download · Apple Developer account ($99/yr) · legal review (DPDP, UIDAI) · campus MoU.
+**Budget:** ₹0, free tools only (`PLANNER.md` §3b).
+**Blockers:** Xcode first launch + iOS simulator download · free iOS signing limits pilot size · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha. sumeet, shruj, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
 
 ---
+
+## 2026-11-11 — sumeet: Zero-cost plan
+- **Budget is ₹0.** Every paid service in the docs now has a free substitute (`PLANNER.md` §3b):
+  - free Apple ID signing instead of the $99 account
+  - Telegram bot + email alerts instead of paid SMS/voice and APNs
+  - email OTP instead of SMS OTP
+  - college-email + security sign-off verification instead of paid KYC
+  - Apple Vision face check
+  - OpenFreeMap tiles
+  - Oracle Always Free hosting
+  - in-house security testing
+- `P3-W3-tier1-verification` (Aadhaar KYC) is deferred: it needs a paid vendor.
+- **Trade-off:** free iOS signing means 7-day app expiry and max 3 devices, so the free pilot is small. A wider pilot needs a sponsor for the $99 account, or Android.
 
 ## 2026-11-11 — sumeet: iOS only, name-tagged updates, Tanisha on P1
 - **iOS only for now; Android later** (`P1-LATER-android-port`). `mobile/android/` stays in the repo but isn't built or tested.

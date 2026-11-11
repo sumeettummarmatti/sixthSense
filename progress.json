@@ -94,7 +94,7 @@
         },
         {
           "id": "ALL-W12-pilot-pentest",
-          "title": "Pilot launch on one campus + external pentest",
+          "title": "Small free pilot (team + testers) + in-house security test (OWASP ZAP, MobSF)",
           "status": "todo",
           "week": 12,
           "notes": ""
@@ -127,10 +127,10 @@
         },
         {
           "id": "P1-W0-ios-signing",
-          "title": "Apple Developer account, bundle ID, signing team, run on a real iPhone",
+          "title": "Free Apple ID signing (Personal Team), run on a real iPhone",
           "status": "todo",
           "week": 0,
-          "notes": "sumeet: $99/yr account needed for APNs + TestFlight; free signing works for simulator and 7-day device installs"
+          "notes": "sumeet: no $99 account (₹0 budget). Free signing: 7-day expiry, 3 devices, no push/TestFlight"
         },
         {
           "id": "P1-W1-signup-contacts-ui",
@@ -169,7 +169,7 @@
         },
         {
           "id": "P1-W5-sms-fallback-lowbattery",
-          "title": "Offline fallback (iOS: pre-filled SMS + one-tap 112; server watchdog SMS) + low-battery mode",
+          "title": "Offline fallback (iOS: pre-filled SMS from user's plan + one-tap 112; server watchdog Telegram/email) + low-battery mode",
           "status": "todo",
           "week": 5,
           "notes": "sumeet: iOS can't send SMS silently; pairs with P2-W4-watchdog-alert-ladder"
@@ -237,10 +237,10 @@
         },
         {
           "id": "P2-W1-otp-device-auth",
-          "title": "Phone OTP + device-bound keys",
+          "title": "Email OTP (college email) + device-bound keys",
           "status": "todo",
           "week": 1,
-          "notes": ""
+          "notes": "sumeet: phone SMS OTP costs money; email OTP is free"
         },
         {
           "id": "P2-W2-trusted-contacts",
@@ -258,10 +258,10 @@
         },
         {
           "id": "P2-W4-watchdog-alert-ladder",
-          "title": "Heartbeat watchdog + push/SMS/voice ladder, idempotent",
+          "title": "Heartbeat watchdog + Telegram bot → email alert ladder, idempotent",
           "status": "todo",
           "week": 4,
-          "notes": "sumeet: on iOS the server watchdog is the only automatic offline SMS path, so treat it as critical. Push via APNs first"
+          "notes": "sumeet: free channels only (no CPaaS SMS/voice, no APNs). On iOS the server watchdog is the only automatic offline path, so treat it as critical"
         },
         {
           "id": "P2-W5-location-relay",
@@ -298,17 +298,17 @@
       "tasks": [
         {
           "id": "P3-W1-vendor-selection",
-          "title": "Pick KYC + liveness vendors, get sandbox access",
+          "title": "Free verification design: college email + security sign-off, Apple Vision face check",
           "status": "todo",
           "week": 1,
-          "notes": ""
+          "notes": "sumeet: no paid KYC/liveness vendors (₹0 budget)"
         },
         {
           "id": "P3-W3-tier1-verification",
           "title": "Tier 1: Aadhaar app/DigiLocker + liveness, delete-after-verify, dedupe hash",
-          "status": "todo",
+          "status": "blocked",
           "week": 3,
-          "notes": ""
+          "notes": "sumeet: deferred; Aadhaar/DigiLocker KYC needs paid vendor/registration. Pilot uses Tier 2 only"
         },
         {
           "id": "P3-W4-tier2-campus",
@@ -511,6 +511,12 @@
       "decision": "Tanisha owns P1 Mobile",
       "why": "Team assignment",
       "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Zero budget: free substitutes for everything paid (free Apple ID signing, Telegram bot + email alerts, email OTP, Tier-2 campus verification only, Apple Vision face check, OpenFreeMap, Oracle Always Free hosting, in-house pentest)",
+      "why": "Team has no budget",
+      "by": "sumeet"
     }
   ],
   "blockers": [
@@ -540,10 +546,9 @@
     },
     {
       "id": "B4",
-      "title": "Apple Developer account ($99/yr) for APNs, TestFlight, real devices",
+      "title": "Free iOS signing limits pilot size (7-day expiry, 3 devices, no push). Options: college sponsors $99 account, or Android later",
       "affects": [
-        "P1-W0-ios-signing",
-        "P2-W4-watchdog-alert-ladder"
+        "ALL-W12-pilot-pentest"
       ],
       "by": "sumeet"
     }
@@ -551,8 +556,8 @@
   "next_steps": [
     "sumeet: merge PR #1 (setup/foundation -> main)",
     "tanisha: finish iOS toolchain (B1), run the app on the iPhone simulator, close P1-W0-flutter-shell",
-    "sumeet: decide on the Apple Developer account (B4)",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
     "ALL-W1-api-contract: whole team fills contracts/openapi.yaml"
-  ]
+  ],
+  "budget": "zero: free tools/services only (PLANNER §3b)"
 }

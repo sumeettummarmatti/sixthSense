@@ -3,7 +3,7 @@
 > Claude Code loads this file automatically. Keep it short and current; details live in the linked files.
 
 ## What this is
-SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and children: **Avoid** risky routes, **Reduce** risk during a journey (check-ins, Walk With Me companions), **Interrupt** harm (parallel escalation, duress PIN, offline SMS), and **Fix** causes (anonymous place reports → campus dashboard). Campus pilot in ~12 weeks, 4-person team: **sumeet, tanisha (P1 Mobile), shruj, jival**. **iOS only for now**; Android later (`PLANNER.md` §3a).
+SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and children: **Avoid** risky routes, **Reduce** risk during a journey (check-ins, Walk With Me companions), **Interrupt** harm (parallel escalation, duress PIN, offline SMS), and **Fix** causes (anonymous place reports → campus dashboard). Campus pilot in ~12 weeks, 4-person team: **sumeet, tanisha (P1 Mobile), shruj, jival**. **iOS only for now**; Android later (`PLANNER.md` §3a). **Budget ₹0**: use only free tools/services (`PLANNER.md` §3b); never add a paid dependency.
 
 ## Read first, every session
 1. `progress.json` — **source of truth**: current phase, task statuses, blockers, next steps.

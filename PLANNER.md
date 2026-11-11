@@ -5,6 +5,7 @@
 > Source docs: `Docs/SafeThread_HLD_and_TechStack.md`, `Docs/SafeThread_Team_Split.md`, `Docs/SafeThread_Verification_and_Anonymity.md`.
 > Live status: `progress.json` (source of truth) · `PROGRESS.md` (session log). Task IDs below match `progress.json`.
 > **Platform: iOS only for now.** Android comes later (see §3a).
+> **Budget: ₹0.** Everything must be free (see §3b). No paid accounts, vendors or hosting.
 > **Team:** Sumeet · Tanisha (P1 Mobile) · Shruj · Jival. Every progress update is prefixed with the author's name (see §8).
 
 ---
@@ -61,7 +62,7 @@ Edge: API gateway — TLS 1.3, rate limits, WAF, device attestation
 │ Routing · Trust & Safety                                   │   │                                 │
 │ Postgres+PostGIS (core) · Redis · NATS · KMS               │   │ Postgres+PostGIS (insight, sep.)│
 └────────────────────────────────────────────────────────────┘   └─────────────────────────────────┘
-External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · APNs (FCM when Android lands) · 112
+External (all free, §3b): college email OTP · on-device face check (Apple Vision) · Telegram bot + email for alerts · user's own SMS app + dialer · 112
 ```
 
 ### Key decisions (ADRs)
@@ -71,7 +72,7 @@ External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · A
 | ADR-2 | Escalation timer runs **on the phone**; server is watchdog | Works offline / during outage (SMS + dialer fallback) |
 | ADR-3 | Server relays location as **ciphertext only**, no persistence | Can't leak, sell, or be compelled |
 | ADR-4 | Modular monolith first; extract Escalation + Notification first | Ship fast, split cleanly |
-| ADR-5 | Buy identity, liveness, SMS, masking — **build policy** | Value = who sees what, when, for how long |
+| ADR-5 | ~~Buy identity, liveness, SMS~~ → **free substitutes** (§3b); build policy ourselves | ₹0 budget; value = who sees what, when, for how long |
 | ADR-6 | Per-session keys → crypto-shredding | Deletion that holds even in backups |
 
 ### Backend modules (core rules)
@@ -80,7 +81,7 @@ External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · A
 | identity | Store verification *outcome* only; dedupe = HMAC(pepper, name‖DOB‖gender); no Aadhaar no., no ID image |
 | journey | Duress PIN shows the same screen as real PIN; 3 wrong PINs = coercion |
 | escalation | Idempotent per journey; never waits on one channel; signed alerts |
-| notification | Push → SMS → voice ladder, retries, delivery receipts |
+| notification | Telegram bot → email ladder (free), retries, delivery receipts; SMS/voice only from the user's own phone |
 | matching | Coarse cell only; per-hour caps; no re-match same pair 14 days; women-only/campus-only filters |
 | walks | Per-walk pseudonyms; companion never sees destination; escrow shredded at 30 days |
 | relay | Ciphertext only, no persistence |
@@ -98,9 +99,9 @@ External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · A
 | Mobile | **Flutter, iOS only for now** + Swift platform channels (Kotlin when Android lands) | MVP |
 | Mobile storage | Drift (SQLite) + SQLCipher; iOS Keychain / Secure Enclave | MVP |
 | Mobile E2E | libsignal (or OpenMLS) | MVP (W5–6) |
-| Maps | MapLibre GL + OSM tiles | MVP |
-| Integrity | App Attest (Play Integrity later) | MVP |
-| Push | APNs (FCM later) | MVP |
+| Maps | MapLibre GL + **OpenFreeMap** tiles (free, no key) | MVP |
+| Integrity | Device-bound keys only (App Attest needs paid account: later) | MVP |
+| Push | **None from server** (APNs needs paid account). Local notifications on phone; live updates over WebSocket while app is open | MVP |
 | Backend | **Python 3.12 + FastAPI**, SQLAlchemy 2 + Alembic, pydantic-settings | MVP (Go for hot paths later) |
 | Realtime | FastAPI WebSockets | MVP |
 | DBs | **PostgreSQL 16 + PostGIS** ×2 (core, insight) | MVP |
@@ -112,9 +113,9 @@ External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · A
 | Dashboard / T&S | **Next.js (TS) + MapLibre** | MVP |
 | Tooling | uv, ruff, pytest · pnpm, eslint · Docker Compose | MVP |
 | CI | GitHub Actions + Semgrep + Trivy + Dependabot | **Later** (not set up; local checks for now) |
-| Cloud | AWS Mumbai (ECS Fargate, RDS, KMS, S3 Object Lock), Terraform | **Later** (local-first now) |
-| Observability | OpenTelemetry + Grafana/Prometheus + Sentry (PII scrub) | Later |
-| Vendors | KYC aggregator, liveness SDK, DLT-registered CPaaS | Pick in W1–2 (P3/P2) |
+| Hosting | Local Docker now; pilot on **Oracle Cloud Always Free** VM (or a team laptop + Cloudflare Tunnel). AWS only if funded | Later |
+| Observability | OpenTelemetry + Grafana/Prometheus (self-hosted, free) | Later |
+| Vendors | **None** (all replaced by free options in §3b) | — |
 
 ### 3a. Platform: iOS only for now (decided 2026-11-11)
 We build and test **iOS only** until the pilot flow works; Android follows later. The Flutter code stays cross-platform, and `mobile/android/` is kept but **not built or tested**. Do not add Android-only work now.
@@ -123,13 +124,31 @@ iOS blocks some things the docs assume. This is how we handle each one:
 
 | Docs assume | iOS limit | What we build on iOS |
 |---|---|---|
-| Phone sends SMS by itself when offline (rule 3, ADR-2) | Apps cannot send SMS silently | (1) **Server watchdog** sends SMS through CPaaS when heartbeats stop; (2) the phone shows a **pre-filled SMS** (one tap to send) plus a **one-tap call to 112** |
+| Phone sends SMS by itself when offline (rule 3, ADR-2) | Apps cannot send SMS silently | (1) **Server watchdog** alerts contacts via Telegram bot + email when heartbeats stop; (2) the phone shows a **pre-filled SMS** (one tap to send) plus a **one-tap call to 112** |
 | Covert SOS via power / volume buttons | Apps cannot read hardware buttons | **App Intents**: Action Button, Back Tap and Siri Shortcut trigger SOS; in-app hidden gesture |
 | Escalation timer keeps running in the background | iOS suspends apps | Check-ins scheduled as **local notifications**; background location mode only during an active journey; server watchdog as backup |
 | Block screenshots (`FLAG_SECURE`) | Not possible | Detect screenshots and recording (`UIScreen.isCaptured`), hide sensitive views while recording, flag to T&S |
-| FCM push | — | APNs (needs the paid Apple Developer account) |
+| FCM push | — | No server push (APNs is paid): local notifications + WebSocket while open |
 
-**Needs:** a Mac with Xcode for anyone building the app, plus an **Apple Developer account ($99/year)** for APNs, TestFlight and real-device installs.
+**Needs:** a Mac with Xcode for anyone building the app. We use a **free Apple ID** ("Personal Team") to sign, not the $99 account.
+
+### 3b. Zero-cost plan (decided 2026-11-11)
+Rule: **nothing in the build may cost money.** If a feature needs a paid service, use the free substitute below or defer it.
+
+| Paid thing in the docs | Free substitute | What we lose |
+|---|---|---|
+| Apple Developer account ($99/yr) | Free Apple ID signing in Xcode + iPhone simulator | App expires on real iPhones every **7 days** (re-install from Xcode); max 3 devices; no TestFlight, no APNs, no App Store |
+| APNs push | Local notifications for check-ins (on-device, free); WebSocket while the app is open | Server can't wake a closed app |
+| SMS / voice CPaaS (Twilio, Exotel, DLT) | **Telegram bot** (free, instant push on contacts' phones) + **email** (Gmail SMTP / free tier); phone opens a **pre-filled SMS from the user's own plan** + **tel:112** | Contacts must open the bot once to receive alerts; no automatic server SMS or robocall |
+| Phone OTP by SMS | **Email OTP** (college email for campus) + device-bound keys | No phone-number verification |
+| KYC aggregator (Aadhaar / DigiLocker) | **Tier 2 only:** college email + campus security sign-off for companions | No Tier 1 government ID check in the pilot |
+| Liveness SDK | On-device face check with **Apple Vision** (free) | Weaker anti-spoofing than paid SDKs |
+| Map tiles (paid providers) | **OpenFreeMap** / self-hosted Protomaps; Valhalla is open source | — |
+| AWS (ECS, RDS, KMS, S3) | **Oracle Cloud Always Free** VM running our Docker Compose; keys in the DB with app-level encryption | Less managed security (no KMS, no Object Lock) |
+| Sentry / paid monitoring | Self-hosted Grafana + Prometheus, or just logs | — |
+| External pentest | In-house red-team week with free tools (OWASP ZAP, MobSF) | No independent audit |
+
+**Pilot impact:** with free signing, each pilot iPhone must be plugged into a Mac weekly. So the free pilot is **small (team + a few testers)**. A wider campus pilot needs either the $99 account (if sponsored, e.g. by the college) or Android (APK installs are free).
 
 ---
 
@@ -139,13 +158,13 @@ iOS blocks some things the docs assume. This is how we handle each one:
 *"The phone is the safety net. It must work with no internet."*
 - **Never:** require ID to be protected · let a server problem stop an alert · upload exact report locations.
 - **Needs:** P2 auth/journey/alert APIs · P3 walk/verification/handshake APIs · P4 routes/labels/report APIs.
-- **Done when (iOS):** Wi-Fi + data off, miss a check-in → the phone shows a pre-filled SMS + call-112 prompt, **and** the server watchdog SMSes the contact once heartbeats stop.
+- **Done when (iOS):** Wi-Fi + data off, miss a check-in → the phone shows a pre-filled SMS + call-112 prompt, **and** the server watchdog alerts the contact on Telegram + email once heartbeats stop.
 
 ### P2 — Safety Core Backend + Infra
 *"When something goes wrong, the right people find out, fast."*
 - **Never:** store live location · let contacts see location outside a journey/alert · notify a contact they were removed.
 - **Needs:** P1 heartbeats/events · P3 "find nearby responders".
-- **Done when:** SOS reaches contacts by push in seconds; auto-moves to SMS then call; duplicate trigger sends nothing extra.
+- **Done when:** SOS reaches contacts on Telegram in seconds; auto-moves to email if not acknowledged; duplicate trigger sends nothing extra.
 
 ### P3 — Trust: Verification + Walk With Me + Anonymity
 *"Strangers are accountable during the walk and strangers again after it."*
@@ -189,7 +208,7 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 | 7–8 | **M4 Walk With Me** — full walk end-to-end, nothing left behind |
 | 9–10 | **M5 Reports + routing + dashboard** — campus security sees a real cluster |
 | 11 | **M6 Red-team week** — every break found is fixed |
-| 12 | **M7 Pilot** — live on one campus + external pentest |
+| 12 | **M7 Pilot** — small free pilot (team + testers) + in-house security test |
 
 ### Task IDs by lane
 | Wk | P1 Mobile | P2 Safety Core | P3 Trust | P4 Insight |
@@ -210,11 +229,11 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 ## 7. Open items / blockers (before or during build)
 1. **Legal:** DPDP rules for children's monitoring; UIDAI offline-verification entity registration; responder liability; log retention vs crypto-shredding.
 2. **Campus MoU** (aggregates-only data sharing) + campus security liaison.
-3. **Vendors:** KYC aggregator + liveness SDK + DLT-registered CPaaS — sandbox access first.
+3. **Vendors:** none (₹0 budget, §3b). Revisit only if someone sponsors costs.
 4. **Escrow unseal policy:** approvers, timelines, user notification, transparency reporting.
 5. **Languages:** Kannada + Hindi first.
-6. **Apple Developer account ($99/year)** for APNs, TestFlight and real-device testing; needed by week 3–4.
-7. **iOS offline gap:** the phone cannot send SMS alone; signed off as "server watchdog SMS + one-tap SMS/112 on phone" (§3a). Re-check with the team before pilot.
+6. **Free iOS signing limits** (7-day expiry, 3 devices, no push/TestFlight) cap the pilot size. Ask the college to sponsor the $99 account, or go Android for a wider pilot.
+7. **iOS offline gap:** the phone cannot send SMS alone; signed off as "server watchdog Telegram + email alerts + one-tap SMS/112 on phone" (§3a, §3b). Re-check with the team before pilot.
 
 ---
 
