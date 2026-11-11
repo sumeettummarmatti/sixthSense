@@ -86,3 +86,14 @@ def verify_device_signature(der: bytes, message: bytes, b64_signature: str) -> b
     except (binascii.Error, ValueError, InvalidSignature):
         return False
     return True
+
+
+def load_raw_32_byte_key(b64: str) -> bytes:
+    """Decode a base64 raw 32-byte public key (X25519 or Ed25519)."""
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except binascii.Error as exc:
+        raise InvalidDeviceKey("not base64") from exc
+    if len(raw) != 32:
+        raise InvalidDeviceKey("key must be 32 bytes")
+    return raw

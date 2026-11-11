@@ -8,6 +8,7 @@ Redis keys (all values and key suffixes are keyed hashes, never raw emails, code
   at:<token hash>          "<account id>:<device id>"      TTL access_token_ttl_seconds
 """
 
+import base64
 import hmac
 import logging
 import uuid
@@ -27,7 +28,7 @@ from app.core.db import get_db
 from app.core.redis import get_redis
 from app.identity import schemas, security
 from app.identity.mailer import SmtpMailer, get_mailer
-from app.identity.models import Account, Device
+from app.identity.models import Account, Device, DeviceE2EKeys
 
 router = APIRouter(prefix="/auth", tags=["identity"])
 log = logging.getLogger(__name__)
@@ -219,3 +220,52 @@ def get_current_session(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
     account_id, device_id = value.decode().split(":")
     return CurrentSession(uuid.UUID(account_id), uuid.UUID(device_id))
+
+
+CurrentSessionDep = Annotated[CurrentSession, Depends(get_current_session)]
+
+
+@router.put("/device/e2e-keys", response_model=schemas.E2EKeys)
+def upload_e2e_keys(
+    body: schemas.E2EKeysUpload, session: CurrentSessionDep, db: DbDep
+) -> schemas.E2EKeys:
+    """Publish this device's X25519 + Ed25519 public keys for E2E location sharing.
+
+    Replaces any earlier keys and issues a new key_id, so contacts can tell keys apart.
+    """
+    try:
+        x25519 = security.load_raw_32_byte_key(body.x25519_public_key)
+        ed25519 = security.load_raw_32_byte_key(body.ed25519_public_key)
+    except security.InvalidDeviceKey as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_e2e_key") from exc
+    if x25519 == bytes(32):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_e2e_key")
+
+    key_id = uuid.uuid4()
+    db.execute(
+        insert(DeviceE2EKeys)
+        .values(
+            device_id=session.device_id,
+            key_id=key_id,
+            x25519_public_key=x25519,
+            ed25519_public_key=ed25519,
+        )
+        .on_conflict_do_update(
+            index_elements=[DeviceE2EKeys.device_id],
+            set_={
+                "key_id": key_id,
+                "x25519_public_key": x25519,
+                "ed25519_public_key": ed25519,
+                "updated_at": datetime.now(UTC),
+            },
+        )
+    )
+    audit.record(
+        db, "device.e2e_keys_set", actor=session.account_id, target=f"device:{session.device_id}"
+    )
+    db.commit()
+    return schemas.E2EKeys(
+        key_id=key_id,
+        x25519_public_key=base64.b64encode(x25519).decode(),
+        ed25519_public_key=base64.b64encode(ed25519).decode(),
+    )

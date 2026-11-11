@@ -42,3 +42,21 @@ class Device(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DeviceE2EKeys(Base):
+    """Public keys a device uses for end-to-end location sharing (P1-W6 envelope).
+
+    Separate from the P-256 sign-in key: the envelope needs X25519 (key agreement) and
+    Ed25519 (sender signatures). Uploading new keys replaces the old ones with a new key_id.
+    """
+
+    __tablename__ = "device_e2e_keys"
+
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
+    )
+    key_id: Mapped[uuid.UUID]
+    x25519_public_key: Mapped[bytes] = mapped_column(LargeBinary(32))
+    ed25519_public_key: Mapped[bytes] = mapped_column(LargeBinary(32))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

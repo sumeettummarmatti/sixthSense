@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     access_token_ttl_seconds: int = 900
     device_challenge_ttl_seconds: int = 120
 
+    # Trusted contacts (P2-W2)
+    max_trusted_contacts: int = 5  # accepted + pending invites
+    contact_invite_ttl_seconds: int = 172_800  # 48 h
+    contact_invites_per_hour: int = 10
+    invite_base_url: str = "https://sixthsense.app/invite"
+
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_username: str = ""

@@ -46,3 +46,18 @@ class Session(BaseModel):
     expires_in: int
     account_id: uuid.UUID
     device_id: uuid.UUID
+
+
+class E2EKeysUpload(BaseModel):
+    x25519_public_key: str = Field(
+        description="Base64 raw 32-byte X25519 public key", max_length=64
+    )
+    ed25519_public_key: str = Field(
+        description="Base64 raw 32-byte Ed25519 public key", max_length=64
+    )
+
+
+class E2EKeys(BaseModel):
+    key_id: uuid.UUID
+    x25519_public_key: str
+    ed25519_public_key: str
