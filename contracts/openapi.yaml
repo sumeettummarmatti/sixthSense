@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SixthSense API
-  version: 0.1.0
+  version: 0.2.0
   description: >
     Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
     Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
@@ -157,6 +157,145 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
         "422": {$ref: "#/components/responses/ValidationError"}
+  /auth/device/e2e-keys:
+    put:
+      tags: [auth]
+      summary: Publish this device's E2E location keys
+      description: >
+        Upload the raw 32-byte X25519 (key agreement) and Ed25519 (signing) public keys used by the
+        live-location envelope (P1-W6). These are separate from the P-256 sign-in key. Uploading
+        again replaces them and returns a new key_id. Call after every sign-in on a new install.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/E2EKeysUpload"}
+      responses:
+        "200":
+          description: Keys stored
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/E2EKeys"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "422":
+          description: "Not base64, not 32 bytes, or an all-zero X25519 key (detail: invalid_e2e_key)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts/invites:
+    post:
+      tags: [contacts]
+      summary: Create a one-time invite link to share from the phone
+      description: >
+        The owner shares `invite_url` with the phone's share sheet (WhatsApp, SMS...). The server
+        never sees the contact's name or phone number: keep those on the phone, mapped to
+        `contact_link_id`. The token is after '#', so it is never sent to a web server. Expires in
+        48 h. Max 5 contacts (accepted + pending) and 10 invites per hour.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/InviteCreate"}
+            example: {owner_label: Priya}
+      responses:
+        "201":
+          description: Invite created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Invite"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "409":
+          description: "Already 5 contacts/pending invites (detail: contact_limit_reached)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+        "429":
+          description: "Too many invites this hour (detail: rate_limited)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts/invites/accept:
+    post:
+      tags: [contacts]
+      summary: Accept an invite (called by the contact, signed in)
+      description: Accepting the same invite again returns 200 and changes nothing.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/InviteAccept"}
+      responses:
+        "200":
+          description: You are now this person's trusted contact
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/InviteAccepted"}
+        "400":
+          description: "Your own invite (detail: cannot_add_self)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Unknown, expired, cancelled or already used by someone else (detail: invite_invalid)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts:
+    get:
+      tags: [contacts]
+      summary: List my trusted contacts (pending and accepted)
+      description: >
+        Only the owner's own links. Contacts get an empty list for people they watch over
+        (rule 4: nothing outside an active journey or alert). No contact details are returned.
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: My contacts
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ContactList"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /contacts/{link_id}:
+    delete:
+      tags: [contacts]
+      summary: Remove a contact or cancel a pending invite (silent)
+      description: The contact is never told. Their access ends immediately.
+      security: [{bearer: []}]
+      parameters:
+        - {name: link_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "204": {description: Removed}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not one of my contacts (detail: contact_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /contacts/{link_id}/keys:
+    get:
+      tags: [contacts]
+      summary: E2E public keys of an accepted contact's devices
+      description: Use these to encrypt live location to each of the contact's devices (P1-W6).
+      security: [{bearer: []}]
+      parameters:
+        - {name: link_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: One entry per active device that uploaded keys (can be empty)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ContactKeys"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my contact, or not accepted yet (detail: contact_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
 components:
   securitySchemes:
     bearer:
@@ -166,6 +305,8 @@ components:
   responses:
     ValidationError:
       description: Request body failed validation
+    NotAuthenticated:
+      description: "Missing, expired or unknown access token (detail: not_authenticated)"
   schemas:
     Error:
       type: object
@@ -224,3 +365,66 @@ components:
         expires_in: {type: integer, example: 900, description: seconds}
         account_id: {type: string, format: uuid}
         device_id: {type: string, format: uuid, description: Store this on the phone}
+    E2EKeysUpload:
+      type: object
+      required: [x25519_public_key, ed25519_public_key]
+      properties:
+        x25519_public_key: {type: string, maxLength: 64, description: Base64 raw 32-byte X25519 public key}
+        ed25519_public_key: {type: string, maxLength: 64, description: Base64 raw 32-byte Ed25519 public key}
+    E2EKeys:
+      type: object
+      required: [key_id, x25519_public_key, ed25519_public_key]
+      properties:
+        key_id: {type: string, format: uuid}
+        x25519_public_key: {type: string}
+        ed25519_public_key: {type: string}
+    InviteCreate:
+      type: object
+      required: [owner_label]
+      properties:
+        owner_label: {type: string, minLength: 1, maxLength: 40, description: "How the contact sees you in alerts, e.g. Priya"}
+    Invite:
+      type: object
+      required: [contact_link_id, invite_token, invite_url, expires_at]
+      properties:
+        contact_link_id: {type: string, format: uuid, description: Store on the phone next to the contact's name and number}
+        invite_token: {type: string}
+        invite_url: {type: string, example: "https://sixthsense.app/invite#<token>"}
+        expires_at: {type: string, format: date-time}
+    InviteAccept:
+      type: object
+      required: [invite_token]
+      properties:
+        invite_token: {type: string, maxLength: 128, description: The part of the link after '#'}
+    InviteAccepted:
+      type: object
+      required: [owner_label]
+      properties:
+        owner_label: {type: string}
+    ContactLink:
+      type: object
+      required: [id, status, created_at, accepted_at, invite_expires_at]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [pending, accepted]}
+        created_at: {type: string, format: date-time}
+        accepted_at: {type: [string, "null"], format: date-time}
+        invite_expires_at: {type: [string, "null"], format: date-time, description: Only for pending invites}
+    ContactList:
+      type: object
+      required: [contacts]
+      properties:
+        contacts: {type: array, items: {$ref: "#/components/schemas/ContactLink"}}
+    ContactKey:
+      type: object
+      required: [key_id, x25519_public_key, ed25519_public_key]
+      properties:
+        key_id: {type: string, format: uuid}
+        x25519_public_key: {type: string}
+        ed25519_public_key: {type: string}
+    ContactKeys:
+      type: object
+      required: [contact_link_id, keys]
+      properties:
+        contact_link_id: {type: string, format: uuid}
+        keys: {type: array, items: {$ref: "#/components/schemas/ContactKey"}}
