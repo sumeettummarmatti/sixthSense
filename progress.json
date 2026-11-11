@@ -273,9 +273,9 @@
         {
           "id": "P2-W6-signed-alerts",
           "title": "Signed alerts",
-          "status": "todo",
+          "status": "done",
           "week": 6,
-          "notes": ""
+          "notes": "shruj: Push alerts carry the alert as canonical JSON (alert), an Ed25519 signature (sig) and key id (kid); app verifies with the public key from GET /notifications/signing-keys (no sign-in; bundle it in the app). Telegram/email alerts carry a per-contact verification code (e.g. 7KQ2-9M4D) that GET /escalations/active also shows; mismatch = fake. ALERT_SIGNING_KEY (base64 32-byte seed, refused outside dev if default) with ALERT_SIGNING_KEY_PREVIOUS for rotation. Not covered: the phone's own offline SMS (contacts may not have the app). 178 tests pass, ruff clean; live: email code matched the app. Branch p2/signed-alerts."
         },
         {
           "id": "P2-W7-responder-alerts",
@@ -649,6 +649,18 @@
       "decision": "Location keeps relaying during a silent alarm even after the phone was shown 'resolved'",
       "why": "Contacts need her location most during a coerced situation; the app must keep sending covertly",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Push alerts are Ed25519-signed (canonical JSON + sig + kid); Telegram/email alerts carry a per-contact verification code that the app shows on the same alert",
+      "why": "Apps can verify signatures automatically; people can't, but they can compare a short code against the app. Per-contact codes mean one leaked code can't fake another contact's alerts",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "The phone's offline SMS is not signed",
+      "why": "Contacts may not have the app to verify; revisit if all contacts install it",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -689,7 +701,8 @@
     "tanisha: connect onboarding to /auth/otp/request + /auth/otp/verify and add Keystore device sign-in (see contracts/openapi.yaml, PROGRESS.md 'shruj: Email OTP + device auth')",
     "tanisha: contacts screen -> invite link via share sheet + deep link to accept; keep name/number on the phone keyed by contact_link_id; upload E2E keys after sign-in (contracts/openapi.yaml)",
     "tanisha: wire journey screens to /journeys (start, heartbeat every <=5 min, check-in ok/duress, prompt, sos, arrive/end); see contracts/openapi.yaml",
-    "shruj: P2-W6-signed-alerts",
+    "shruj: P2-W7-responder-alerts (needs P3 matching) or W1 leftovers (remove-device endpoint) while P3 catches up",
+    "tanisha: verify push alerts with GET /notifications/signing-keys (bundle current key); show verification_code on the contact alert screen",
     "tanisha: P1-W6 integration: open /relay/ws, auth frame, send envelopes per contact key (GET /contacts/{id}/keys), keep sending during a silent alarm; decrypt incoming frames with the attached sender key",
     "tanisha: contact side of alerts: send FCM token (PUT /notifications/push-token), 'Get alerts on Telegram' button, alert screen with I'm on it / They're safe / Raise alarm (see contracts/openapi.yaml)",
     "sumeet: merge PR #1 (setup/foundation -> main)",

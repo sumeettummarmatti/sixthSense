@@ -12,13 +12,25 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
-| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`); **encrypted location relay** (`P2-W5`) | Firebase + Telegram keys, then `P2-W6-signed-alerts` |
+| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`); **encrypted location relay** (`P2-W5`); **signed alerts** (`P2-W6`) | Firebase + Telegram keys; `P2-W7-responder-alerts` needs P3 matching |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. sumeet, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+
+## 2026-11-11 — shruj: Signed alerts
+- Shruj: Built `P2-W6-signed-alerts` on branch `p2/signed-alerts` (stacked on `p2/location-relay`). Contacts can now tell real SixthSense alerts from fakes.
+- Shruj: **Push alerts are signed.** Each push carries the alert details plus an Ed25519 signature. The app checks it with SixthSense's public key (`GET /notifications/signing-keys`, no sign-in; Tanisha can also build the key into the app). A changed or forged alert fails the check.
+- Shruj: **Telegram and email alerts get a verification code** like `3VYM-5UV5`. The SixthSense app shows the same code on that alert (`GET /escalations/active`). If someone fakes a Telegram or email alert, the code won't match. Codes are different for each contact.
+- Shruj: New `.env` keys: `ALERT_SIGNING_KEY` (generate once, command in `.env.example`; refused outside dev if left at the default) and `ALERT_SIGNING_KEY_PREVIOUS` for rotating without breaking older alerts.
+- Shruj: Not covered: the SMS the phone sends by itself when offline, since contacts may not have the app to check it.
+- Shruj: `contracts/openapi.yaml` explains exactly what is signed and how to verify it.
+- Shruj: Checks: ruff clean, 178 tests pass (6 new, incl. tampered and forged alerts rejected, key rotation). Live: a real alert email's code matched the code in the app. Also fixed one older test that picked up leftover journeys from manual runs in the dev database.
+- Shruj: **After pulling:** copy the signed-alerts block from `.env.example` into your `.env`.
+- **Needs Tanisha:** verify push alerts with the signing key; show `verification_code` on the contact's alert screen.
+- **Next:** `P2-W7-responder-alerts` needs P3's matching first. Meanwhile: Firebase + Telegram keys, and a "remove device" endpoint (W1 leftover).
 
 ## 2026-11-11 — shruj: Encrypted location relay
 - Shruj: Built `P2-W5-location-relay` on branch `p2/location-relay` (stacked on `p2/watchdog-alert-ladder`). This is what Tanisha's location encryption (`P1-W6`) was waiting on.
