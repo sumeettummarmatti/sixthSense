@@ -3,7 +3,7 @@
   "updated_at": "2026-11-11",
   "updated_by": "sumeet",
   "current_phase": "M0-setup",
-  "platform": "ios-only (Android later: P1-LATER-android-port)",
+  "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
     "sumeet": "lead (lane TBD)",
     "tanisha": "P1 Mobile",
@@ -94,7 +94,7 @@
         },
         {
           "id": "ALL-W12-pilot-pentest",
-          "title": "Small free pilot (team + testers) + in-house security test (OWASP ZAP, MobSF)",
+          "title": "Campus pilot (APK shared directly) + in-house security test (OWASP ZAP, MobSF)",
           "status": "todo",
           "week": 12,
           "notes": ""
@@ -120,17 +120,17 @@
       "tasks": [
         {
           "id": "P1-W0-flutter-shell",
-          "title": "Install Flutter, create app shell (features/, core/), iOS toolchain green",
+          "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
           "status": "in_progress",
           "week": 0,
-          "notes": "sumeet: Flutter 3.47.9 + CocoaPods 1.17 installed; mobile/ created (in.sixthsense.sixthsense_app), core/ + features/ folders, themed shell; analyze + test pass. iOS only now: android/ kept but not built. Remaining: sudo xcodebuild -runFirstLaunch + -license accept, xcodebuild -downloadPlatform iOS, then flutter doctor shows Xcode [✓] and the app runs on the iPhone simulator. Handing over to tanisha"
+          "notes": "sumeet: Flutter 3.47.9 installed; mobile/ created (in.sixthsense.sixthsense_app), core/ + features/ folders, themed shell; analyze + test pass. Android first: ios/ kept but not built. Android Studio installed; build-tools + platform-tools present. Remaining: SDK Manager → Android SDK Command-line Tools, flutter doctor --android-licenses, create an emulator, run the app. Handing over to tanisha"
         },
         {
-          "id": "P1-W0-ios-signing",
-          "title": "Free Apple ID signing (Personal Team), run on a real iPhone",
+          "id": "P1-W0-android-device",
+          "title": "Emulator (Device Manager) + run on a real Android phone via USB debugging",
           "status": "todo",
           "week": 0,
-          "notes": "sumeet: no $99 account (₹0 budget). Free signing: 7-day expiry, 3 devices, no push/TestFlight"
+          "notes": "sumeet: free, no account needed"
         },
         {
           "id": "P1-W1-signup-contacts-ui",
@@ -147,11 +147,11 @@
           "notes": ""
         },
         {
-          "id": "P1-W3-ios-background-checkins",
-          "title": "iOS: check-ins as local notifications, background location only during a journey",
+          "id": "P1-W3-android-foreground-service",
+          "title": "Foreground service + exact alarms for journey timers; battery-optimisation exemption",
           "status": "todo",
           "week": 3,
-          "notes": "sumeet: iOS suspends apps; timers can't run in the background (PLANNER §3a)"
+          "notes": "sumeet: test on a Xiaomi/Oppo/Vivo/Samsung phone (aggressive battery savers)"
         },
         {
           "id": "P1-W4-sos-duress-pin",
@@ -161,18 +161,18 @@
           "notes": ""
         },
         {
-          "id": "P1-W4-ios-sos-shortcuts",
-          "title": "iOS covert SOS: App Intents (Action Button, Back Tap, Siri Shortcut)",
+          "id": "P1-W4-android-sos-triggers",
+          "title": "Covert SOS: volume-button pattern, Quick Settings tile, widget",
           "status": "todo",
           "week": 4,
-          "notes": "sumeet: iOS can't read power/volume buttons"
+          "notes": ""
         },
         {
           "id": "P1-W5-sms-fallback-lowbattery",
-          "title": "Offline fallback (iOS: pre-filled SMS from user's plan + one-tap 112; server watchdog Telegram/email) + low-battery mode",
+          "title": "Offline SMS fallback (SmsManager, auto-send from user's plan) + low-battery mode",
           "status": "todo",
           "week": 5,
-          "notes": "sumeet: iOS can't send SMS silently; pairs with P2-W4-watchdog-alert-ladder"
+          "notes": ""
         },
         {
           "id": "P1-W6-e2e-location",
@@ -196,11 +196,11 @@
           "notes": ""
         },
         {
-          "id": "P1-LATER-android-port",
-          "title": "Android: Kotlin modules (auto-SMS, power-button SOS, FLAG_SECURE, FCM), test on Android",
+          "id": "P1-LATER-ios-port",
+          "title": "iOS: Swift modules, local-notification check-ins, App Intents SOS, pre-filled SMS (no auto-SMS on iOS)",
           "status": "todo",
           "week": "later",
-          "notes": "sumeet: paused; iOS first"
+          "notes": "sumeet: paused; Android first. Needs a Mac; $99 Apple account for real distribution"
         }
       ]
     },
@@ -258,10 +258,10 @@
         },
         {
           "id": "P2-W4-watchdog-alert-ladder",
-          "title": "Heartbeat watchdog + Telegram bot → email alert ladder, idempotent",
+          "title": "Heartbeat watchdog + FCM push → Telegram bot → email ladder, idempotent",
           "status": "todo",
           "week": 4,
-          "notes": "sumeet: free channels only (no CPaaS SMS/voice, no APNs). On iOS the server watchdog is the only automatic offline path, so treat it as critical"
+          "notes": "sumeet: free channels only (no CPaaS SMS/voice). SMS comes from the user's phone (P1-W5)"
         },
         {
           "id": "P2-W5-location-relay",
@@ -298,7 +298,7 @@
       "tasks": [
         {
           "id": "P3-W1-vendor-selection",
-          "title": "Free verification design: college email + security sign-off, Apple Vision face check",
+          "title": "Free verification design: college email + security sign-off, ML Kit face check",
           "status": "todo",
           "week": 1,
           "notes": "sumeet: no paid KYC/liveness vendors (₹0 budget)"
@@ -517,12 +517,18 @@
       "decision": "Zero budget: free substitutes for everything paid (free Apple ID signing, Telegram bot + email alerts, email OTP, Tier-2 campus verification only, Apple Vision face check, OpenFreeMap, Oracle Always Free hosting, in-house pentest)",
       "why": "Team has no budget",
       "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Switch to Android first; iOS later (P1-LATER-ios-port). Replaces the earlier iOS-only decision",
+      "why": "Free to ship to unlimited testers (APK), auto SMS + FCM + FLAG_SECURE possible, matches India's low-end Android user base",
+      "by": "sumeet"
     }
   ],
   "blockers": [
     {
       "id": "B1",
-      "title": "iOS toolchain: sudo xcodebuild -runFirstLaunch + -license accept, xcodebuild -downloadPlatform iOS (run in Terminal.app)",
+      "title": "Android toolchain: SDK Manager → Command-line Tools, then flutter doctor --android-licenses",
       "affects": [
         "P1-W0-flutter-shell"
       ],
@@ -546,16 +552,16 @@
     },
     {
       "id": "B4",
-      "title": "Free iOS signing limits pilot size (7-day expiry, 3 devices, no push). Options: college sponsors $99 account, or Android later",
+      "title": "Battery savers on Xiaomi/Oppo/Vivo/Realme/Samsung can kill journey timers; need a test phone from one of these",
       "affects": [
-        "ALL-W12-pilot-pentest"
+        "P1-W3-android-foreground-service"
       ],
       "by": "sumeet"
     }
   ],
   "next_steps": [
     "sumeet: merge PR #1 (setup/foundation -> main)",
-    "tanisha: finish iOS toolchain (B1), run the app on the iPhone simulator, close P1-W0-flutter-shell",
+    "tanisha: finish Android toolchain (B1), create an emulator, run the app, close P1-W0-flutter-shell",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
     "ALL-W1-api-contract: whole team fills contracts/openapi.yaml"
   ],

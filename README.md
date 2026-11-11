@@ -8,7 +8,7 @@
 | **Status** | [`PROGRESS.md`](PROGRESS.md) (for people) · [`progress.json`](progress.json) (for Claude) |
 | **AI context** | [`CLAUDE.md`](CLAUDE.md): loaded automatically by Claude Code |
 | **Design docs** | [`Docs/`](Docs/) (the product is called *SafeThread* there) |
-| **Platform** | **iOS only for now** (Android later; see `PLANNER.md` §3a) |
+| **Platform** | **Android first** (iOS later; see `PLANNER.md` §3a) · **Budget ₹0** (free tools only, §3b) |
 | **Team** | Sumeet · Tanisha (P1 Mobile) · Shruj · Jival |
 | **Colours** | [Lamplight Lavender preview](https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz) (private: ask Sumeet for access) |
 
@@ -51,11 +51,10 @@ brew link --overwrite --force node@22     # puts Node 22 on your PATH (it includ
 brew install --cask docker-desktop
 ```
 
-People who will run the mobile app (P1, plus anyone testing it). **Needs a Mac with Xcode** from the App Store:
+People who will run the mobile app (P1, plus anyone testing it):
 
 ```bash
-brew install --cask flutter
-brew install cocoapods
+brew install --cask flutter android-studio
 ```
 
 Then:
@@ -72,17 +71,23 @@ docker info --format '{{.ServerVersion}}'   # a version number such as 27.3.1 (n
 gh auth status       # Logged in to github.com
 ```
 
-### Step 3: iOS toolchain (skip if you won't run the app)
+### Step 3: Android toolchain (skip if you won't run the app)
 
-We build for **iOS only** right now, so you don't need Android Studio. Install **Xcode** from the App Store first (about 15 GB), open it once, then in Terminal:
+We build for **Android first**, so you need Android Studio (installed in step 2). You don't need Xcode yet.
 
-```bash
-sudo xcodebuild -runFirstLaunch          # asks for your Mac password; nothing shows while typing
-sudo xcodebuild -license accept
-xcodebuild -downloadPlatform iOS         # downloads the iPhone simulator (~8 GB)
-```
+1. Open **Android Studio** from Applications. Choose **Do not import settings**, then **Standard** setup, accept every license, and click **Finish**. Wait for the downloads.
+2. On the welcome screen, click **More Actions → SDK Manager → SDK Tools** tab.
+3. Tick **Android SDK Command-line Tools (latest)**, **Android SDK Build-Tools** and **Android SDK Platform-Tools**. Click **Apply**, then **OK**.
+4. Make an emulator: **More Actions → Virtual Device Manager → Create Virtual Device** (a **Pixel** phone is fine), pick the newest system image, click **Finish**.
+5. Back in Terminal:
+   ```bash
+   flutter config --android-sdk ~/Library/Android/sdk
+   flutter doctor --android-licenses      # type y and press Enter at each prompt
+   ```
 
-✅ You should see: `flutter doctor` shows `[✓]` for **Flutter** and **Xcode**. (`[!]` or `[✗]` next to Android toolchain, Chrome or Connected device is fine.)
+**Real phone (optional, recommended):** on the phone, open **Settings → About phone** and tap **Build number** 7 times. Then **Settings → Developer options → USB debugging** on. Plug it in and tap **Allow**.
+
+✅ You should see: `flutter doctor` shows `[✓]` for **Flutter** and **Android toolchain**. (`[!]` or `[✗]` next to Xcode, Chrome or Connected device is fine.)
 
 ### Step 4: Get the code
 
@@ -134,7 +139,7 @@ Open **one Terminal tab per app** (⌘ + T for a new tab). In each tab, `cd ~/De
 | 2 | Core API | `cd backend && uv run uvicorn app.main:app --reload --port 8000` | http://localhost:8000/docs |
 | 3 | Insight API | `cd insight && uv run uvicorn app.main:app --reload --port 8001` | http://localhost:8001/docs |
 | 4 | Dashboard | `cd dashboard && corepack pnpm dev` | http://localhost:3000 |
-| 5 | Mobile app | `open -a Simulator`, then `cd mobile && flutter run -d iPhone` | opens in the iPhone simulator |
+| 5 | Mobile app | `flutter emulators --launch <name>` (see `flutter emulators`), then `cd mobile && flutter run` | opens on the emulator or your USB phone |
 
 **To stop:** press **Ctrl + C** in each tab. To stop the databases: `docker compose -f infra/docker-compose.yml down` (your data is kept).
 
@@ -172,9 +177,11 @@ The test counts grow as features are added; what matters is that nothing says `f
 | `Cannot connect to the Docker daemon` | Open Docker from Applications and wait until it says it is running. |
 | `port is already allocated` / `address already in use` | Something else uses that port. Find what is using it with `lsof -i :<port>`. Our databases use 5434 and 5433 so they do not clash with a local Postgres on 5432. |
 | `corepack pnpm` fails with `Cannot find module ... pnpm.cjs` | Always run pnpm from inside `dashboard/`; it is pinned to `10.18.0` there. Newer pnpm 12 is broken with corepack on some machines. |
-| `flutter doctor`: Android toolchain `[✗]` | Ignore it: we're iOS only for now. |
-| `flutter doctor`: *Unable to get list of installed Simulator runtimes* | Run the three `xcodebuild` lines in step 3. |
-| `flutter run -d iPhone`: *No supported devices* | Run `open -a Simulator` first, or `flutter devices` to see the name. |
+| `flutter doctor`: *cmdline-tools component is missing* | Redo step 3, items 2–3 (SDK Manager → SDK Tools). |
+| `flutter doctor`: *Android license status unknown* | Run `flutter doctor --android-licenses` and type `y` at each prompt. |
+| `flutter doctor`: Xcode `[✗]` | Ignore it: we're Android first. |
+| `flutter run`: *No supported devices* | Start the emulator first (`flutter emulators --launch <name>`) or plug in your phone with USB debugging on; check with `flutter devices`. |
+| Phone doesn't show in `flutter devices` | Unplug and replug, tap **Allow USB debugging** on the phone, try another cable (some only charge). |
 | `sudo: a terminal is required` | You ran `sudo` inside Claude Code. Run it in the macOS Terminal app instead. |
 | `alembic upgrade head` can't connect | The databases aren't running: run step 6's first line and wait for `healthy`. |
 
@@ -186,7 +193,7 @@ Still stuck? Paste the full error into Claude Code with: *"This setup step faile
 
 | Path | What | Lane |
 |---|---|---|
-| `mobile/` | Flutter app (traveller, companion, contact), iOS only for now | P1 |
+| `mobile/` | Flutter app (traveller, companion, contact), Android first | P1 |
 | `backend/` | FastAPI: Core zone (identity, journey, escalation, walks, ...) | P2 / P3 |
 | `insight/` | FastAPI: Insight zone (anonymous reports, clustering, risk), with its **own database** | P4 |
 | `dashboard/` | Next.js + MapLibre campus dashboard | P4 |
@@ -200,7 +207,7 @@ Still stuck? Paste the full error into Claude Code with: *"This setup step faile
 
 | Lane | Owns | Start in |
 |---|---|---|
-| **P1 Mobile** (Tanisha) | Everything the user touches; on-phone timers, SOS, offline fallback (iOS) | `mobile/` |
+| **P1 Mobile** (Tanisha) | Everything the user touches; on-phone timers, SOS, offline SMS (Android) | `mobile/` |
 | **P2 Safety Core** | Login, contacts, journeys, alerts, relay, infra | `backend/app/{identity,journey,escalation,notification,relay}`, `infra/` |
 | **P3 Trust** | Verification, Walk With Me, anonymity, trust & safety | `backend/app/{matching,walks,comms,trust_safety}` |
 | **P4 Insight** | Reports, clustering, risk labels, routing, dashboard | `insight/`, `dashboard/`, `routing-engine/` |

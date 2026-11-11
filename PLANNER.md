@@ -4,7 +4,7 @@
 > Code name: `sixthsense`. Design docs call it *SafeThread* — same product.
 > Source docs: `Docs/SafeThread_HLD_and_TechStack.md`, `Docs/SafeThread_Team_Split.md`, `Docs/SafeThread_Verification_and_Anonymity.md`.
 > Live status: `progress.json` (source of truth) · `PROGRESS.md` (session log). Task IDs below match `progress.json`.
-> **Platform: iOS only for now.** Android comes later (see §3a).
+> **Platform: Android first.** iOS comes later (see §3a).
 > **Budget: ₹0.** Everything must be free (see §3b). No paid accounts, vendors or hosting.
 > **Team:** Sumeet · Tanisha (P1 Mobile) · Shruj · Jival. Every progress update is prefixed with the author's name (see §8).
 
@@ -62,7 +62,7 @@ Edge: API gateway — TLS 1.3, rate limits, WAF, device attestation
 │ Routing · Trust & Safety                                   │   │                                 │
 │ Postgres+PostGIS (core) · Redis · NATS · KMS               │   │ Postgres+PostGIS (insight, sep.)│
 └────────────────────────────────────────────────────────────┘   └─────────────────────────────────┘
-External (all free, §3b): college email OTP · on-device face check (Apple Vision) · Telegram bot + email for alerts · user's own SMS app + dialer · 112
+External (all free, §3b): college email OTP · on-device face check (Google ML Kit) · FCM push + Telegram bot + email for alerts · SMS sent from the user's own phone plan · 112
 ```
 
 ### Key decisions (ADRs)
@@ -81,7 +81,7 @@ External (all free, §3b): college email OTP · on-device face check (Apple Visi
 | identity | Store verification *outcome* only; dedupe = HMAC(pepper, name‖DOB‖gender); no Aadhaar no., no ID image |
 | journey | Duress PIN shows the same screen as real PIN; 3 wrong PINs = coercion |
 | escalation | Idempotent per journey; never waits on one channel; signed alerts |
-| notification | Telegram bot → email ladder (free), retries, delivery receipts; SMS/voice only from the user's own phone |
+| notification | FCM push → Telegram bot → email ladder (all free), retries, delivery receipts; SMS sent by the user's own phone |
 | matching | Coarse cell only; per-hour caps; no re-match same pair 14 days; women-only/campus-only filters |
 | walks | Per-walk pseudonyms; companion never sees destination; escrow shredded at 30 days |
 | relay | Ciphertext only, no persistence |
@@ -96,12 +96,12 @@ External (all free, §3b): college email OTP · on-device face check (Apple Visi
 
 | Layer | Choice | Status |
 |---|---|---|
-| Mobile | **Flutter, iOS only for now** + Swift platform channels (Kotlin when Android lands) | MVP |
-| Mobile storage | Drift (SQLite) + SQLCipher; iOS Keychain / Secure Enclave | MVP |
+| Mobile | **Flutter, Android first** + Kotlin platform channels (Swift when iOS lands) | MVP |
+| Mobile storage | Drift (SQLite) + SQLCipher; Android Keystore | MVP |
 | Mobile E2E | libsignal (or OpenMLS) | MVP (W5–6) |
 | Maps | MapLibre GL + **OpenFreeMap** tiles (free, no key) | MVP |
-| Integrity | Device-bound keys only (App Attest needs paid account: later) | MVP |
-| Push | **None from server** (APNs needs paid account). Local notifications on phone; live updates over WebSocket while app is open | MVP |
+| Integrity | Device-bound keys (Android Keystore); Play Integrity later (needs a Play listing) | MVP |
+| Push | **FCM** (Firebase Cloud Messaging, free) | MVP |
 | Backend | **Python 3.12 + FastAPI**, SQLAlchemy 2 + Alembic, pydantic-settings | MVP (Go for hot paths later) |
 | Realtime | FastAPI WebSockets | MVP |
 | DBs | **PostgreSQL 16 + PostGIS** ×2 (core, insight) | MVP |
@@ -117,54 +117,57 @@ External (all free, §3b): college email OTP · on-device face check (Apple Visi
 | Observability | OpenTelemetry + Grafana/Prometheus (self-hosted, free) | Later |
 | Vendors | **None** (all replaced by free options in §3b) | — |
 
-### 3a. Platform: iOS only for now (decided 2026-11-11)
-We build and test **iOS only** until the pilot flow works; Android follows later. The Flutter code stays cross-platform, and `mobile/android/` is kept but **not built or tested**. Do not add Android-only work now.
+### 3a. Platform: Android first (decided 2026-11-11)
+We build and test **Android first**; iOS follows later (`P1-LATER-ios-port`). The Flutter code stays cross-platform, and `mobile/ios/` is kept but **not built or tested** for now.
 
-iOS blocks some things the docs assume. This is how we handle each one:
+**Why Android first:** it is free to ship to unlimited testers, it is what most users in India carry (the docs target low-end Android), and it allows everything the docs need:
 
-| Docs assume | iOS limit | What we build on iOS |
-|---|---|---|
-| Phone sends SMS by itself when offline (rule 3, ADR-2) | Apps cannot send SMS silently | (1) **Server watchdog** alerts contacts via Telegram bot + email when heartbeats stop; (2) the phone shows a **pre-filled SMS** (one tap to send) plus a **one-tap call to 112** |
-| Covert SOS via power / volume buttons | Apps cannot read hardware buttons | **App Intents**: Action Button, Back Tap and Siri Shortcut trigger SOS; in-app hidden gesture |
-| Escalation timer keeps running in the background | iOS suspends apps | Check-ins scheduled as **local notifications**; background location mode only during an active journey; server watchdog as backup |
-| Block screenshots (`FLAG_SECURE`) | Not possible | Detect screenshots and recording (`UIScreen.isCaptured`), hide sensitive views while recording, flag to T&S |
-| FCM push | — | No server push (APNs is paid): local notifications + WebSocket while open |
+| Docs need | How we build it on Android |
+|---|---|
+| Phone sends SMS by itself when offline (rule 3, ADR-2) | `SmsManager` sends from the user's own plan, **no tap needed** (`SEND_SMS` permission) |
+| Escalation timer keeps running in the background | **Foreground service** during an active journey (with a visible notification) + `AlarmManager` exact alarms |
+| Covert SOS | Volume-button pattern during a journey, Quick Settings tile, home-screen widget |
+| Block screenshots of sensitive screens | `FLAG_SECURE` |
+| Push alerts | **FCM**, free |
+| Device-bound keys | Android Keystore |
 
-**Needs:** a Mac with Xcode for anyone building the app. We use a **free Apple ID** ("Personal Team") to sign, not the $99 account.
+**Watch out for:**
+- **Battery savers** on Xiaomi, Oppo, Vivo, Realme and Samsung kill background apps. Ask the user to exempt the app from battery optimisation, and test on at least one of these phones.
+- **Play Store rules** restrict the SMS permission. We share the APK directly for the pilot, so this only matters if we publish on the Play Store later.
+
+**Needs:** Android Studio (SDK + emulator) on any Mac, Windows or Linux laptop, plus any Android phone with **USB debugging** on.
 
 ### 3b. Zero-cost plan (decided 2026-11-11)
 Rule: **nothing in the build may cost money.** If a feature needs a paid service, use the free substitute below or defer it.
 
 | Paid thing in the docs | Free substitute | What we lose |
 |---|---|---|
-| Apple Developer account ($99/yr) | Free Apple ID signing in Xcode + iPhone simulator | App expires on real iPhones every **7 days** (re-install from Xcode); max 3 devices; no TestFlight, no APNs, no App Store |
-| APNs push | Local notifications for check-ins (on-device, free); WebSocket while the app is open | Server can't wake a closed app |
-| SMS / voice CPaaS (Twilio, Exotel, DLT) | **Telegram bot** (free, instant push on contacts' phones) + **email** (Gmail SMTP / free tier); phone opens a **pre-filled SMS from the user's own plan** + **tel:112** | Contacts must open the bot once to receive alerts; no automatic server SMS or robocall |
+| App store account | **APK shared directly** (GitHub Releases or Firebase App Distribution, both free); Play Store ($25 one-time) only if sponsored | Testers must allow "install unknown apps" |
+| SMS / voice CPaaS (Twilio, Exotel, DLT) | **Phone sends SMS itself** from the user's plan; server alerts contacts via **FCM push + Telegram bot + email** | No server-sent SMS or robocall. Contacts open the bot once (or install the app) to receive alerts |
 | Phone OTP by SMS | **Email OTP** (college email for campus) + device-bound keys | No phone-number verification |
 | KYC aggregator (Aadhaar / DigiLocker) | **Tier 2 only:** college email + campus security sign-off for companions | No Tier 1 government ID check in the pilot |
-| Liveness SDK | On-device face check with **Apple Vision** (free) | Weaker anti-spoofing than paid SDKs |
+| Liveness SDK | On-device face check with **Google ML Kit** (free) | Weaker anti-spoofing than paid SDKs |
 | Map tiles (paid providers) | **OpenFreeMap** / self-hosted Protomaps; Valhalla is open source | — |
 | AWS (ECS, RDS, KMS, S3) | **Oracle Cloud Always Free** VM running our Docker Compose; keys in the DB with app-level encryption | Less managed security (no KMS, no Object Lock) |
 | Sentry / paid monitoring | Self-hosted Grafana + Prometheus, or just logs | — |
 | External pentest | In-house red-team week with free tools (OWASP ZAP, MobSF) | No independent audit |
-
-**Pilot impact:** with free signing, each pilot iPhone must be plugged into a Mac weekly. So the free pilot is **small (team + a few testers)**. A wider campus pilot needs either the $99 account (if sponsored, e.g. by the college) or Android (APK installs are free).
+| Apple Developer account ($99/yr) | Not needed until the iOS port | — |
 
 ---
 
 ## 4. Lanes (4-person team)
 
-### P1 — Mobile App (Flutter, iOS) · owner: **Tanisha**
+### P1 — Mobile App (Flutter, Android first) · owner: **Tanisha**
 *"The phone is the safety net. It must work with no internet."*
 - **Never:** require ID to be protected · let a server problem stop an alert · upload exact report locations.
 - **Needs:** P2 auth/journey/alert APIs · P3 walk/verification/handshake APIs · P4 routes/labels/report APIs.
-- **Done when (iOS):** Wi-Fi + data off, miss a check-in → the phone shows a pre-filled SMS + call-112 prompt, **and** the server watchdog alerts the contact on Telegram + email once heartbeats stop.
+- **Done when:** Wi-Fi + data off, miss a check-in → contact still gets an SMS with location, sent automatically by the phone.
 
 ### P2 — Safety Core Backend + Infra
 *"When something goes wrong, the right people find out, fast."*
 - **Never:** store live location · let contacts see location outside a journey/alert · notify a contact they were removed.
 - **Needs:** P1 heartbeats/events · P3 "find nearby responders".
-- **Done when:** SOS reaches contacts on Telegram in seconds; auto-moves to email if not acknowledged; duplicate trigger sends nothing extra.
+- **Done when:** SOS reaches contacts by FCM push in seconds; auto-moves to Telegram then email if not acknowledged; duplicate trigger sends nothing extra.
 
 ### P3 — Trust: Verification + Walk With Me + Anonymity
 *"Strangers are accountable during the walk and strangers again after it."*
@@ -208,21 +211,21 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 | 7–8 | **M4 Walk With Me** — full walk end-to-end, nothing left behind |
 | 9–10 | **M5 Reports + routing + dashboard** — campus security sees a real cluster |
 | 11 | **M6 Red-team week** — every break found is fixed |
-| 12 | **M7 Pilot** — small free pilot (team + testers) + in-house security test |
+| 12 | **M7 Pilot** — live on one campus (APK shared directly) + in-house security test |
 
 ### Task IDs by lane
 | Wk | P1 Mobile | P2 Safety Core | P3 Trust | P4 Insight |
 |---|---|---|---|---|
-| 0 | `P1-W0-flutter-shell` `P1-W0-ios-signing` | `P2-W0-monorepo` `P2-W0-local-stack` `P2-W0-backend-skeleton` `P2-W0-ci` | — | `P4-W0-insight-skeleton` `P4-W0-dashboard-shell` |
+| 0 | `P1-W0-flutter-shell` `P1-W0-android-device` | `P2-W0-monorepo` `P2-W0-local-stack` `P2-W0-backend-skeleton` `P2-W0-ci` | — | `P4-W0-insight-skeleton` `P4-W0-dashboard-shell` |
 | 1 | `ALL-W1-api-contract` | ← | ← | ← |
 | 1–2 | `P1-W1-signup-contacts-ui` | `P2-W1-otp-device-auth` `P2-W2-trusted-contacts` | `P3-W1-vendor-selection` | `P4-W1-report-model-separate-db` |
-| 3–4 | `P1-W3-journey-ui-timers` `P1-W3-ios-background-checkins` `P1-W4-sos-duress-pin` `P1-W4-ios-sos-shortcuts` | `P2-W3-journey-state-machine` `P2-W4-watchdog-alert-ladder` | `P3-W3-tier1-verification` `P3-W4-tier2-campus` | `P4-W3-report-intake-filters` |
+| 3–4 | `P1-W3-journey-ui-timers` `P1-W3-android-foreground-service` `P1-W4-sos-duress-pin` `P1-W4-android-sos-triggers` | `P2-W3-journey-state-machine` `P2-W4-watchdog-alert-ladder` | `P3-W3-tier1-verification` `P3-W4-tier2-campus` | `P4-W3-report-intake-filters` |
 | 5–6 | `P1-W5-sms-fallback-lowbattery` `P1-W6-e2e-location` | `P2-W5-location-relay` `P2-W6-signed-alerts` | `P3-W5-matching-rules` | `P4-W5-clustering-threshold` `P4-W6-risk-labels` |
 | 7–8 | `P1-W7-walk-screens-handshake-chat` | `P2-W7-responder-alerts` | `P3-W7-walk-lifecycle` `P3-W8-close-wipe-escrow` | `P4-W7-valhalla-safety-costing` |
 | 9–10 | `P1-W9-map-routes-report-blur` | `P2-W9-load-test-monitoring` | `P3-W9-complaints-ts-console` | `P4-W9-campus-dashboard-before-after` |
 | 11 | `ALL-W11-red-team` | ← | ← | ← |
 | 12 | `ALL-W12-pilot-pentest` | ← | ← | ← |
-| Later | `P1-LATER-android-port` (Kotlin modules, auto-SMS, FLAG_SECURE, FCM) | | | |
+| Later | `P1-LATER-ios-port` (Swift modules; iOS can't auto-send SMS or read hardware buttons; needs a Mac + Apple account) | | | |
 
 ---
 
@@ -232,8 +235,8 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 3. **Vendors:** none (₹0 budget, §3b). Revisit only if someone sponsors costs.
 4. **Escrow unseal policy:** approvers, timelines, user notification, transparency reporting.
 5. **Languages:** Kannada + Hindi first.
-6. **Free iOS signing limits** (7-day expiry, 3 devices, no push/TestFlight) cap the pilot size. Ask the college to sponsor the $99 account, or go Android for a wider pilot.
-7. **iOS offline gap:** the phone cannot send SMS alone; signed off as "server watchdog Telegram + email alerts + one-tap SMS/112 on phone" (§3a, §3b). Re-check with the team before pilot.
+6. **Phone battery savers** (Xiaomi, Oppo, Vivo, Realme, Samsung) can kill the journey timer; test on real phones and guide users to exempt the app.
+7. **Play Store SMS policy:** only matters if we publish on the store; the pilot uses a directly shared APK.
 
 ---
 

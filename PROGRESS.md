@@ -6,21 +6,32 @@
 ## Status at a glance (updated 2026-11-11)
 
 **Phase:** M0 Setup → next **M1 Foundation** (weeks 1–2: sign up + add contacts)
-**Platform:** iOS only for now; Android later.
+**Platform:** Android first; iOS later.
 
 | Lane | Done | Up next |
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
-| P1 Mobile (**tanisha**) | Flutter shell + theme | Finish iOS toolchain, run on iPhone simulator → `P1-W0-ios-signing` → `P1-W1-signup-contacts-ui` |
+| P1 Mobile (**tanisha**) | Flutter shell + theme | Finish Android toolchain, run on emulator → `P1-W0-android-device` → `P1-W1-signup-contacts-ui` |
 | P2 Safety Core | Repo, backend skeleton, local databases running + migrated | `P2-W1-otp-device-auth` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
-**Blockers:** Xcode first launch + iOS simulator download · free iOS signing limits pilot size · legal review (DPDP, UIDAI) · campus MoU.
+**Blockers:** Android Command-line Tools + licenses · need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha. sumeet, shruj, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
 
 ---
+
+## 2026-11-11 — sumeet: Android first (replaces iOS only)
+- **We now build for Android first; iOS comes later** (`P1-LATER-ios-port`). `mobile/ios/` stays in the repo but isn't built for now.
+- **Why:** it's free to share the app (APK) with any number of testers, and most of our users have Android phones. Android also allows what the docs need: the phone sends SMS by itself when offline, a background journey timer (foreground service), button SOS, screenshot blocking (`FLAG_SECURE`) and free push (FCM).
+- **Budget is still ₹0.** Alerts go out as FCM push → Telegram → email, plus SMS from the user's own phone plan. The app is shared as an APK, with no Play Store or Apple account.
+- **P1 task changes:**
+  - `P1-W0-ios-signing` → `P1-W0-android-device`
+  - `P1-W3-ios-background-checkins` → `P1-W3-android-foreground-service`
+  - `P1-W4-ios-sos-shortcuts` → `P1-W4-android-sos-triggers`
+- **README:** step 3 is the Android setup again; Xcode isn't needed.
+- **Next:** tanisha ticks Command-line Tools in Android Studio, accepts the licenses, creates an emulator and runs the app.
 
 ## 2026-11-11 — sumeet: Zero-cost plan
 - **Budget is ₹0.** Every paid service in the docs now has a free substitute (`PLANNER.md` §3b):
