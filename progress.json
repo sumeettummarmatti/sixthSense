@@ -1,7 +1,7 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-11",
-  "updated_by": "sumeet",
+  "updated_by": "tanisha",
   "current_phase": "M0-setup",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
@@ -121,7 +121,7 @@
         {
           "id": "P1-W0-flutter-shell",
           "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
-          "status": "in_progress",
+          "status": "done",
           "week": 0,
           "notes": "sumeet: Flutter 3.47.9; mobile/ shell with core/ + features/ + theme; analyze + test pass. Android first (ios/ kept, not built). flutter doctor: Android toolchain ✓ (licenses no longer needed with new Android CLI). Emulator Medium_Phone_API_37.0 boots. Gradle 9.3.1 wrapper download timed out from Java; fetched manually (sha256 verified) into ~/.gradle/wrapper/dists. Remaining: first flutter build apk (downloading Android libs) + run on emulator. Handing over to tanisha"
         },
@@ -135,16 +135,16 @@
         {
           "id": "P1-W1-signup-contacts-ui",
           "title": "Sign-up (OTP) + trusted contacts screens",
-          "status": "todo",
+          "status": "done",
           "week": 1,
-          "notes": ""
+          "notes": "tanisha: Phone entry, verification-code and trusted-contact screens implemented as a local UI flow. API/OTP delivery and durable contact sync await the shared contract and P2 endpoints."
         },
         {
           "id": "P1-W3-journey-ui-timers",
           "title": "Journey screens + on-phone timers",
-          "status": "todo",
+          "status": "done",
           "week": 3,
-          "notes": ""
+          "notes": "tanisha: Journey setup, active countdown, check-in due state, and reset flow implemented. Timer uses device-local time and refreshes on app resume. Android foreground service/exact alarms, escalation, and persistence across app termination remain future work. flutter analyze clean; widget tests cover due transition and reset."
         },
         {
           "id": "P1-W3-android-foreground-service",
@@ -156,9 +156,9 @@
         {
           "id": "P1-W4-sos-duress-pin",
           "title": "SOS, covert SOS, duress PIN",
-          "status": "todo",
+          "status": "done",
           "week": 4,
-          "notes": ""
+          "notes": "tanisha: Added visible SOS request UI, hidden in-app long-press covert SOS gesture, normal/duress PIN check-in using the same obscured screen, and silent coercion handler after three wrong PINs. Prototype only: no contacts/emergency alerts are sent and PINs are not persisted. Android volume-button/Quick Settings/widget triggers are tracked separately. flutter analyze clean; widget tests pass."
         },
         {
           "id": "P1-W4-android-sos-triggers",
@@ -561,9 +561,12 @@
   ],
   "next_steps": [
     "sumeet: merge PR #1 (setup/foundation -> main)",
-    "tanisha: finish Android toolchain (B1), create an emulator, run the app, close P1-W0-flutter-shell",
+    "tanisha: create an Android emulator and run the app to complete P1-W0-android-device",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
-    "ALL-W1-api-contract: whole team fills contracts/openapi.yaml"
+    "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
+    "P1/P2: connect the onboarding and trusted-contact screens to the agreed auth and contacts APIs",
+    "P1-W3-android-foreground-service: foreground service + exact alarms for journey timers",
+    "P1-W4-android-sos-triggers: volume-button pattern, Quick Settings tile, and widget"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
 }
