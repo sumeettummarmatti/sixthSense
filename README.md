@@ -181,6 +181,8 @@ The test counts grow as features are added; what matters is that nothing says `f
 | `flutter doctor`: *Android license status unknown* | Run `flutter doctor --android-licenses` and type `y` at each prompt. |
 | `flutter doctor`: Xcode `[✗]` | Ignore it: we're Android first. |
 | `flutter run`: *No supported devices* | Start the emulator first (`flutter emulators --launch <name>`) or plug in your phone with USB debugging on; check with `flutter devices`. |
+| First Android build fails with `java.net.ConnectException: Operation timed out` (downloading Gradle) | Java can't reach the download server, though your browser can. Download https://services.gradle.org/distributions/gradle-9.3.1-all.zip in the browser, then put it in the folder named in the error, under `~/.gradle/wrapper/dists/gradle-9.3.1-all/<random-folder>/` (delete any `.part` / `.lck` files there). Run the build again. |
+| First Android build is slow (5–15 min) | Normal: it downloads Android build libraries once. Later builds take under a minute. |
 | Phone doesn't show in `flutter devices` | Unplug and replug, tap **Allow USB debugging** on the phone, try another cable (some only charge). |
 | `sudo: a terminal is required` | You ran `sudo` inside Claude Code. Run it in the macOS Terminal app instead. |
 | `alembic upgrade head` can't connect | The databases aren't running: run step 6's first line and wait for `healthy`. |

@@ -17,10 +17,15 @@
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
-**Blockers:** Android Command-line Tools + licenses · need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
+**Blockers:** first Android build (Java download timeouts) · need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha. sumeet, shruj, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
 
 ---
+
+## 2026-11-11 — sumeet: Android toolchain ready
+- `flutter doctor` shows Android ✓; emulator `Medium_Phone_API_37.0` boots.
+- The first build's Gradle download timed out from Java (network quirk on Sumeet's Mac), so I downloaded it manually and verified it. README troubleshooting now has the fix.
+- **Next:** finish the first build, run the app on the emulator; teammates run the setup check (README → Check everything works).
 
 ## 2026-11-11 — sumeet: Android first (replaces iOS only)
 - **We now build for Android first; iOS comes later** (`P1-LATER-ios-port`). `mobile/ios/` stays in the repo but isn't built for now.

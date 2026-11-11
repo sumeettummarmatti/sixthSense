@@ -123,7 +123,7 @@
           "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
           "status": "in_progress",
           "week": 0,
-          "notes": "sumeet: Flutter 3.47.9 installed; mobile/ created (in.sixthsense.sixthsense_app), core/ + features/ folders, themed shell; analyze + test pass. Android first: ios/ kept but not built. Android Studio installed; build-tools + platform-tools present. Remaining: SDK Manager → Android SDK Command-line Tools, flutter doctor --android-licenses, create an emulator, run the app. Handing over to tanisha"
+          "notes": "sumeet: Flutter 3.47.9; mobile/ shell with core/ + features/ + theme; analyze + test pass. Android first (ios/ kept, not built). flutter doctor: Android toolchain ✓ (licenses no longer needed with new Android CLI). Emulator Medium_Phone_API_37.0 boots. Gradle 9.3.1 wrapper download timed out from Java; fetched manually (sha256 verified) into ~/.gradle/wrapper/dists. Remaining: first flutter build apk (downloading Android libs) + run on emulator. Handing over to tanisha"
         },
         {
           "id": "P1-W0-android-device",
@@ -528,7 +528,7 @@
   "blockers": [
     {
       "id": "B1",
-      "title": "Android toolchain: SDK Manager → Command-line Tools, then flutter doctor --android-licenses",
+      "title": "First Android build: Java downloads time out on Sumeet's Mac (Gradle wrapper fixed manually); confirm build + run on emulator",
       "affects": [
         "P1-W0-flutter-shell"
       ],
