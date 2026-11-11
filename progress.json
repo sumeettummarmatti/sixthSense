@@ -1,7 +1,7 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-11",
-  "updated_by": "sumeet",
+  "updated_by": "shruj",
   "current_phase": "M0-setup",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
@@ -238,9 +238,9 @@
         {
           "id": "P2-W1-otp-device-auth",
           "title": "Email OTP (college email) + device-bound keys",
-          "status": "todo",
+          "status": "done",
           "week": 1,
-          "notes": "sumeet: phone SMS OTP costs money; email OTP is free"
+          "notes": "shruj: Email-code sign-in + device-bound keys in backend/app/identity. POST /auth/otp/request (6-digit code, only its HMAC in Redis, 10-min TTL, 3/email + 10/IP per 10 min, always 202), POST /auth/otp/verify (5 attempts, constant-time, single use; creates Tier 0 account keyed by HMAC(OTP_PEPPER, email) and registers the EC P-256 Keystore key), POST /auth/device/challenge + /auth/device/verify (SHA256withECDSA over 'sixthsense-device-auth-v1|device_id|nonce'). 15-min opaque access tokens in Redis; get_current_session dependency for protected endpoints. Migration 0002 (core DB only): accounts, devices, append-only audit_events (DB trigger blocks UPDATE/DELETE). Mailpit added to docker-compose (inbox :8025); real sending via SMTP settings in .env. contracts/openapi.yaml has the 4 endpoints. 34 tests pass, ruff clean; live run against real Redis + Mailpit OK. Not done yet: device revoke endpoint, proxy-aware client IP for rate limits (needed once behind a load balancer)."
         },
         {
           "id": "P2-W2-trusted-contacts",
@@ -535,6 +535,30 @@
       "decision": "Shruj owns P2 Safety Core; starts on branch p2/otp-device-auth",
       "why": "Team assignment",
       "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Access tokens are opaque random tokens stored hashed in Redis (15 min), renewed by the device challenge; no JWT",
+      "why": "Instantly revocable, no new dependency; the device key is the long-lived credential",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Accounts keyed by HMAC-SHA256(OTP_PEPPER, lowercased trimmed email); no plaintext email stored. Codes, nonces, tokens and IPs only appear in Redis as HMAC(TOKEN_SECRET, ...)",
+      "why": "Rule 2: never store what we don't need. Changing OTP_PEPPER orphans all accounts, so set it once per environment",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Mailpit catches sign-in emails locally; real sending is plain SMTP from .env (e.g. Gmail app password)",
+      "why": "₹0 budget: no paid email/OTP service",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "audit_events table in the core DB is append-only, enforced by a DB trigger; rows hold internal IDs only",
+      "why": "Rule 7 until WORM object storage exists (no S3 Object Lock on the free plan)",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -564,7 +588,8 @@
     }
   ],
   "next_steps": [
-    "shruj: start P2-W1-otp-device-auth on branch p2/otp-device-auth (email code + device-bound keys; see PLANNER §3b)",
+    "tanisha: connect onboarding to /auth/otp/request + /auth/otp/verify and add Keystore device sign-in (see contracts/openapi.yaml, PROGRESS.md 'shruj: Email OTP + device auth')",
+    "shruj: P2-W2-trusted-contacts (uses get_current_session; includes contact public-key lookup for P1-W6)",
     "sumeet: merge PR #1 (setup/foundation -> main)",
     "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",

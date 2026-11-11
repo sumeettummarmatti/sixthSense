@@ -12,13 +12,27 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
-| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated | `P2-W1-otp-device-auth` (email code + device keys) on branch `p2/otp-device-auth` |
+| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`) | `P2-W2-trusted-contacts` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. sumeet, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+
+## 2026-11-11 — shruj: Email OTP + device auth
+- Shruj: Built `P2-W1-otp-device-auth` in `backend/app/identity/`. Sign in with a 6-digit email code once per phone; after that the phone signs in with its Android Keystore key.
+  - `POST /auth/otp/request`: always answers `202 {"status":"sent"}` (no hint whether an account exists). Code lives 10 min, only its hash is in Redis. Limit: 3 per email and 10 per IP per 10 min.
+  - `POST /auth/otp/verify`: 5 tries, then locked; single use. Creates a Tier 0 account (no ID, rule 1) and registers the phone's EC P-256 public key. Returns a 15-min access token + `device_id`.
+  - `POST /auth/device/challenge` + `POST /auth/device/verify`: the phone signs a one-time server nonce; no email needed again on that phone.
+- Shruj: Privacy: no plaintext email anywhere. Accounts are found by `HMAC(OTP_PEPPER, email)`; codes, tokens, nonces and IPs are stored only as keyed hashes in Redis. Logs say "otp issued"/"otp verified", nothing personal.
+- Shruj: Migration `0002` (core DB only): `accounts`, `devices`, and an append-only `audit_events` table (a DB trigger blocks edits and deletes, rule 7).
+- Shruj: Added **Mailpit** to `infra/docker-compose.yml`: every email sent locally lands in http://localhost:8025. Real sending is plain SMTP set in your own `.env` (e.g. Gmail app password). New `.env.example` keys: `OTP_PEPPER`, `TOKEN_SECRET`, `SMTP_*`. The API refuses to start outside dev with the default secrets.
+- Shruj: `contracts/openapi.yaml` now has the 4 auth endpoints with exact formats, so Tanisha can wire up the onboarding screens.
+- Shruj: Checks: ruff clean, 34 tests pass (happy path, wrong/expired/reused code, attempt lock, rate limits, same response for unknown email, device signature checks, nothing sensitive in logs or Redis, audit log can't be edited). Also ran it live against real Redis + Mailpit: email arrived, both sign-ins worked, replayed nonce rejected.
+- Shruj: **After pulling:** `cp .env.example .env` again (or copy the new sign-in block into your `.env`), `docker compose -f infra/docker-compose.yml up -d --wait`, `cd backend && uv sync && uv run alembic upgrade head`.
+- Shruj: This work is on its own branch `p2/email-otp-device-keys` (branched from `p2/otp-device-auth`); open a PR from there.
+- **Next:** `P2-W2-trusted-contacts`. Not done yet: a "remove device" endpoint, and reading the real client IP behind a proxy (only needed once deployed).
 
 ## 2026-11-11 — sumeet: Merged setup/foundation into p1/android-device; sign-in by email
 - Merged Sumeet's latest `setup/foundation` commit into Tanisha's branch. The only conflicts were in `PROGRESS.md` and `progress.json`, resolved by keeping the newest status from each side.
