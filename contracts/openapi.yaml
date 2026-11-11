@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SixthSense API
-  version: 0.4.0
+  version: 0.5.0
   description: >
     Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
     Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
@@ -733,6 +733,34 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
+  /relay/ws:
+    get:
+      tags: [realtime]
+      summary: "WebSocket: end-to-end encrypted live location (ciphertext only, nothing stored)"
+      description: |
+        Open a WebSocket (ws:// locally, wss:// in the pilot). JSON text frames.
+
+        1. First frame, within 10 s: {"type": "auth", "access_token": "<token>"} -> {"type": "ready"}.
+           Never put the token in the URL. When the token expires the server sends
+           {"type": "error", "detail": "token_expired"} and closes with code 4401; reconnect with a
+           fresh token (POST /auth/device/challenge + /auth/device/verify). Bad auth also closes 4401.
+        2. Traveller sends, during an open journey (including a silent alarm):
+           {"type": "location", "envelopes": [<LiveLocationEnvelope.toJson()>, ...]}, one envelope
+           per recipient device (keys from GET /contacts/{link_id}/keys), 1-10 per frame, at most
+           10 frames per 5 s. session_id must be the journey id; sender_key_id must be this device's
+           current key_id from PUT /auth/device/e2e-keys.
+           Reply: {"type": "sent", "delivered": n, "offline": n, "not_allowed": n}. Offline means the
+           contact wasn't connected and the envelope was dropped (never queued or stored).
+           Errors: bad_envelopes, bad_envelope, unsupported_version, mixed_sessions, no_open_journey,
+           stale_sender_key (re-fetch your key_id), rate_limited.
+        3. Contact receives (only during that traveller's open journey or alert, and only if on the
+           alert list): {"type": "location", "envelope": {...unchanged...},
+           "sender": {"key_id": "<uuid>", "ed25519_public_key": "<base64>"}}. Verify with
+           LiveLocationCipher.decrypt using the sender block as the verification key.
+        4. Either side: {"type": "ping"} -> {"type": "pong"}. Send a ping every ~30 s to keep the
+           connection alive and notice an expired token early.
+      responses:
+        "101": {description: Switching protocols to WebSocket}
 components:
   securitySchemes:
     bearer:
