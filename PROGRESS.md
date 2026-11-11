@@ -19,6 +19,10 @@
 
 ---
 
+## 2026-11-11 — README setup guide
+- Rewrote README as a step-by-step "set up from scratch" guide (Homebrew → tools → mobile toolchain → clone → deps → databases), plus daily run commands, a check-everything block and a troubleshooting table.
+- Not yet tested end to end: step 6 (Docker databases + `alembic upgrade head`), because the containers haven't been started on Sumeet's Mac.
+
 ## 2026-11-11 — CI removed
 - Removed the CI workflow and Dependabot at Sumeet's request; CI/CD will be set up later. Run checks locally (README → Check your setup).
 
