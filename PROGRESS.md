@@ -5,7 +5,7 @@
 
 ## Status at a glance (updated 2026-11-11)
 
-**Phase:** M0 Setup → next **M1 Foundation** (weeks 1–2: sign up + add contacts)
+**Phase:** **2-day demo** from branch `demo` (12-week plan paused; see `PLANNER.md` §0)
 **Platform:** Android first; iOS later.
 
 | Lane | Done | Up next |
@@ -18,7 +18,14 @@
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
-**Lane owners:** P1 = tanisha, P2 = shruj. sumeet, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+**Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
+
+## 2026-11-11 — sumeet: 2-day demo plan
+- sumeet: **New priority: a working demo in 2 days.** The 12-week plan is paused. Plan is in `PLANNER.md` §0.
+- sumeet: Created branch `demo` from `p2/signed-alerts`, so it has all of Shruj's P2 work and all of Tanisha's P1 work.
+- sumeet: **Demo story:** sign up with an email code → add a contact, who taps "Get alerts on Telegram" → start a journey → SOS or missed check-in → contact gets a **Telegram** alert → offline, the phone sends a normal SMS.
+- sumeet: Decisions: email code is the only sign-up check; **Telegram is the only alert channel** for the demo; no app lock; no Firebase push. Phone-number code over Twilio WhatsApp is **future scope** (`P2-LATER-whatsapp-phone-otp`).
+- sumeet: Jobs: sumeet makes the Telegram bot and runs the server on a laptop (`ALL-W1-demo-branch-server`); shruj proves a real Telegram alert arrives (`P2-W1-demo-telegram-live`); tanisha connects the app to the server (`P1-W1-demo-api-wiring`); jival does the demo script and slides (`ALL-W1-demo-script-slides`).
 
 ## 2026-11-11 — shruj: Signed alerts
 - Shruj: Built `P2-W6-signed-alerts` on branch `p2/signed-alerts` (stacked on `p2/location-relay`). Contacts can now tell real SixthSense alerts from fakes.

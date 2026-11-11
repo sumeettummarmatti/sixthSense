@@ -8,6 +8,28 @@
 > **Budget: ₹0.** Everything must be free (see §3b). No paid accounts, vendors or hosting.
 > **Team:** Sumeet · Tanisha (P1 Mobile) · Shruj · Jival. Every progress update is prefixed with the author's name (see §8).
 
+## 0. 2-day demo (decided 2026-11-11, top priority)
+Everything below is the long-term plan. **Right now we only need a working demo in 2 days**, from branch `demo` (Shruj's full P2 stack + Tanisha's P1 work).
+
+**Demo story:** sign up with an email code → add a contact (they tap "Get alerts on Telegram") → start a journey → press SOS or miss a check-in → **the contact gets a Telegram alert** → with no internet, the phone sends a normal SMS from the user's own plan.
+
+| In the demo | How | Status |
+|---|---|---|
+| Sign-up | Email code (`/auth/otp/*`), then silent device-key sign-in | Server done; app not connected yet |
+| Alerts to contacts | **Telegram bot only** (free) | Server code done; needs bot token |
+| Offline | Phone sends SMS itself (SmsManager) | Done in app |
+| Server | Runs on Sumeet's laptop; phone on same Wi-Fi, or a free Cloudflare tunnel | To do |
+
+**Not in the demo:** app lock, Firebase push, email alerts, Walk With Me matching, reports/map data.
+**Future scope:** phone-number code over Twilio WhatsApp as a second sign-up check (`P2-LATER-whatsapp-phone-otp`); Firebase push (`P2-LATER-fcm-push`).
+
+| Who | Task ID | Job |
+|---|---|---|
+| sumeet | `ALL-W1-demo-branch-server` | Create Telegram bot (@BotFather), merge into `demo`, run server on laptop, phone reaches it |
+| shruj | `P2-W1-demo-telegram-live` | Put bot token in `.env`, prove a real Telegram alert arrives end to end, fix bugs |
+| tanisha | `P1-W1-demo-api-wiring` | Connect sign-up, contacts (+ "Get alerts on Telegram"), journey and SOS to the server; test on a real phone |
+| jival | `ALL-W1-demo-script-slides` | Demo script + slides; rehearse |
+
 ---
 
 ## 1. Product in one screen
@@ -225,7 +247,9 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 | 9–10 | `P1-W9-map-routes-report-blur` | `P2-W9-load-test-monitoring` | `P3-W9-complaints-ts-console` | `P4-W9-campus-dashboard-before-after` |
 | 11 | `ALL-W11-red-team` | ← | ← | ← |
 | 12 | `ALL-W12-pilot-pentest` | ← | ← | ← |
-| Later | `P1-LATER-ios-port` (Swift modules; iOS can't auto-send SMS or read hardware buttons; needs a Mac + Apple account) | | | |
+| Demo (now) | `P1-W1-demo-api-wiring` | `P2-W1-demo-telegram-live` | — | — |
+| Demo (now) | `ALL-W1-demo-branch-server` `ALL-W1-demo-script-slides` | ← | ← | ← |
+| Later | `P1-LATER-ios-port` (Swift modules; iOS can't auto-send SMS or read hardware buttons; needs a Mac + Apple account) | `P2-LATER-whatsapp-phone-otp` (Twilio WhatsApp code as 2nd sign-up check) `P2-LATER-fcm-push` | | |
 
 ---
 

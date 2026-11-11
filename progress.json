@@ -1,14 +1,14 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-11",
-  "updated_by": "shruj",
-  "current_phase": "M0-setup",
+  "updated_by": "sumeet",
+  "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
-    "sumeet": "lead (lane TBD)",
+    "sumeet": "lead + demo server",
     "tanisha": "P1 Mobile",
     "shruj": "P2 Safety Core",
-    "jival": "TBD"
+    "jival": "demo script + slides"
   },
   "update_rule": "Prefix every notes field, decision ('by') and PROGRESS.md heading with your name: sumeet: / tanisha: / shruj: / jival:",
   "status_values": [
@@ -72,6 +72,20 @@
       "owner": "team",
       "tasks": [
         {
+          "id": "ALL-W1-demo-branch-server",
+          "title": "Demo: Telegram bot, merge into demo branch, run server on laptop, phone reaches it",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "sumeet: demo branch created from p2/signed-alerts (includes all P1 + P2 work)"
+        },
+        {
+          "id": "ALL-W1-demo-script-slides",
+          "title": "Demo: script + slides, rehearse",
+          "status": "todo",
+          "week": 1,
+          "notes": "sumeet: assigned to jival"
+        },
+        {
           "id": "ALL-W0-planner",
           "title": "Read docs, write PLANNER.md + progress tracking",
           "status": "done",
@@ -118,6 +132,13 @@
     "P1": {
       "owner": "tanisha",
       "tasks": [
+        {
+          "id": "P1-W1-demo-api-wiring",
+          "title": "Demo: connect sign-up (email code + device key), contacts + Get alerts on Telegram, journey, SOS to the server; test on real phone",
+          "status": "todo",
+          "week": 1,
+          "notes": "sumeet: assigned to tanisha; no app lock, no FCM"
+        },
         {
           "id": "P1-W0-flutter-shell",
           "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
@@ -208,6 +229,13 @@
       "owner": "shruj",
       "tasks": [
         {
+          "id": "P2-W1-demo-telegram-live",
+          "title": "Demo: bot token in .env, real Telegram alert end to end, fix bugs",
+          "status": "todo",
+          "week": 1,
+          "notes": "sumeet: assigned to shruj"
+        },
+        {
           "id": "P2-W0-monorepo",
           "title": "Monorepo layout, root files, README",
           "status": "done",
@@ -290,6 +318,20 @@
           "status": "todo",
           "week": 9,
           "notes": ""
+        },
+        {
+          "id": "P2-LATER-whatsapp-phone-otp",
+          "title": "Future: phone-number code over Twilio WhatsApp as 2nd sign-up check (store only a keyed hash of the number)",
+          "status": "todo",
+          "week": "later",
+          "notes": "sumeet: future scope; Twilio sandbox needs each number to send join code first"
+        },
+        {
+          "id": "P2-LATER-fcm-push",
+          "title": "Future: Firebase push alerts (code exists; needs Firebase project)",
+          "status": "todo",
+          "week": "later",
+          "notes": "sumeet: skipped for demo"
         }
       ]
     },
@@ -661,6 +703,24 @@
       "decision": "The phone's offline SMS is not signed",
       "why": "Contacts may not have the app to verify; revisit if all contacts install it",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "2-day demo is the priority; 12-week plan paused",
+      "why": "Need a working end-to-end demo in 2 days",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Demo: sign-up by email code only; alerts to contacts by Telegram bot only; no app lock; no Firebase push",
+      "why": "Already built and free; least work for 2 days",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Phone-number code over Twilio WhatsApp is future scope",
+      "why": "Free sandbox works for testing but every number must join first; not needed for the demo",
+      "by": "sumeet"
     }
   ],
   "blockers": [
@@ -690,27 +750,20 @@
     },
     {
       "id": "B5",
-      "title": "Real push/Telegram alerts need a free Firebase project (service-account JSON) and a Telegram bot token from @BotFather; email works today",
+      "title": "Demo needs a Telegram bot token from @BotFather (Firebase push is future scope)",
       "affects": [
-        "P2-W4-watchdog-alert-ladder"
+        "P2-W1-demo-telegram-live"
       ],
-      "by": "shruj"
+      "by": "sumeet"
     }
   ],
   "next_steps": [
-    "tanisha: connect onboarding to /auth/otp/request + /auth/otp/verify and add Keystore device sign-in (see contracts/openapi.yaml, PROGRESS.md 'shruj: Email OTP + device auth')",
-    "tanisha: contacts screen -> invite link via share sheet + deep link to accept; keep name/number on the phone keyed by contact_link_id; upload E2E keys after sign-in (contracts/openapi.yaml)",
-    "tanisha: wire journey screens to /journeys (start, heartbeat every <=5 min, check-in ok/duress, prompt, sos, arrive/end); see contracts/openapi.yaml",
-    "shruj: P2-W7-responder-alerts (needs P3 matching) or W1 leftovers (remove-device endpoint) while P3 catches up",
-    "tanisha: verify push alerts with GET /notifications/signing-keys (bundle current key); show verification_code on the contact alert screen",
-    "tanisha: P1-W6 integration: open /relay/ws, auth frame, send envelopes per contact key (GET /contacts/{id}/keys), keep sending during a silent alarm; decrypt incoming frames with the attached sender key",
-    "tanisha: contact side of alerts: send FCM token (PUT /notifications/push-token), 'Get alerts on Telegram' button, alert screen with I'm on it / They're safe / Raise alarm (see contracts/openapi.yaml)",
-    "sumeet: merge PR #1 (setup/foundation -> main)",
-    "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
-    "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
-    "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
-    "P1/P2: connect the onboarding and trusted-contact screens to the agreed auth and contacts APIs",
-    "P1-W6-e2e-location: integrate client envelope when P2 device keys, contact-key lookup, and relay are ready"
+    "sumeet: create Telegram bot with @BotFather, send token + username to shruj (not in git)",
+    "sumeet: push demo branch; run docker + backend on laptop; give tanisha the laptop IP (same Wi-Fi) or a free cloudflared tunnel URL",
+    "shruj: put TELEGRAM_BOT_TOKEN/USERNAME in .env, prove a real Telegram alert arrives for SOS and missed check-in",
+    "tanisha: on demo branch, connect sign-up (/auth/otp/request, /auth/otp/verify, device key), contacts (invite + Get alerts on Telegram), journey (/journeys, heartbeat, check-in, sos, end)",
+    "jival: demo script + slides",
+    "after demo: resume 12-week plan (see earlier next steps in PROGRESS.md)"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
 }
