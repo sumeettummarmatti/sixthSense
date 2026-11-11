@@ -102,7 +102,7 @@
           "title": "CLAUDE.md, README team guide, push to GitHub",
           "status": "done",
           "week": 0,
-          "notes": "setup/foundation pushed. PR still to open (gh not authenticated)"
+          "notes": "setup/foundation pushed; PR #1 https://github.com/sumeettummarmatti/sixthSense/pull/1"
         }
       ]
     },
@@ -422,6 +422,11 @@
       "date": "2026-11-11",
       "decision": "Colour system 'Lamplight Lavender' sampled from logo; no green anywhere; red only for SOS/strong evidence; night mode after sunset",
       "why": "Soothing, matches brand; green implies 'safe' (rule 5). Preview https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Commits and PRs show only Sumeet as author; no Claude co-author lines",
+      "why": "User request"
     }
   ],
   "blockers": [
@@ -448,7 +453,7 @@
     }
   ],
   "next_steps": [
-    "Open PR setup/foundation -> main (https://github.com/sumeettummarmatti/sixthSense/pull/new/setup/foundation), merge once CI is green",
+    "Merge PR #1 (setup/foundation -> main) once CI is green",
     "Assign lane owners in progress.json (lanes.P*.owner)",
     "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
     "Sumeet: Android cmdline-tools + sudo xcodebuild -runFirstLaunch, then flutter doctor --android-licenses",
