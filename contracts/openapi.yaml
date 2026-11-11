@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SixthSense API
-  version: 0.2.0
+  version: 0.3.0
   description: >
     Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
     Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
@@ -296,6 +296,250 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
+  /journeys/protocol:
+    get:
+      tags: [journey]
+      summary: My journey settings (defaults if never set)
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProtocolSettings"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+    put:
+      tags: [journey]
+      summary: Save my journey settings
+      description: >
+        Applies to journeys started afterwards; a running journey keeps the timers it started with.
+        The phone must run the same timers locally (ADR-2).
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProtocolSettings"}
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProtocolSettings"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "422":
+          description: "Out-of-range timer, or alert_contact_ids has an id that is not an accepted contact of mine (detail: unknown_contact)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys:
+    post:
+      tags: [journey]
+      summary: Start a journey
+      description: >
+        Copies the current protocol. No destination or location is sent: those stay on the phone.
+        One open journey at a time.
+      security: [{bearer: []}]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/JourneyStart"}
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "409":
+          description: "A journey is already open (detail: journey_already_open)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/current:
+    get:
+      tags: [journey]
+      summary: My open journey, with any timer steps the server has applied
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: Open journey
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "No open journey (detail: no_open_journey)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/heartbeat:
+    post:
+      tags: [journey]
+      summary: Still here (no location)
+      description: >
+        Send at least every heartbeat_timeout_min / 2 minutes while the journey is open, or the server alerts contacts.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/check-in:
+    post:
+      tags: [journey]
+      summary: Report a PIN check-in (real or duress)
+      description: >
+        The PIN is checked on the phone and never sent. 'ok' and 'duress' get exactly the same response; duress silently starts a full escalation and the journey keeps looking normal to the phone.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CheckIn"}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/prompt:
+    post:
+      tags: [journey]
+      summary: The phone missed a check-in and is showing the private PIN prompt
+      description: >
+        Moves the journey to private_prompt and restarts the prompt window (prompt_timeout_min).
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/sos:
+    post:
+      tags: [journey]
+      summary: SOS
+      description: >
+        Full escalation now. With covert=true the phone keeps being shown a normal journey.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/Sos"}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/arrive:
+    post:
+      tags: [journey]
+      summary: Arrived
+      description: >
+        Ends the journey (outcome arrived). Not allowed while contacts are being alerted. After a duress PIN or covert SOS it shows 'resolved' but the escalation continues.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /journeys/{journey_id}/end:
+    post:
+      tags: [journey]
+      summary: End the journey early
+      description: >
+        Same as arrive, with outcome ended.
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: Journey as the phone should show it
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JourneyView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404":
+          description: "Not my journey (detail: journey_not_found)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "Journey is over (detail: journey_over), or the event does not fit the current state (detail: invalid_for_state)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
 components:
   securitySchemes:
     bearer:
@@ -428,3 +672,43 @@ components:
       properties:
         contact_link_id: {type: string, format: uuid}
         keys: {type: array, items: {$ref: "#/components/schemas/ContactKey"}}
+    ProtocolSettings:
+      type: object
+      properties:
+        check_in_interval_min: {type: integer, minimum: 1, maximum: 240, default: 15}
+        check_in_grace_min: {type: integer, minimum: 0, maximum: 30, default: 2, description: "T1: check-in due -> private prompt"}
+        prompt_timeout_min: {type: integer, minimum: 1, maximum: 30, default: 2, description: "T2: private prompt -> contacts alerted"}
+        contact_response_min: {type: integer, minimum: 1, maximum: 60, default: 5, description: "Contacts alerted -> full escalation"}
+        heartbeat_timeout_min: {type: integer, minimum: 2, maximum: 120, default: 10, description: "Silent phone -> contacts alerted"}
+        auto_112: {type: boolean, default: false}
+        alert_contact_ids:
+          type: [array, "null"]
+          maxItems: 5
+          items: {type: string, format: uuid}
+          description: Trusted contact link ids to alert; null = all accepted contacts
+    JourneyStart:
+      type: object
+      properties:
+        check_in_interval_min: {type: [integer, "null"], minimum: 1, maximum: 240, description: Override for this journey}
+    CheckIn:
+      type: object
+      required: [result]
+      properties:
+        result: {type: string, enum: [ok, duress], description: Which PIN the phone accepted}
+    Sos:
+      type: object
+      properties:
+        covert: {type: boolean, default: false}
+    JourneyView:
+      type: object
+      required: [id, state, outcome, started_at, next_check_in_at, timers]
+      properties:
+        id: {type: string, format: uuid}
+        state:
+          type: string
+          enum: [active, check_in_due, private_prompt, contact_alert, full_escalation, resolved]
+          description: A covert escalation is shown as active (or resolved after arrive/end)
+        outcome: {type: [string, "null"], enum: [arrived, ended, null]}
+        started_at: {type: string, format: date-time}
+        next_check_in_at: {type: string, format: date-time}
+        timers: {$ref: "#/components/schemas/ProtocolSettings"}
