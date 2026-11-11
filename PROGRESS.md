@@ -20,6 +20,12 @@
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
 
+## 2026-11-12 — sumeet: Merged everyone's demo work into `demo`
+- sumeet: `demo` now has Tanisha's app wiring (email sign-in + device key, add contact invite, "Get alerts on Telegram", journey/heartbeat/check-in/SOS/end), Shruj's real Telegram alerts (`p2/demo-telegram-live`) and the optional real-email setup (`p2/demo-real-email`, parked; Mailpit for now).
+- sumeet: Fixed a test that failed on any machine whose `.env` has real secrets (it now ignores `.env`).
+- sumeet: Checks: backend ruff clean, 185 tests pass; `flutter analyze` clean, 11 tests pass.
+- sumeet: **Gap:** the app can't accept an invite yet (`POST /contacts/invites/accept`). Telegram alerts only go to contacts who accepted, so this is needed for the 2-phone demo.
+
 ## 2026-11-11 — sumeet: Real email for sign-in codes (branch p2/demo-real-email)
 - sumeet: New branch `p2/demo-real-email` on top of Shruj's `p2/demo-telegram-live`. Goal: sign-in codes reach real inboxes for the demo, not Mailpit.
 - sumeet: Shruj's mailer already spoke plain SMTP. Added: **verified TLS** (smtplib's default skips certificate checks), an `SMTP_SSL` option for port 465, and `backend/scripts/send_test_email.py <address>`, which sends one test email and explains common errors.

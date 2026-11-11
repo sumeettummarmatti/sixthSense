@@ -298,11 +298,12 @@ def test_audit_log_is_append_only(client, mailer, db) -> None:
 
 
 def test_dev_secrets_refused_outside_dev() -> None:
+    # _env_file=None: judge the defaults, not whatever real secrets are in this machine's .env
     with pytest.raises(ValueError, match="OTP_PEPPER"):
-        Settings(env="prod")
+        Settings(_env_file=None, env="prod")
     with pytest.raises(ValueError, match="DATA_KEY"):
-        Settings(env="prod", otp_pepper="real-pepper", token_secret="real-secret")
+        Settings(_env_file=None, env="prod", otp_pepper="real-pepper", token_secret="real-secret")
     real = {"otp_pepper": "p", "token_secret": "t", "data_key": "d"}
     with pytest.raises(ValueError, match="ALERT_SIGNING_KEY"):
-        Settings(env="prod", **real)
-    Settings(env="prod", **real, alert_signing_key="cmVhbC1rZXk=")
+        Settings(_env_file=None, env="prod", **real)
+    Settings(_env_file=None, env="prod", **real, alert_signing_key="cmVhbC1rZXk=")
