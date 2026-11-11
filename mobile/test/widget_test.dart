@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sixthsense_app/features/journey/journey_flow.dart';
 import 'package:sixthsense_app/main.dart';
@@ -15,6 +16,17 @@ void main() {
   ) async {
     var duressRequests = 0;
     var covertSosRequests = 0;
+    final runtimeCalls = <MethodCall>[];
+    const runtimeChannel = MethodChannel('in.sixthsense/journey_runtime');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(runtimeChannel, (call) async {
+      runtimeCalls.add(call);
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(runtimeChannel, null);
+    });
     await tester.pumpWidget(
       MaterialApp(
         home: JourneyFlow(
@@ -94,5 +106,27 @@ void main() {
     await tester.pump();
     expect(covertSosRequests, 1);
     expect(find.text('SOS requested'), findsNothing);
+
+    await tester.tap(find.byTooltip('End journey'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('End journey').last);
+    await tester.pumpAndSettle();
+    expect(runtimeCalls.map((call) => call.method), [
+      'startJourney',
+      'requestDuress',
+      'requestDuress',
+      'checkIn',
+      'checkIn',
+      'requestSos',
+      'requestCovertSos',
+      'endJourney',
+    ]);
+    final startArguments = runtimeCalls.first.arguments as Map;
+    expect(startArguments['smsNumbers'], isEmpty);
+    expect(startArguments['smsFallbackEnabled'], isFalse);
+    expect(
+      (runtimeCalls.first.arguments as Map).containsKey('destination'),
+      isFalse,
+    );
   });
 }

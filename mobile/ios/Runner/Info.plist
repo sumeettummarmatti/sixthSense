@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Show your current area on the map and prepare a location-blurred place report.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Capture a companion liveness selfie when accepting a walk.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is not used by the Walk With Me selfie flow.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

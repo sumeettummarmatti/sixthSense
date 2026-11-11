@@ -3,17 +3,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/journey/journey_runtime.dart';
 import '../../core/theme/app_theme.dart';
+import '../walk/walk_flow.dart';
+import '../map/map_route_screen.dart';
 
 class JourneyFlow extends StatefulWidget {
   const JourneyFlow({
     super.key,
     this.now,
+    this.runtime = const JourneyRuntime(),
     this.onDuressRequested,
     this.onCovertSosRequested,
   });
 
   final DateTime Function()? now;
+  final JourneyRuntime runtime;
   final VoidCallback? onDuressRequested;
   final VoidCallback? onCovertSosRequested;
 
@@ -51,12 +56,49 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     }
   }
 
-  void _startJourney(JourneyPlan plan) {
+  Future<void> _startJourney(JourneyPlan plan) async {
+    final nextCheckIn = _now().add(plan.checkInInterval);
+    try {
+      await widget.runtime.startJourney(
+        nextCheckIn: nextCheckIn,
+        smsNumbers: plan.smsNumbers,
+        smsFallbackEnabled: plan.smsFallbackEnabled,
+      );
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final exactAlarmNeeded = error.code == 'exact_alarm_permission_required';
+      final notificationNeeded =
+          error.code == 'notification_permission_required';
+      final smsPermissionsNeeded = error.code == 'sms_permissions_required';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            exactAlarmNeeded
+                ? 'Allow Alarms & reminders to start a reliable check-in timer.'
+                : notificationNeeded
+                ? 'Allow notifications, then tap Start journey again.'
+                : smsPermissionsNeeded
+                ? 'Allow SMS and location, then tap Start journey again to enable offline alerts.'
+                : error.message ?? 'Could not start the journey timer.',
+          ),
+          action: exactAlarmNeeded
+              ? SnackBarAction(
+                  label: 'Open settings',
+                  onPressed: widget.runtime.requestExactAlarmAccess,
+                )
+              : null,
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     _ticker?.cancel();
     setState(() {
       _plan = plan;
       _checkInDue = false;
-      _nextCheckIn = _now().add(plan.checkInInterval);
+      _nextCheckIn = nextCheckIn;
       _remaining = plan.checkInInterval;
     });
     _ticker = Timer.periodic(
@@ -80,12 +122,29 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     setState(() => _remaining = remaining);
   }
 
-  void _checkIn() {
+  Future<void> _checkIn() async {
     final plan = _plan;
     if (plan == null) return;
+    final nextCheckIn = _now().add(plan.checkInInterval);
+    try {
+      await widget.runtime.checkIn(
+        nextCheckIn: nextCheckIn,
+        smsNumbers: plan.smsNumbers,
+        smsFallbackEnabled: plan.smsFallbackEnabled,
+      );
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? 'Could not reset the check-in timer.'),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _checkInDue = false;
-      _nextCheckIn = _now().add(plan.checkInInterval);
+      _nextCheckIn = nextCheckIn;
       _remaining = plan.checkInInterval;
     });
     _ticker?.cancel();
@@ -105,35 +164,50 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (!mounted || pin == null) return;
     if (pin == plan.duressPin) {
       _wrongPinAttempts = 0;
-      widget.onDuressRequested?.call();
-      _checkIn();
+      await _requestDuress();
+      await _checkIn();
     } else if (pin == plan.realPin) {
       _wrongPinAttempts = 0;
-      _checkIn();
+      await _checkIn();
     } else {
       _wrongPinAttempts++;
       if (_wrongPinAttempts >= 3) {
         _wrongPinAttempts = 0;
-        widget.onDuressRequested?.call();
+        await _requestDuress();
       }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('That PIN did not match. Try again.')),
       );
     }
   }
 
+  Future<void> _requestDuress() async {
+    widget.onDuressRequested?.call();
+    try {
+      await widget.runtime.requestDuress();
+    } on PlatformException {
+      // Keep coercion feedback discreet if the optional SMS path is unavailable.
+    }
+  }
+
   Future<void> _requestSos(bool covert) async {
     if (covert) {
+      await widget.runtime.requestCovertSos();
       widget.onCovertSosRequested?.call();
       await HapticFeedback.heavyImpact();
       return;
     }
+    final smsSubmitted = await widget.runtime.requestSos();
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('SOS requested'),
-        content: const Text(
-          'This prototype cannot contact anyone yet. If you need emergency help, call 112 from your phone.',
+        content: Text(
+          smsSubmitted
+              ? 'A safety SMS was submitted to Android for sending. If you need emergency help, call 112 from your phone.'
+              : 'No SMS was sent. Offline SMS works only during an opted-in journey when internet is unavailable. If you need emergency help, call 112 from your phone.',
         ),
         actions: [
           FilledButton(
@@ -164,6 +238,18 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       ),
     );
     if (shouldEnd == true && mounted) {
+      try {
+        await widget.runtime.endJourney();
+      } on PlatformException catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message ?? 'Could not stop the journey timer.'),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
       _ticker?.cancel();
       setState(() {
         _plan = null;
@@ -187,7 +273,21 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       onCheckIn: _enterCheckInPin,
       onEnd: _endJourney,
       onSos: _requestSos,
+      onRequestBatteryExemption: _requestBatteryExemption,
     );
+  }
+
+  Future<void> _requestBatteryExemption() async {
+    try {
+      await widget.runtime.requestBatteryExemption();
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? 'Could not open battery settings.'),
+        ),
+      );
+    }
   }
 }
 
@@ -198,12 +298,16 @@ class JourneyPlan {
     required this.checkInInterval,
     required this.realPin,
     required this.duressPin,
+    this.smsNumbers = const [],
+    this.smsFallbackEnabled = false,
   });
 
   final String destination;
   final Duration checkInInterval;
   final String realPin;
   final String duressPin;
+  final List<String> smsNumbers;
+  final bool smsFallbackEnabled;
 }
 
 class JourneySetupScreen extends StatefulWidget {
@@ -219,7 +323,9 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
   final _destinationController = TextEditingController();
   final _realPinController = TextEditingController();
   final _duressPinController = TextEditingController();
+  final _smsNumberController = TextEditingController();
   var _selectedMinutes = 5;
+  var _smsFallbackEnabled = false;
 
   static const _intervals = [1, 5, 10, 15];
 
@@ -228,6 +334,7 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
     _destinationController.dispose();
     _realPinController.dispose();
     _duressPinController.dispose();
+    _smsNumberController.dispose();
     super.dispose();
   }
 
@@ -256,12 +363,22 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
       );
       return;
     }
+    final smsNumber = _smsNumberController.text.trim().replaceAll(' ', '');
+    if (_smsFallbackEnabled &&
+        !RegExp(r'^\+?[0-9]{10,15}$').hasMatch(smsNumber)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid SMS contact number.')),
+      );
+      return;
+    }
     widget.onStart(
       JourneyPlan(
         destination: destination,
         checkInInterval: Duration(minutes: _selectedMinutes),
         realPin: realPin,
         duressPin: duressPin,
+        smsNumbers: _smsFallbackEnabled ? [smsNumber] : const [],
+        smsFallbackEnabled: _smsFallbackEnabled,
       ),
     );
   }
@@ -357,6 +474,31 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
                     counterText: '',
                   ),
                 ),
+                const SizedBox(height: 18),
+                SwitchListTile.adaptive(
+                  key: const ValueKey('sms-fallback-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _smsFallbackEnabled,
+                  onChanged: (enabled) =>
+                      setState(() => _smsFallbackEnabled = enabled),
+                  title: const Text('Enable offline SMS fallback'),
+                  subtitle: const Text(
+                    'With your permission, safety alerts can text one contact if internet is unavailable. At 10% battery or lower, alerts use SMS. Carrier SMS charges may apply.',
+                  ),
+                ),
+                if (_smsFallbackEnabled) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    key: const ValueKey('journey-sms-contact'),
+                    controller: _smsNumberController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Trusted contact phone',
+                      hintText: '+91 98765 43210',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -372,7 +514,7 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Prototype only: PINs are held in memory, and SOS/duress do not alert anyone. Background notifications are not connected yet.',
+                          'Journey PINs stay in memory only. SMS fallback is optional and requires SMS/location permission; only one journey contact is stored encrypted on this phone until the journey ends. Android timers use an ongoing notification and exact alarm.',
                           style: text.bodyMedium?.copyWith(
                             color: colors.onSurfaceVariant,
                           ),
@@ -405,6 +547,7 @@ class ActiveJourneyScreen extends StatelessWidget {
     required this.onCheckIn,
     required this.onEnd,
     required this.onSos,
+    required this.onRequestBatteryExemption,
   });
 
   final JourneyPlan plan;
@@ -413,6 +556,7 @@ class ActiveJourneyScreen extends StatelessWidget {
   final VoidCallback onCheckIn;
   final VoidCallback onEnd;
   final ValueChanged<bool> onSos;
+  final VoidCallback onRequestBatteryExemption;
 
   @override
   Widget build(BuildContext context) {
@@ -420,9 +564,8 @@ class ActiveJourneyScreen extends StatelessWidget {
     final colors = theme.colorScheme;
     final text = theme.textTheme;
     final intervalSeconds = plan.checkInInterval.inSeconds;
-    final timerDiameter = MediaQuery.sizeOf(context).height < 700
-        ? 184.0
-        : 224.0;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final timerDiameter = screenHeight < 700 ? 184.0 : 224.0;
     final progress = intervalSeconds == 0
         ? 0.0
         : (remaining.inSeconds / intervalSeconds).clamp(0.0, 1.0);
@@ -443,6 +586,27 @@ class ActiveJourneyScreen extends StatelessWidget {
         ),
         title: const Text('Journey in progress'),
         actions: [
+          IconButton(
+            tooltip: 'Map and route preview',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => MapRouteScreen(destination: plan.destination),
+              ),
+            ),
+            icon: const Icon(Icons.map_outlined),
+          ),
+          IconButton(
+            tooltip: 'Walk With Me',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const WalkFlow())),
+            icon: const Icon(Icons.directions_walk_rounded),
+          ),
+          IconButton(
+            tooltip: 'Battery settings',
+            onPressed: onRequestBatteryExemption,
+            icon: const Icon(Icons.battery_saver_outlined),
+          ),
           IconButton(
             tooltip: 'End journey',
             onPressed: onEnd,
@@ -486,36 +650,39 @@ class ActiveJourneyScreen extends StatelessWidget {
                             backgroundColor: colors.primaryContainer,
                           ),
                         ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isCheckInDue
-                                  ? Icons.notifications_active_outlined
-                                  : Icons.schedule_rounded,
-                              color: isCheckInDue
-                                  ? AppColors.caution
-                                  : colors.primary,
-                              size: 30,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              isCheckInDue ? 'Check in now' : durationText,
-                              style: isCheckInDue
-                                  ? text.titleLarge
-                                  : text.displaySmall,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              isCheckInDue
-                                  ? 'Your check-in is due'
-                                  : 'until your next check-in',
-                              style: text.bodySmall?.copyWith(
-                                color: colors.onSurfaceVariant,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isCheckInDue
+                                    ? Icons.notifications_active_outlined
+                                    : Icons.schedule_rounded,
+                                color: isCheckInDue
+                                    ? AppColors.caution
+                                    : colors.primary,
+                                size: 30,
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                isCheckInDue ? 'Check in now' : durationText,
+                                style: isCheckInDue
+                                    ? text.titleLarge
+                                    : text.displaySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                isCheckInDue
+                                    ? 'Your check-in is due'
+                                    : 'until your next check-in',
+                                style: text.bodySmall?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -532,7 +699,7 @@ class ActiveJourneyScreen extends StatelessWidget {
                         border: Border.all(color: AppColors.caution),
                       ),
                       child: Text(
-                        'This prototype does not send an alert if you miss a check-in.',
+                        'A missed check-in does not alert your contacts yet.',
                         style: text.bodyMedium?.copyWith(
                           color: AppColors.caution,
                         ),

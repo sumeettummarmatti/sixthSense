@@ -11,18 +11,61 @@
 | Lane | Done | Up next |
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
-| P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow | Run app on Android emulator (`P1-W0-android-device`); then `P1-W3-android-foreground-service` and `P1-W4-android-sos-triggers` |
+| P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
 | P2 Safety Core | Repo, backend skeleton, local databases running + migrated | `P2-W1-otp-device-auth` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
-**Blockers:** first Android build (Java download timeouts) · need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
+**Blockers:** Android download timeout on Sumeet’s Mac (Gradle wrapper was fixed manually); need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha. sumeet, shruj, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+
+## 2026-11-11 — Tan: P1 map, route preview, and anonymous report privacy
+- Tan: Added a MapLibre/OpenFreeMap map screen with an explicit **Insufficient data** state and no route recommendation until P4 routing/risk data is available. Location permission is requested only when the user asks to center the map.
+- Tan: Added a category-only report form and on-device planar-Laplace location noise (100 m expected radial offset) plus two-hour local time buckets. The preview payload contains only the noisy point, category, and time bucket; no report is uploaded while the P4 endpoint is unavailable.
+- Tan: `flutter analyze`, all 10 tests, `flutter build apk --debug`, `git diff --check`, `progress.json` parsing, and iOS plist validation pass. Manual map/location preview steps are in `mobile/README.md`.
+
+## 2026-11-11 — Tan: P1 Walk With Me screens
+- Tan: Added traveller and companion preview flows, public meeting-point selection, sample profile, four-digit handshake screen, local masked chat with phone-number rejection, companion duty toggle, pose prompt, and camera selfie capture. Android blocks screenshots throughout the Walk With Me flow.
+- Tan: Camera bytes stay in memory and the temporary image is deleted after reading. Ending the demo clears chat/selfie from memory and removes profile/route from the completion view.
+- Tan: `flutter analyze`, all 7 tests, and `flutter build apk --debug` pass. Manual flow steps are in `mobile/README.md`. Real matching, shared handshake verification, remote masked chat, and liveness detection remain P3 service work; the screens clearly identify the demo limitations.
+
+## 2026-11-11 — Tan: P1 end-to-end location encryption client
+- Tan: Added a versioned, per-recipient location envelope using X25519, HKDF-SHA256, AES-256-GCM, and Ed25519 signatures. Coordinates, accuracy, timestamp, and sequence remain encrypted; decryption verifies signature, session/recipient binding, authentication tag, and replay watermark.
+- Tan: Added round-trip, ciphertext-metadata, tampering, context-binding, and replay tests. `flutter analyze`, all 5 widget/crypto tests, and `flutter build apk --debug` pass.
+- Tan: Live GPS publishing and relay are not connected: authenticated device-key provisioning, trusted-contact public-key lookup, and the ciphertext WebSocket relay are P2 dependencies still open. W6 stays in progress until those integrations are available.
+
+## 2026-11-11 — Tan: P1 offline SMS and low-battery mode
+- Tan: Added an opt-in journey SMS contact, runtime SMS/location permissions, and Android Keystore encryption for that contact until the journey ends.
+- Tan: Offline SOS, covert SOS/duress, and missed check-ins submit SMS with a Maps link when a fresh last-known location is available. At 10% battery or lower, the app submits one low-battery SMS and routes later journey alerts through SMS.
+- Tan: Documented carrier and low-battery manual checks in `mobile/README.md`; physical SIM checks were not run. `flutter analyze`, `flutter test` (2 tests), `flutter build apk --debug`, and `git diff --check` pass.
+
+## 2026-11-11 — Tan: P1 Android SOS shortcuts
+- Tan: Added the foreground Volume Up → Volume Down → Volume Up pattern, a user-added Quick Settings SOS tile, and a home-screen SOS widget. Each routes to the same local SOS notification; no contact or emergency alert is sent.
+- Tan: Documented shortcut setup, test steps, foreground-only volume detection, and the placeholder onboarding behavior (no OTP is sent or verified; contacts can be skipped).
+- Tan: `flutter analyze`, `flutter test` (2 tests), and `flutter build apk --debug` pass. Manual tile/widget/volume checks are listed in `mobile/README.md`.
 
 ## 2026-11-11 — Tan: Updated P1 status for Android-first plan
 - Tan: Synced the task branch with the latest Android-first plan and updated P1’s next tasks and blockers.
-- Tan: `flutter doctor` confirms Flutter and Android SDK 36.0.0 are ready; running the app on an Android emulator remains open.
+
+## 2026-11-11 — Tan: P1 Android journey emulator check
+- Tan: Tanisha manually tested the journey timer flow on the emulator and reported it is working well so far.
+- Tan: Physical USB-device and vendor battery-saver checks remain deferred.
+
+## 2026-11-11 — Tan: P1 Android journey service and alarms
+- Tan: Added an Android foreground service with a private ongoing notification and exact, allow-while-idle check-in alarms; check-in resets the alarm and ending a journey cancels it.
+- Tan: Added notification and exact-alarm permission handling, an optional battery-optimization exemption action, and alarm rescheduling after device reboot. Android stores only the active flag and next deadline; destination and PINs are not persisted.
+- Tan: Made the countdown content scale down on compact screens and kept the prototype limitation clear: missed check-ins do not alert contacts, and SOS/duress do not send alerts yet.
+- Tan: Added manual emulator verification steps to `mobile/README.md`. `flutter analyze`, `flutter test`, and `flutter run -d emulator-5554` pass; Tanisha later reported the emulator timer flow is working well so far. Physical-device checks were deferred at Tanisha’s request.
+
+## 2026-11-11 — Tan: P1 Android emulator run
+- Tan: Started `Medium_Phone_API_37.0` directly after Flutter's emulator launcher failed to register it with ADB.
+- Tan: Built, installed, and launched the Flutter app on `emulator-5554`; confirmed the app process is running. The first Android build installed NDK 28.2.13676358 and Android SDK Platform 36.
+- Tan: The physical Android phone USB-debugging check remains open, so `P1-W0-android-device` is in progress.
+
+## 2026-11-11 — Tan: Updated P1 status for Android-first plan
+- Tan: Synced the task branch with the latest Android-first plan and updated P1’s next tasks and blockers.
+- Tan: `flutter doctor` confirms Flutter and Android SDK 36.0.0 are ready.
 
 ## 2026-11-11 — Tan: Reconciled progress during upstream pull
 - Tan: Kept the latest upstream Android-first setup notes and reconciled the P1 work log during the rebase.

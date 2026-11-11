@@ -123,14 +123,14 @@
           "title": "Install Flutter, create app shell (features/, core/), Android toolchain green",
           "status": "done",
           "week": 0,
-          "notes": "sumeet: Flutter 3.47.9; mobile/ shell with core/ + features/ + theme; analyze + test pass. Android first (ios/ kept, not built). flutter doctor: Android toolchain ✓ (licenses no longer needed with new Android CLI). Emulator Medium_Phone_API_37.0 boots. Gradle 9.3.1 wrapper download timed out from Java; fetched manually (sha256 verified) into ~/.gradle/wrapper/dists. Remaining: first flutter build apk (downloading Android libs) + run on emulator. Handing over to tanisha"
+          "notes": "sumeet: Flutter 3.47.9; mobile/ shell with core/ + features/ + theme; analyze + test pass. Android first (ios/ kept, not built). flutter doctor: Android toolchain \u2713 (licenses no longer needed with new Android CLI). Emulator Medium_Phone_API_37.0 boots. Gradle 9.3.1 wrapper download timed out from Java; fetched manually (sha256 verified) into ~/.gradle/wrapper/dists. Remaining: first flutter build apk (downloading Android libs) + run on emulator. Handing over to tanisha"
         },
         {
           "id": "P1-W0-android-device",
           "title": "Emulator (Device Manager) + run on a real Android phone via USB debugging",
-          "status": "todo",
+          "status": "in_progress",
           "week": 0,
-          "notes": "sumeet: free, no account needed"
+          "notes": "tanisha: Built, installed, and launched the app on Medium_Phone_API_37.0 (emulator-5554). Physical Android phone USB-debugging verification is deferred at Tanisha's request."
         },
         {
           "id": "P1-W1-signup-contacts-ui",
@@ -144,14 +144,14 @@
           "title": "Journey screens + on-phone timers",
           "status": "done",
           "week": 3,
-          "notes": "tanisha: Journey setup, active countdown, check-in due state, and reset flow implemented. Timer uses device-local time and refreshes on app resume. Android foreground service/exact alarms, escalation, and persistence across app termination remain future work. flutter analyze clean; widget tests cover due transition and reset."
+          "notes": "tanisha: Journey setup, active countdown, check-in due state, and reset flow implemented. Timer uses device-local time and refreshes on app resume. Android service/alarm integration is tracked in P1-W3-android-foreground-service. Flutter journey screen/PIN restoration after force-stop remains future work."
         },
         {
           "id": "P1-W3-android-foreground-service",
           "title": "Foreground service + exact alarms for journey timers; battery-optimisation exemption",
-          "status": "todo",
+          "status": "done",
           "week": 3,
-          "notes": "sumeet: test on a Xiaomi/Oppo/Vivo/Samsung phone (aggressive battery savers)"
+          "notes": "tanisha: Added Android foreground service, ongoing notification, one-shot exact alarms, notification/exact-alarm permission handling, optional battery-optimization exemption, and alarm rescheduling after reboot. Flutter analyze/test and Android emulator build/run pass. Tanisha manually tested the journey timer flow on the emulator and reports it is working well so far. Physical-device checks are deferred at Tanisha's request."
         },
         {
           "id": "P1-W4-sos-duress-pin",
@@ -163,37 +163,37 @@
         {
           "id": "P1-W4-android-sos-triggers",
           "title": "Covert SOS: volume-button pattern, Quick Settings tile, widget",
-          "status": "todo",
+          "status": "done",
           "week": 4,
-          "notes": ""
+          "notes": "tanisha: Added foreground Volume Up \u2192 Volume Down \u2192 Volume Up pattern, Quick Settings tile, and home-screen widget; each posts a local-only SOS notification. Flutter analyze/test and Android debug APK build pass. Manual trigger steps are documented in mobile/README.md; notification display and launcher/tile interaction remain to be manually checked."
         },
         {
           "id": "P1-W5-sms-fallback-lowbattery",
           "title": "Offline SMS fallback (SmsManager, auto-send from user's plan) + low-battery mode",
-          "status": "todo",
+          "status": "done",
           "week": 5,
-          "notes": ""
+          "notes": "tanisha: Added opt-in journey-scoped SMS fallback with runtime SMS/location permission, Android Keystore-encrypted recipient, offline SOS/duress/missed-check-in SMS, and a one-time <=10% battery SMS with SMS routing for later alerts. Flutter analyze/test and Android debug APK build pass. Real-carrier SMS and low-battery checks are documented in mobile/README.md and remain unverified without a physical SIM phone."
         },
         {
           "id": "P1-W6-e2e-location",
           "title": "E2E encrypted live location",
-          "status": "todo",
+          "status": "in_progress",
           "week": 6,
-          "notes": ""
+          "notes": "tanisha: Added and tested a versioned per-recipient E2E envelope: X25519 + HKDF-SHA256 + AES-256-GCM + Ed25519 signature, with context binding and replay watermark checks. Flutter analyze/test and Android debug APK build pass. Live GPS publishing and relay integration await P2-W1 device-key provisioning, P2-W2 authenticated contact-key lookup, and P2-W5 ciphertext relay."
         },
         {
           "id": "P1-W7-walk-screens-handshake-chat",
           "title": "Walk screens, handshake code, masked chat, liveness selfie",
-          "status": "todo",
+          "status": "done",
           "week": 7,
-          "notes": ""
+          "notes": "tanisha: Added traveller/companion Walk With Me preview screens, public meeting point, sample profile, 4-digit handshake code screen, local masked chat with phone-number rejection, companion on-duty toggle, random pose prompt, and camera selfie capture. Android FLAG_SECURE protects the flow; selfie bytes stay in memory and the temporary capture is deleted. Analyze, 7 Flutter tests, and Android debug build pass. This is UI only: real matching, shared handshake, remote chat, and liveness verification await P3 services."
         },
         {
           "id": "P1-W9-map-routes-report-blur",
           "title": "Map + routes + report screen + on-device location blur",
-          "status": "todo",
+          "status": "done",
           "week": 9,
-          "notes": ""
+          "notes": "tanisha: Added the MapLibre/OpenFreeMap map and route screen, on-demand current-location centering, and an explicit Insufficient data/no route recommendation state pending P4 services. Added category-only report UI and on-device planar-Laplace geo-noise (100 m expected radial offset) plus a two-hour local time bucket; report payload contains only the noisy coordinates, category, and time bucket. No upload occurs until the P4 endpoint exists. Analyze, all 10 tests, Android debug build, git diff check, and plist validation pass; manual map/location checks are documented."
         },
         {
           "id": "P1-LATER-ios-port",
@@ -258,7 +258,7 @@
         },
         {
           "id": "P2-W4-watchdog-alert-ladder",
-          "title": "Heartbeat watchdog + FCM push → Telegram bot → email ladder, idempotent",
+          "title": "Heartbeat watchdog + FCM push \u2192 Telegram bot \u2192 email ladder, idempotent",
           "status": "todo",
           "week": 4,
           "notes": "sumeet: free channels only (no CPaaS SMS/voice). SMS comes from the user's phone (P1-W5)"
@@ -301,7 +301,7 @@
           "title": "Free verification design: college email + security sign-off, ML Kit face check",
           "status": "todo",
           "week": 1,
-          "notes": "sumeet: no paid KYC/liveness vendors (₹0 budget)"
+          "notes": "sumeet: no paid KYC/liveness vendors (\u20b90 budget)"
         },
         {
           "id": "P3-W3-tier1-verification",
@@ -491,7 +491,7 @@
     {
       "date": "2026-11-11",
       "decision": "Build iOS only for now; Android later (P1-LATER-android-port). mobile/android/ kept, not built",
-      "why": "Team priority. iOS limits handled per PLANNER §3a",
+      "why": "Team priority. iOS limits handled per PLANNER \u00a73a",
       "by": "sumeet"
     },
     {
@@ -528,7 +528,7 @@
   "blockers": [
     {
       "id": "B1",
-      "title": "First Android build: Java downloads time out on Sumeet's Mac (Gradle wrapper fixed manually); confirm build + run on emulator",
+      "title": "Sumeet's Mac: first Android build had Java download timeouts; Gradle wrapper fixed manually; build verification pending",
       "affects": [
         "P1-W0-flutter-shell"
       ],
@@ -561,12 +561,11 @@
   ],
   "next_steps": [
     "sumeet: merge PR #1 (setup/foundation -> main)",
-    "tanisha: create an Android emulator and run the app to complete P1-W0-android-device",
+    "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
     "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
     "P1/P2: connect the onboarding and trusted-contact screens to the agreed auth and contacts APIs",
-    "P1-W3-android-foreground-service: foreground service + exact alarms for journey timers",
-    "P1-W4-android-sos-triggers: volume-button pattern, Quick Settings tile, and widget"
+    "P1-W6-e2e-location: integrate client envelope when P2 device keys, contact-key lookup, and relay are ready"
   ],
-  "budget": "zero: free tools/services only (PLANNER §3b)"
+  "budget": "zero: free tools/services only (PLANNER \u00a73b)"
 }
