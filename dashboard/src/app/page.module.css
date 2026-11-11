@@ -38,8 +38,23 @@
 
 .labels {
   margin: 0;
-  padding-left: 18px;
-  line-height: 1.8;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.labels li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
 }
 
 .map {

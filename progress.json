@@ -89,6 +89,13 @@
           "status": "todo",
           "week": 12,
           "notes": ""
+        },
+        {
+          "id": "ALL-W0-colour-system",
+          "title": "Colour palette + Flutter theme + dashboard tokens",
+          "status": "done",
+          "week": 0,
+          "notes": "mobile/lib/core/theme/app_theme.dart, dashboard/src/app/globals.css. Fonts (Urbanist + Atkinson Hyperlegible) not bundled yet: bundle as assets, don't fetch at runtime"
         }
       ]
     },
@@ -403,6 +410,11 @@
       "date": "2026-11-11",
       "decision": "Flutter uses Android Studio SDK at ~/Library/Android/sdk (brew android-commandlinetools is unused)",
       "why": "User installed Android Studio"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Colour system 'Lamplight Lavender' sampled from logo; no green anywhere; red only for SOS/strong evidence; night mode after sunset",
+      "why": "Soothing, matches brand; green implies 'safe' (rule 5). Preview https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz"
     }
   ],
   "blockers": [

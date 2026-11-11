@@ -2,6 +2,12 @@
 
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 
+## 2026-11-11 — Colour system
+- "Lamplight Lavender" palette sampled from the logo; preview: https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz
+- Applied to Flutter (`mobile/lib/core/theme/app_theme.dart`, light + night ColorScheme) and dashboard (`globals.css` tokens, colour-coded evidence legend).
+- Rules: no green, red only for SOS / strong evidence, same colours on real and duress PIN screens.
+- Still open: Android cmdline-tools, Xcode first launch, OK to start Docker.
+
 ## 2026-11-11 — M0 setup (branch `setup/foundation`)
 - **Done:** repo root files, `infra/docker-compose.yml` (2× PostGIS on separate networks, Redis, NATS), `backend/` (10 module routers, PII-scrubbing logs, Alembic; 11 tests), `insight/` (own DB only, no-"safe" labels, k/m threshold, isolation tests; 14 tests), `dashboard/` (Next.js + MapLibre; build passes), `routing-engine/` Valhalla stub, `contracts/openapi.yaml` skeleton, CI + Dependabot.
 - **Fixed along the way:** phone-number regex missed a leading `0`; pnpm 12 via corepack is broken here, so pnpm is pinned to 10.18.0.

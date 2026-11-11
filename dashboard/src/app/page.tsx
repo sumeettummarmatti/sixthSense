@@ -2,7 +2,11 @@ import CampusMap from "@/components/CampusMap";
 
 import styles from "./page.module.css";
 
-const LABELS = ["Strong evidence of concern", "Some reports of concern", "Insufficient data"];
+const LABELS = [
+  { text: "Strong evidence of concern", color: "var(--evidence-strong)" },
+  { text: "Some reports of concern", color: "var(--evidence-some)" },
+  { text: "Insufficient data", color: "var(--evidence-insufficient)" },
+];
 
 export default function Home() {
   return (
@@ -17,7 +21,10 @@ export default function Home() {
         <h2 className={styles.heading}>Evidence labels</h2>
         <ul className={styles.labels}>
           {LABELS.map((label) => (
-            <li key={label}>{label}</li>
+            <li key={label.text}>
+              <span className={styles.dot} style={{ background: label.color }} />
+              {label.text}
+            </li>
           ))}
         </ul>
       </aside>
