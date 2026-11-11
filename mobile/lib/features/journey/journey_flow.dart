@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/api/device_identity.dart';
 import '../../core/journey/journey_runtime.dart';
 import '../../core/theme/app_theme.dart';
 import '../walk/walk_flow.dart';
@@ -13,12 +14,14 @@ class JourneyFlow extends StatefulWidget {
     super.key,
     this.now,
     this.runtime = const JourneyRuntime(),
+    this.api = const DemoApi(),
     this.onDuressRequested,
     this.onCovertSosRequested,
   });
 
   final DateTime Function()? now;
   final JourneyRuntime runtime;
+  final DemoApi api;
   final VoidCallback? onDuressRequested;
   final VoidCallback? onCovertSosRequested;
 
@@ -30,6 +33,9 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   JourneyPlan? _plan;
   DateTime? _nextCheckIn;
   Timer? _ticker;
+  Timer? _heartbeatTicker;
+  String? _serverJourneyId;
+  var _promptReported = false;
   Duration _remaining = Duration.zero;
   bool _checkInDue = false;
   var _wrongPinAttempts = 0;
@@ -46,6 +52,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
+    _heartbeatTicker?.cancel();
     super.dispose();
   }
 
@@ -53,11 +60,27 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _plan != null) {
       _updateCountdown();
+      _sendHeartbeat();
     }
   }
 
   Future<void> _startJourney(JourneyPlan plan) async {
-    final nextCheckIn = _now().add(plan.checkInInterval);
+    var nextCheckIn = _now().add(plan.checkInInterval);
+    String? serverJourneyId;
+    var heartbeatTimeoutMinutes = 10;
+    String? serverWarning;
+    try {
+      final remote = await widget.api.startJourney(
+        plan.checkInInterval.inMinutes,
+      );
+      serverJourneyId = remote.id;
+      nextCheckIn = remote.nextCheckInAt;
+      heartbeatTimeoutMinutes = remote.heartbeatTimeoutMinutes;
+    } on ApiException catch (error) {
+      serverWarning = error.detail;
+    } catch (_) {
+      serverWarning = 'server_unreachable';
+    }
     try {
       await widget.runtime.startJourney(
         nextCheckIn: nextCheckIn,
@@ -98,13 +121,32 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     setState(() {
       _plan = plan;
       _checkInDue = false;
+      _promptReported = false;
+      _serverJourneyId = serverJourneyId;
       _nextCheckIn = nextCheckIn;
-      _remaining = plan.checkInInterval;
+      _remaining = nextCheckIn.difference(_now());
     });
     _ticker = Timer.periodic(
       const Duration(seconds: 1),
       (_) => _updateCountdown(),
     );
+    _heartbeatTicker?.cancel();
+    if (serverJourneyId != null) {
+      final heartbeatMinutes = (heartbeatTimeoutMinutes ~/ 2).clamp(1, 60);
+      _heartbeatTicker = Timer.periodic(
+        Duration(minutes: heartbeatMinutes),
+        (_) => _sendHeartbeat(),
+      );
+    }
+    if (serverWarning != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Server unavailable. The local timer and opted-in SMS fallback are active; contact alerts are not connected.',
+          ),
+        ),
+      );
+    }
   }
 
   void _updateCountdown() {
@@ -117,15 +159,33 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         _remaining = Duration.zero;
         _checkInDue = true;
       });
+      _reportPromptShown();
       return;
     }
     setState(() => _remaining = remaining);
   }
 
-  Future<void> _checkIn() async {
+  Future<void> _checkIn({bool duress = false}) async {
     final plan = _plan;
     if (plan == null) return;
-    final nextCheckIn = _now().add(plan.checkInInterval);
+    var nextCheckIn = _now().add(plan.checkInInterval);
+    final journeyId = _serverJourneyId;
+    if (journeyId != null) {
+      try {
+        final remote = await widget.api.checkIn(journeyId, duress: duress);
+        nextCheckIn = remote.nextCheckInAt;
+      } on ApiException catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Check-in saved locally; server update failed (${error.detail}).',
+              ),
+            ),
+          );
+        }
+      }
+    }
     try {
       await widget.runtime.checkIn(
         nextCheckIn: nextCheckIn,
@@ -144,8 +204,9 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() {
       _checkInDue = false;
+      _promptReported = false;
       _nextCheckIn = nextCheckIn;
-      _remaining = plan.checkInInterval;
+      _remaining = nextCheckIn.difference(_now());
     });
     _ticker?.cancel();
     _ticker = Timer.periodic(
@@ -165,10 +226,10 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (pin == plan.duressPin) {
       _wrongPinAttempts = 0;
       await _requestDuress();
-      await _checkIn();
+      await _checkIn(duress: true);
     } else if (pin == plan.realPin) {
       _wrongPinAttempts = 0;
-      await _checkIn();
+      await _checkIn(duress: false);
     } else {
       _wrongPinAttempts++;
       if (_wrongPinAttempts >= 3) {
@@ -192,10 +253,32 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   }
 
   Future<void> _requestSos(bool covert) async {
+    String? serverError;
+    final journeyId = _serverJourneyId;
+    if (journeyId == null) {
+      serverError = 'no_server_journey';
+    } else {
+      try {
+        await widget.api.requestSos(journeyId, covert: covert);
+      } on ApiException catch (error) {
+        serverError = error.detail;
+      } catch (_) {
+        serverError = 'server_unreachable';
+      }
+    }
     if (covert) {
       await widget.runtime.requestCovertSos();
       widget.onCovertSosRequested?.call();
       await HapticFeedback.heavyImpact();
+      if (serverError != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Covert SOS could not reach the server; local safety actions remain active.',
+            ),
+          ),
+        );
+      }
       return;
     }
     final smsSubmitted = await widget.runtime.requestSos();
@@ -205,9 +288,11 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       builder: (context) => AlertDialog(
         title: const Text('SOS requested'),
         content: Text(
-          smsSubmitted
-              ? 'A safety SMS was submitted to Android for sending. If you need emergency help, call 112 from your phone.'
-              : 'No SMS was sent. Offline SMS works only during an opted-in journey when internet is unavailable. If you need emergency help, call 112 from your phone.',
+          serverError != null
+              ? 'The server could not be reached ($serverError). ${smsSubmitted ? 'A safety SMS was submitted to Android for sending.' : 'Offline SMS works only during an opted-in journey when internet is unavailable.'} If you need emergency help, call 112 from your phone.'
+              : smsSubmitted
+              ? 'The SOS was sent to the server and a safety SMS was submitted to Android for sending. If you need emergency help, call 112 from your phone.'
+              : 'The SOS was sent to the server. No SMS was sent; offline SMS works only during an opted-in journey when internet is unavailable. If you need emergency help, call 112 from your phone.',
         ),
         actions: [
           FilledButton(
@@ -238,6 +323,17 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       ),
     );
     if (shouldEnd == true && mounted) {
+      String? serverError;
+      final journeyId = _serverJourneyId;
+      if (journeyId != null) {
+        try {
+          await widget.api.endJourney(journeyId);
+        } on ApiException catch (error) {
+          serverError = error.detail;
+        } catch (_) {
+          serverError = 'server_unreachable';
+        }
+      }
       try {
         await widget.runtime.endJourney();
       } on PlatformException catch (error) {
@@ -251,12 +347,44 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       }
       if (!mounted) return;
       _ticker?.cancel();
+      _heartbeatTicker?.cancel();
       setState(() {
         _plan = null;
+        _serverJourneyId = null;
         _nextCheckIn = null;
         _remaining = Duration.zero;
         _checkInDue = false;
       });
+      if (serverError != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Journey ended on this phone; server update failed ($serverError).',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _reportPromptShown() async {
+    final journeyId = _serverJourneyId;
+    if (journeyId == null || _promptReported) return;
+    _promptReported = true;
+    try {
+      await widget.api.promptShown(journeyId);
+    } on ApiException {
+      // The local prompt must still work if the network is unavailable.
+    }
+  }
+
+  Future<void> _sendHeartbeat() async {
+    final journeyId = _serverJourneyId;
+    if (journeyId == null) return;
+    try {
+      await widget.api.heartbeat(journeyId);
+    } on ApiException {
+      // A missed heartbeat is detected by the server watchdog; local timers remain active.
     }
   }
 

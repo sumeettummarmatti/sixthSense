@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api/device_identity.dart';
 import '../journey/journey_flow.dart';
 
-/// Local UI flow for P1-W1. Sign-in uses an email code (free; PLANNER §3b),
-/// not SMS. Code delivery and contact sync are connected when the shared auth
-/// and contacts API contract is ready (P2-W1-otp-device-auth).
+/// Demo onboarding connected to email OTP, Android device-key auth, contacts,
+/// and Telegram linking.
 class OnboardingFlow extends StatefulWidget {
-  const OnboardingFlow({super.key});
+  const OnboardingFlow({super.key, this.api = const DemoApi()});
+
+  final DemoApi api;
 
   @override
   State<OnboardingFlow> createState() => _OnboardingFlowState();
@@ -17,6 +19,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   final _codeController = TextEditingController();
   final _contacts = <TrustedContactDraft>[];
   var _step = OnboardingStep.email;
+  var _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resumeSession();
+  }
+
+  Future<void> _resumeSession() async {
+    final signedIn = await widget.api.trySilentSignIn();
+    if (!mounted) return;
+    if (signedIn) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => JourneyFlow(api: widget.api)),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -25,21 +44,47 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     super.dispose();
   }
 
-  void _continueToCode() {
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-        .hasMatch(_emailController.text.trim())) {
+  Future<void> _continueToCode() async {
+    final email = _emailController.text.trim();
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       _showMessage('Enter a valid email address to continue.');
       return;
     }
-    setState(() => _step = OnboardingStep.code);
+    setState(() => _busy = true);
+    try {
+      await widget.api.requestOtp(email);
+      if (mounted) setState(() => _step = OnboardingStep.code);
+    } on ApiException catch (error) {
+      _showApiError(error);
+    } catch (_) {
+      _showMessage(
+        'Could not request a sign-in code. Check the server connection.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
-  void _verifyCode() {
-    if (_codeController.text.trim().length < 4) {
-      _showMessage('Enter the verification code to continue.');
+  Future<void> _verifyCode() async {
+    final code = _codeController.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      _showMessage('Enter the 6-digit verification code.');
       return;
     }
-    setState(() => _step = OnboardingStep.contacts);
+    setState(() => _busy = true);
+    try {
+      await widget.api.verifyOtp(
+        email: _emailController.text.trim(),
+        code: code,
+      );
+      if (mounted) setState(() => _step = OnboardingStep.contacts);
+    } on ApiException catch (error) {
+      _showApiError(error);
+    } catch (_) {
+      _showMessage('Could not verify the code. Check the server connection.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _addContact() async {
@@ -47,8 +92,48 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       context: context,
       builder: (_) => const _AddContactDialog(),
     );
-    if (contact != null && mounted) {
-      setState(() => _contacts.add(contact));
+    if (contact == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final invite = await widget.api.createInvite('SixthSense user');
+      final linkedContact = TrustedContactDraft(
+        name: contact.name,
+        phone: contact.phone,
+        contactLinkId: invite['contact_link_id'] as String,
+      );
+      await const DeviceIdentity().shareInvite(
+        invite['invite_url'] as String,
+        contact.name,
+      );
+      if (mounted) {
+        setState(() => _contacts.add(linkedContact));
+        _showMessage('Invite created and ready to share.');
+      }
+    } on ApiException catch (error) {
+      _showApiError(error);
+    } catch (_) {
+      _showMessage(
+        'Could not create or share the invite. Check the server connection.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _getTelegramAlerts() async {
+    setState(() => _busy = true);
+    try {
+      final url = await widget.api.createTelegramLink();
+      await const DeviceIdentity().openUrl(url);
+      if (mounted) {
+        _showMessage('In Telegram, tap Start to finish linking alerts.');
+      }
+    } on ApiException catch (error) {
+      _showApiError(error);
+    } catch (_) {
+      _showMessage('Could not open Telegram. Check the server connection.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -58,9 +143,26 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _showApiError(ApiException error) {
+    final message = switch (error.detail) {
+      'rate_limited' => 'Too many requests. Wait a little, then try again.',
+      'invalid_or_expired_code' =>
+        'That code is incorrect or expired. Request a new one.',
+      'too_many_attempts' => 'Too many attempts. Request a new code.',
+      'telegram_not_configured' =>
+        'Telegram alerts are not configured on the server yet.',
+      'contact_limit_reached' => 'You have reached the trusted-contact limit.',
+      'server_unreachable' || 'server_timeout' =>
+        'Could not reach the server. Check that it is running on this network.',
+      _ =>
+        'The server could not complete this request (HTTP ${error.statusCode}: ${error.detail}).',
+    };
+    _showMessage(message);
+  }
+
   void _finishOnboarding() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const JourneyFlow()),
+      MaterialPageRoute<void>(builder: (_) => JourneyFlow(api: widget.api)),
     );
   }
 
@@ -96,6 +198,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                           key: const ValueKey('email'),
                           controller: _emailController,
                           onContinue: _continueToCode,
+                          busy: _busy,
                           text: text,
                         ),
                         OnboardingStep.code => _CodeStep(
@@ -103,6 +206,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                           controller: _codeController,
                           email: _emailController.text.trim(),
                           onContinue: _verifyCode,
+                          busy: _busy,
                           text: text,
                         ),
                         OnboardingStep.contacts => _ContactsStep(
@@ -111,6 +215,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                           onAdd: _addContact,
                           onRemove: (contact) =>
                               setState(() => _contacts.remove(contact)),
+                          onTelegram: _getTelegramAlerts,
+                          busy: _busy,
                           onContinue: _finishOnboarding,
                           text: text,
                         ),
@@ -187,11 +293,13 @@ class _EmailStep extends StatelessWidget {
     super.key,
     required this.controller,
     required this.onContinue,
+    required this.busy,
     required this.text,
   });
 
   final TextEditingController controller;
   final VoidCallback onContinue;
+  final bool busy;
   final TextTheme text;
 
   @override
@@ -231,7 +339,15 @@ class _EmailStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        FilledButton(onPressed: onContinue, child: const Text('Continue')),
+        FilledButton(
+          onPressed: busy ? null : onContinue,
+          child: busy
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Continue'),
+        ),
         const Spacer(flex: 2),
       ],
     );
@@ -244,12 +360,14 @@ class _CodeStep extends StatelessWidget {
     required this.controller,
     required this.email,
     required this.onContinue,
+    required this.busy,
     required this.text,
   });
 
   final TextEditingController controller;
   final String email;
   final VoidCallback onContinue;
+  final bool busy;
   final TextTheme text;
 
   @override
@@ -282,7 +400,15 @@ class _CodeStep extends StatelessWidget {
           onSubmitted: (_) => onContinue(),
         ),
         const SizedBox(height: 18),
-        FilledButton(onPressed: onContinue, child: const Text('Verify number')),
+        FilledButton(
+          onPressed: busy ? null : onContinue,
+          child: busy
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Verify email'),
+        ),
         const Spacer(flex: 2),
       ],
     );
@@ -295,6 +421,8 @@ class _ContactsStep extends StatelessWidget {
     required this.contacts,
     required this.onAdd,
     required this.onRemove,
+    required this.onTelegram,
+    required this.busy,
     required this.onContinue,
     required this.text,
   });
@@ -302,6 +430,8 @@ class _ContactsStep extends StatelessWidget {
   final List<TrustedContactDraft> contacts;
   final VoidCallback onAdd;
   final ValueChanged<TrustedContactDraft> onRemove;
+  final VoidCallback onTelegram;
+  final bool busy;
   final VoidCallback onContinue;
   final TextTheme text;
 
@@ -320,8 +450,14 @@ class _ContactsStep extends StatelessWidget {
           style: text.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 22),
+        FilledButton.tonalIcon(
+          onPressed: busy ? null : onTelegram,
+          icon: const Icon(Icons.notifications_active_outlined),
+          label: const Text('Get alerts on Telegram'),
+        ),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: onAdd,
+          onPressed: busy ? null : onAdd,
           icon: const Icon(Icons.person_add_alt_1_rounded),
           label: const Text('Add a trusted contact'),
         ),
@@ -388,7 +524,7 @@ class _ContactsStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         FilledButton(
-          onPressed: onContinue,
+          onPressed: busy ? null : onContinue,
           child: Text(contacts.isEmpty ? 'Do this later' : 'Finish setup'),
         ),
         const SizedBox(height: 8),
@@ -404,10 +540,15 @@ class _ContactsStep extends StatelessWidget {
 }
 
 class TrustedContactDraft {
-  const TrustedContactDraft({required this.name, required this.phone});
+  const TrustedContactDraft({
+    required this.name,
+    required this.phone,
+    this.contactLinkId = '',
+  });
 
   final String name;
   final String phone;
+  final String contactLinkId;
 }
 
 class _AddContactDialog extends StatefulWidget {

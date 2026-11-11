@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sixthsense_app/core/api/device_identity.dart';
 import 'package:sixthsense_app/features/onboarding/onboarding_flow.dart';
 
 void main() {
   testWidgets('sign-in asks for email (free), not a phone number', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: OnboardingFlow()));
+    await tester.pumpWidget(
+      MaterialApp(home: OnboardingFlow(api: _FakeOnboardingApi())),
+    );
 
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Phone number'), findsNothing);
@@ -29,4 +32,11 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+class _FakeOnboardingApi extends DemoApi {
+  _FakeOnboardingApi();
+
+  @override
+  Future<void> requestOtp(String email) async {}
 }

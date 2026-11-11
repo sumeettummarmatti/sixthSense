@@ -4,6 +4,34 @@ The Android-first Flutter client. From this folder, run `flutter pub get`,
 `flutter analyze`, and `flutter test`. To run on an Android emulator or USB
 device, use `flutter run -d <device-id>`.
 
+## Demo API and network access
+
+The app connects to the Core API at `http://10.0.2.2:8000` by default on the
+Android emulator. Set `API_BASE_URL` for another server and `RELAY_BASE_URL`
+for the location WebSocket, for example:
+
+```bash
+flutter run -d <device-id> \
+  --dart-define=API_BASE_URL=http://<server-ip>:8000 \
+  --dart-define=RELAY_BASE_URL=ws://<server-ip>:8000/relay/ws
+```
+
+For a physical phone, use the laptop's reachable LAN or ZeroTier Managed IP.
+The phone must join the same ZeroTier network and be approved by its owner; the
+emulator reaches the network through the laptop where it runs. The Core API
+must listen on `0.0.0.0:8000`; its health check is `/healthz`. Local sign-in
+codes arrive in Mailpit at `http://<server-ip>:8025`.
+
+Plain HTTP is enabled only in `src/debug/AndroidManifest.xml` for local demo
+builds. Keep release builds on HTTPS/WSS.
+
+Email OTP and device-key sign-in, contact invite creation/sharing, Telegram
+link creation, and journey start/heartbeat/check-in/SOS/end use the demo API.
+Telegram linking requires the server's bot token and username. Contact names
+and phone numbers stay on the phone; the API receives only the invite label.
+The visible journey screen, local timer and opted-in offline SMS remain usable
+when the server cannot be reached, but remote contacts will not be alerted.
+
 ## Journey timer on Android
 
 Starting a journey runs an ongoing Android foreground service and schedules a
@@ -116,11 +144,12 @@ To add the tile, open Quick Settings, choose **Edit**, and drag **SixthSense
 SOS** into the active tiles. To add the widget, long-press the launcher home
 screen, open **Widgets**, find SixthSense, and place the **SOS** widget.
 
-The onboarding email and verification-code screens are local UI only: any
-valid-looking email address and any code of at least four characters pass the
-screen; no email is sent or verified yet (that is `P2-W1-otp-device-auth`).
-Sign-in uses **email, not SMS**, because email codes are free (PLANNER §3b). Trusted contacts can be skipped with **Do this
-later**.
+Sign-in uses **email, not SMS**, because email codes are free (PLANNER §3b).
+The first sign-in registers an Android Keystore P-256 key; later launches use
+the signed device challenge without another email code. The access token is
+encrypted with an Android Keystore AES key. Trusted contacts can be skipped
+with **Do this later**. Invite acceptance on a contact's device remains a
+separate part of the contact-side flow.
 
 ### Manual Android verification
 

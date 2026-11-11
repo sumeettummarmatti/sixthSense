@@ -84,6 +84,65 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, IDENTITY_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "getDevicePublicKey" -> result.success(DeviceIdentityVault.publicKey())
+                        "signDeviceChallenge" -> {
+                            val deviceId = call.argument<String>("deviceId")
+                            val nonce = call.argument<String>("nonce")
+                            if (deviceId.isNullOrBlank() || nonce.isNullOrBlank()) {
+                                result.error("invalid_challenge", "Device challenge is missing.", null)
+                            } else {
+                                result.success(DeviceIdentityVault.sign(deviceId, nonce))
+                            }
+                        }
+                        "saveSession" -> {
+                            val deviceId = call.argument<String>("deviceId")
+                            val accountId = call.argument<String>("accountId")
+                            val token = call.argument<String>("accessToken")
+                            if (deviceId.isNullOrBlank() || accountId.isNullOrBlank() || token.isNullOrBlank()) {
+                                result.error("invalid_session", "Session details are missing.", null)
+                            } else {
+                                DeviceIdentityVault.saveSession(this, deviceId, accountId, token)
+                                result.success(null)
+                            }
+                        }
+                        "getDeviceId" -> result.success(DeviceIdentityVault.sessionValue(this, "device_id"))
+                        "getAccessToken" -> result.success(DeviceIdentityVault.sessionValue(this, "access_token"))
+                        "clearSession" -> {
+                            DeviceIdentityVault.clearSession(this)
+                            result.success(null)
+                        }
+                        "shareInvite" -> {
+                            val url = call.argument<String>("url")
+                            val name = call.argument<String>("contactName").orEmpty()
+                            if (url.isNullOrBlank()) {
+                                result.error("invalid_invite", "Invite link is missing.", null)
+                            } else {
+                                val share = Intent(Intent.ACTION_SEND)
+                                    .setType("text/plain")
+                                    .putExtra(Intent.EXTRA_TEXT, "Join me on SixthSense so I can share safety alerts with you: $url")
+                                startActivity(Intent.createChooser(share, "Invite $name to SixthSense"))
+                                result.success(null)
+                            }
+                        }
+                        "openUrl" -> {
+                            val url = call.argument<String>("url")
+                            if (url.isNullOrBlank() || !url.startsWith("https://")) {
+                                result.error("invalid_url", "Only HTTPS links can be opened.", null)
+                            } else {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                result.success(null)
+                            }
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (error: Exception) {
+                    result.error("device_identity_error", "Could not use this device's secure identity.", error.javaClass.simpleName)
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PRIVACY_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method != "setScreenshotProtection") {
@@ -202,6 +261,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val CHANNEL = "in.sixthsense/journey_runtime"
+        private const val IDENTITY_CHANNEL = "in.sixthsense/device_identity"
         private const val PRIVACY_CHANNEL = "in.sixthsense/privacy"
         private const val REQUEST_NOTIFICATIONS = 4105
         private const val REQUEST_SMS_LOCATION = 4106

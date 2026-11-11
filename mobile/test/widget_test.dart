@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sixthsense_app/core/api/device_identity.dart';
 import 'package:sixthsense_app/features/journey/journey_flow.dart';
 import 'package:sixthsense_app/main.dart';
 
@@ -31,6 +32,7 @@ void main() {
       MaterialApp(
         home: JourneyFlow(
           now: () => tester.binding.clock.now(),
+          api: _FakeJourneyApi(() => tester.binding.clock.now()),
           onDuressRequested: () => duressRequests++,
           onCovertSosRequested: () => covertSosRequests++,
         ),
@@ -129,4 +131,61 @@ void main() {
       isFalse,
     );
   });
+}
+
+class _FakeJourneyApi extends DemoApi {
+  _FakeJourneyApi(this.now);
+
+  final DateTime Function() now;
+  Duration interval = const Duration(minutes: 1);
+
+  @override
+  Future<JourneySnapshot> startJourney(int checkInIntervalMinutes) async {
+    interval = Duration(minutes: checkInIntervalMinutes);
+    return JourneySnapshot(
+      id: 'journey-1',
+      state: 'active',
+      nextCheckInAt: now().add(interval),
+      heartbeatTimeoutMinutes: 10,
+    );
+  }
+
+  @override
+  Future<JourneySnapshot> checkIn(
+    String journeyId, {
+    required bool duress,
+  }) async => JourneySnapshot(
+    id: journeyId,
+    state: duress ? 'full_escalation' : 'active',
+    nextCheckInAt: now().add(interval),
+    heartbeatTimeoutMinutes: 10,
+  );
+
+  @override
+  Future<JourneySnapshot> promptShown(String journeyId) async =>
+      JourneySnapshot(
+        id: journeyId,
+        state: 'private_prompt',
+        nextCheckInAt: now().add(interval),
+        heartbeatTimeoutMinutes: 10,
+      );
+
+  @override
+  Future<JourneySnapshot> requestSos(
+    String journeyId, {
+    required bool covert,
+  }) async => JourneySnapshot(
+    id: journeyId,
+    state: covert ? 'active' : 'full_escalation',
+    nextCheckInAt: now().add(interval),
+    heartbeatTimeoutMinutes: 10,
+  );
+
+  @override
+  Future<JourneySnapshot> endJourney(String journeyId) async => JourneySnapshot(
+    id: journeyId,
+    state: 'resolved',
+    nextCheckInAt: now().add(interval),
+    heartbeatTimeoutMinutes: 10,
+  );
 }
