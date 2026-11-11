@@ -43,7 +43,7 @@ cd insight   && uv sync && uv run ruff check . && uv run pytest      # Insight A
 cd dashboard && corepack pnpm install && corepack pnpm lint && corepack pnpm build
 cd mobile    && flutter pub get && flutter analyze && flutter test
 ```
-Run the relevant checks locally before claiming work is done. CI is **paused** (configs parked in `infra/ci-paused/` with known fixes); do not re-enable it unless asked.
+Run the relevant checks locally before claiming work is done. There is no CI yet (set up later); do not add CI/CD unless asked.
 
 ## Conventions
 - Branch per task: `p2/otp-device-auth`, `p4/clustering-threshold`. Never commit to `main` directly; open a PR.

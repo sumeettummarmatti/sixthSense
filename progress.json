@@ -194,9 +194,9 @@
         {
           "id": "P2-W0-ci",
           "title": "GitHub Actions: lint/test, Semgrep, Trivy",
-          "status": "blocked",
-          "week": 0,
-          "notes": "PAUSED by user (no CI/CD for now). Configs in infra/ci-paused/ with known fixes: pnpm package_json_file, trivy tag v0.33.1, 18 semgrep findings (uv/dependabot cooldown, SHA-pinned actions). backend/insight/mobile jobs passed on GitHub before pausing"
+          "status": "todo",
+          "week": "later",
+          "notes": "Removed at user's request; set up later. Run checks locally until then"
         },
         {
           "id": "P2-W1-otp-device-auth",
@@ -430,8 +430,8 @@
     },
     {
       "date": "2026-11-11",
-      "decision": "CI/CD and Dependabot paused; run checks locally",
-      "why": "User: no CI/CD hassle for now"
+      "decision": "No CI/CD or Dependabot for now (removed); run checks locally",
+      "why": "User: set up later"
     }
   ],
   "blockers": [

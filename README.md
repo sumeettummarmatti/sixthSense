@@ -109,7 +109,7 @@ Tests: `uv run pytest` (backend, insight) · `corepack pnpm lint && corepack pnp
 3. **Branch:** `git checkout -b p<lane>/<slug>` (e.g. `p2/otp-device-auth`).
 4. **Build + test** (commands above). Keep the [7 rules](#rules-we-never-break) intact.
 5. **Update progress:** set your task's `status` and `notes` in `progress.json`, add a dated line at the top of `PROGRESS.md`.
-6. **Open a PR** to `main` after running the checks in [Check your setup](#check-your-setup) §3 locally (CI is paused for now). API changes go through `contracts/openapi.yaml` and need a review from the lanes they affect.
+6. **Open a PR** to `main` after running the checks in [Check your setup](#check-your-setup) §3 locally (there is no CI yet). API changes go through `contracts/openapi.yaml` and need a review from the lanes they affect.
 
 ### Working with Claude Code
 [`CLAUDE.md`](CLAUDE.md) is loaded automatically in every Claude Code session. It holds the project summary, rules, repo map and the progress-update routine, so you don't need to re-explain the project. Prompts work best when they name the **task ID** and point at the **source section**:
