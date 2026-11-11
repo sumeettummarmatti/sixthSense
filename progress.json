@@ -1,7 +1,16 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-11",
+  "updated_by": "sumeet",
   "current_phase": "M0-setup",
+  "platform": "ios-only (Android later: P1-LATER-android-port)",
+  "team": {
+    "sumeet": "lead (lane TBD)",
+    "tanisha": "P1 Mobile",
+    "shruj": "TBD",
+    "jival": "TBD"
+  },
+  "update_rule": "Prefix every notes field, decision ('by') and PROGRESS.md heading with your name: sumeet: / tanisha: / shruj: / jival:",
   "status_values": [
     "todo",
     "in_progress",
@@ -67,7 +76,7 @@
           "title": "Read docs, write PLANNER.md + progress tracking",
           "status": "done",
           "week": 0,
-          "notes": "PLANNER.md, progress.json, PROGRESS.md created"
+          "notes": "sumeet: PLANNER.md, progress.json, PROGRESS.md created"
         },
         {
           "id": "ALL-W1-api-contract",
@@ -95,26 +104,33 @@
           "title": "Colour palette + Flutter theme + dashboard tokens",
           "status": "done",
           "week": 0,
-          "notes": "mobile/lib/core/theme/app_theme.dart, dashboard/src/app/globals.css. Fonts (Urbanist + Atkinson Hyperlegible) not bundled yet: bundle as assets, don't fetch at runtime"
+          "notes": "sumeet: mobile/lib/core/theme/app_theme.dart, dashboard/src/app/globals.css. Fonts (Urbanist + Atkinson Hyperlegible) not bundled yet: bundle as assets, don't fetch at runtime"
         },
         {
           "id": "ALL-W0-team-handoff",
           "title": "CLAUDE.md, README team guide, push to GitHub",
           "status": "done",
           "week": 0,
-          "notes": "setup/foundation pushed; PR #1 https://github.com/sumeettummarmatti/sixthSense/pull/1"
+          "notes": "sumeet: setup/foundation pushed; PR #1 https://github.com/sumeettummarmatti/sixthSense/pull/1"
         }
       ]
     },
     "P1": {
-      "owner": "Mobile (TBD)",
+      "owner": "tanisha",
       "tasks": [
         {
           "id": "P1-W0-flutter-shell",
-          "title": "Install Flutter, create app shell (features/, core/)",
+          "title": "Install Flutter, create app shell (features/, core/), iOS toolchain green",
           "status": "in_progress",
           "week": 0,
-          "notes": "Flutter 3.47.9 + CocoaPods 1.17 installed; mobile/ created (in.sixthsense.sixthsense_app, android+ios), core/ + features/ folders, themed shell; analyze + test pass. Remaining: Android cmdline-tools (Studio SDK Manager), Xcode runFirstLaunch/license (user sudo in Terminal), android licenses, flutter doctor green"
+          "notes": "sumeet: Flutter 3.47.9 + CocoaPods 1.17 installed; mobile/ created (in.sixthsense.sixthsense_app), core/ + features/ folders, themed shell; analyze + test pass. iOS only now: android/ kept but not built. Remaining: sudo xcodebuild -runFirstLaunch + -license accept, xcodebuild -downloadPlatform iOS, then flutter doctor shows Xcode [✓] and the app runs on the iPhone simulator. Handing over to tanisha"
+        },
+        {
+          "id": "P1-W0-ios-signing",
+          "title": "Apple Developer account, bundle ID, signing team, run on a real iPhone",
+          "status": "todo",
+          "week": 0,
+          "notes": "sumeet: $99/yr account needed for APNs + TestFlight; free signing works for simulator and 7-day device installs"
         },
         {
           "id": "P1-W1-signup-contacts-ui",
@@ -131,6 +147,13 @@
           "notes": ""
         },
         {
+          "id": "P1-W3-ios-background-checkins",
+          "title": "iOS: check-ins as local notifications, background location only during a journey",
+          "status": "todo",
+          "week": 3,
+          "notes": "sumeet: iOS suspends apps; timers can't run in the background (PLANNER §3a)"
+        },
+        {
           "id": "P1-W4-sos-duress-pin",
           "title": "SOS, covert SOS, duress PIN",
           "status": "todo",
@@ -138,11 +161,18 @@
           "notes": ""
         },
         {
+          "id": "P1-W4-ios-sos-shortcuts",
+          "title": "iOS covert SOS: App Intents (Action Button, Back Tap, Siri Shortcut)",
+          "status": "todo",
+          "week": 4,
+          "notes": "sumeet: iOS can't read power/volume buttons"
+        },
+        {
           "id": "P1-W5-sms-fallback-lowbattery",
-          "title": "Offline SMS fallback + low-battery mode",
+          "title": "Offline fallback (iOS: pre-filled SMS + one-tap 112; server watchdog SMS) + low-battery mode",
           "status": "todo",
           "week": 5,
-          "notes": ""
+          "notes": "sumeet: iOS can't send SMS silently; pairs with P2-W4-watchdog-alert-ladder"
         },
         {
           "id": "P1-W6-e2e-location",
@@ -164,6 +194,13 @@
           "status": "todo",
           "week": 9,
           "notes": ""
+        },
+        {
+          "id": "P1-LATER-android-port",
+          "title": "Android: Kotlin modules (auto-SMS, power-button SOS, FLAG_SECURE, FCM), test on Android",
+          "status": "todo",
+          "week": "later",
+          "notes": "sumeet: paused; iOS first"
         }
       ]
     },
@@ -175,28 +212,28 @@
           "title": "Monorepo layout, root files, README",
           "status": "done",
           "week": 0,
-          "notes": "Root files (.gitignore, .editorconfig, .env.example), README, contracts/ skeleton, routing-engine stub"
+          "notes": "sumeet: Root files (.gitignore, .editorconfig, .env.example), README, contracts/ skeleton, routing-engine stub"
         },
         {
           "id": "P2-W0-local-stack",
           "title": "docker-compose: core PG+PostGIS, insight PG+PostGIS, Redis, NATS",
           "status": "done",
           "week": 0,
-          "notes": "Verified: 4 services healthy; core-db moved to host port 5434 (5432 clashes with local Postgres); alembic 0001 (PostGIS 3.4.3) applied on both DBs"
+          "notes": "sumeet: Verified: 4 services healthy; core-db moved to host port 5434 (5432 clashes with local Postgres); alembic 0001 (PostGIS 3.4.3) applied on both DBs"
         },
         {
           "id": "P2-W0-backend-skeleton",
           "title": "FastAPI modular monolith skeleton + Alembic + PII-scrub logging",
           "status": "done",
           "week": 0,
-          "notes": "FastAPI app factory, 10 module routers, settings, SQLAlchemy, Alembic 0001 postgis, PII-scrub logging. 11 tests pass, ruff clean. Alembic upgrade not run yet (needs DB). alembic.ini needed prepend_sys_path = . (fixed); upgrade head verified; /healthz + /docs return 200"
+          "notes": "sumeet: FastAPI app factory, 10 module routers, settings, SQLAlchemy, Alembic 0001 postgis, PII-scrub logging. 11 tests pass, ruff clean. Alembic upgrade not run yet (needs DB). alembic.ini needed prepend_sys_path = . (fixed); upgrade head verified; /healthz + /docs return 200"
         },
         {
           "id": "P2-W0-ci",
           "title": "GitHub Actions: lint/test, Semgrep, Trivy",
           "status": "todo",
           "week": "later",
-          "notes": "Removed at user's request; set up later. Run checks locally until then"
+          "notes": "sumeet: Removed at user's request; set up later. Run checks locally until then"
         },
         {
           "id": "P2-W1-otp-device-auth",
@@ -224,7 +261,7 @@
           "title": "Heartbeat watchdog + push/SMS/voice ladder, idempotent",
           "status": "todo",
           "week": 4,
-          "notes": ""
+          "notes": "sumeet: on iOS the server watchdog is the only automatic offline SMS path, so treat it as critical. Push via APNs first"
         },
         {
           "id": "P2-W5-location-relay",
@@ -318,14 +355,14 @@
           "title": "Insight FastAPI service on separate DB",
           "status": "done",
           "week": 0,
-          "notes": "Separate service, insight DB only; RiskLabel enum (no 'safe'); k/m threshold fn; zone-isolation tests. 14 tests pass. alembic upgrade head verified on insight-db; /healthz + /docs return 200"
+          "notes": "sumeet: Separate service, insight DB only; RiskLabel enum (no 'safe'); k/m threshold fn; zone-isolation tests. 14 tests pass. alembic upgrade head verified on insight-db; /healthz + /docs return 200"
         },
         {
           "id": "P4-W0-dashboard-shell",
           "title": "Next.js + MapLibre dashboard shell",
           "status": "done",
           "week": 0,
-          "notes": "Next.js 15.5.4 + MapLibre 5.9 map page; pnpm 10.18.0 pinned (pnpm 12 corepack broken locally). lint + build pass"
+          "notes": "sumeet: Next.js 15.5.4 + MapLibre 5.9 map page; pnpm 10.18.0 pinned (pnpm 12 corepack broken locally). lint + build pass"
         },
         {
           "id": "P4-W1-report-model-separate-db",
@@ -376,96 +413,146 @@
     {
       "date": "2026-11-11",
       "decision": "Code name 'sixthsense' (docs keep 'SafeThread')",
-      "why": "Matches repo and logo"
+      "why": "Matches repo and logo",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "4-person lanes P1-P4",
-      "why": "Matches team split doc"
+      "why": "Matches team split doc",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Local-first setup; cloud/Terraform later",
-      "why": "Ship skeleton fast without cloud cost"
+      "why": "Ship skeleton fast without cloud cost",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "progress.json = source of truth, PROGRESS.md = human log",
-      "why": "Fast for Claude to parse, readable for humans"
+      "why": "Fast for Claude to parse, readable for humans",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Not adopting xtool (xtool-org/xtool)",
-      "why": "Builds SwiftPM-only iOS apps without Xcode; cannot build Flutter apps. Xcode 26.4.1 already installed on the Mac. Revisit only if a Linux/Windows teammate must build a native Swift iOS app"
+      "why": "Builds SwiftPM-only iOS apps without Xcode; cannot build Flutter apps. Xcode 26.4.1 already installed on the Mac. Revisit only if a Linux/Windows teammate must build a native Swift iOS app",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Android SDK via Android Studio (user installs), not brew CLI tools",
-      "why": "User preference; includes emulator"
+      "why": "User preference; includes emulator",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "pnpm pinned to 10.18.0 via packageManager",
-      "why": "corepack + pnpm 12 fails with MODULE_NOT_FOUND on this machine"
+      "why": "corepack + pnpm 12 fails with MODULE_NOT_FOUND on this machine",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Python 3.12 pinned for backend/insight (system has 3.14)",
-      "why": "ML deps (hdbscan, torch) lag on newest Python"
+      "why": "ML deps (hdbscan, torch) lag on newest Python",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Flutter uses Android Studio SDK at ~/Library/Android/sdk (brew android-commandlinetools is unused)",
-      "why": "User installed Android Studio"
+      "why": "User installed Android Studio",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Colour system 'Lamplight Lavender' sampled from logo; no green anywhere; red only for SOS/strong evidence; night mode after sunset",
-      "why": "Soothing, matches brand; green implies 'safe' (rule 5). Preview https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz"
+      "why": "Soothing, matches brand; green implies 'safe' (rule 5). Preview https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Commits and PRs show only Sumeet as author; no Claude co-author lines",
-      "why": "User request"
+      "why": "User request",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "No CI/CD or Dependabot for now (removed); run checks locally",
-      "why": "User: set up later"
+      "why": "User: set up later",
+      "by": "sumeet"
     },
     {
       "date": "2026-11-11",
       "decision": "Core DB host port 5434 (insight 5433)",
-      "why": "5432 is commonly taken by a local Postgres (it is on Sumeet's Mac)"
+      "why": "5432 is commonly taken by a local Postgres (it is on Sumeet's Mac)",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Build iOS only for now; Android later (P1-LATER-android-port). mobile/android/ kept, not built",
+      "why": "Team priority. iOS limits handled per PLANNER §3a",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "iOS offline fallback = server watchdog SMS + pre-filled SMS/one-tap 112 on the phone; covert SOS via App Intents",
+      "why": "iOS forbids silent SMS and hardware-button access",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Every progress update is name-prefixed (sumeet:/tanisha:/shruj:/jival:)",
+      "why": "Tell who did what across 4 people",
+      "by": "sumeet"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Tanisha owns P1 Mobile",
+      "why": "Team assignment",
+      "by": "sumeet"
     }
   ],
   "blockers": [
     {
       "id": "B1",
-      "title": "flutter doctor: Android cmdline-tools missing; Xcode simulator runtimes need sudo xcodebuild -runFirstLaunch (user, in Terminal.app)",
+      "title": "iOS toolchain: sudo xcodebuild -runFirstLaunch + -license accept, xcodebuild -downloadPlatform iOS (run in Terminal.app)",
       "affects": [
         "P1-W0-flutter-shell"
-      ]
+      ],
+      "by": "sumeet"
     },
     {
       "id": "B2",
       "title": "Legal review (DPDP children, UIDAI registration, liability)",
       "affects": [
         "P3-W3-tier1-verification"
-      ]
+      ],
+      "by": "sumeet"
     },
     {
       "id": "B3",
       "title": "Campus MoU + security liaison",
       "affects": [
         "ALL-W12-pilot-pentest"
-      ]
+      ],
+      "by": "sumeet"
+    },
+    {
+      "id": "B4",
+      "title": "Apple Developer account ($99/yr) for APNs, TestFlight, real devices",
+      "affects": [
+        "P1-W0-ios-signing",
+        "P2-W4-watchdog-alert-ladder"
+      ],
+      "by": "sumeet"
     }
   ],
   "next_steps": [
-    "Merge PR #1 (setup/foundation -> main); no CI checks run while CI is paused",
-    "Assign lane owners in progress.json (lanes.P*.owner)",
-    "ALL-W1-api-contract: whole team fills contracts/openapi.yaml",
-    "Sumeet: Android cmdline-tools + sudo xcodebuild -runFirstLaunch, then flutter doctor --android-licenses"
+    "sumeet: merge PR #1 (setup/foundation -> main)",
+    "tanisha: finish iOS toolchain (B1), run the app on the iPhone simulator, close P1-W0-flutter-shell",
+    "sumeet: decide on the Apple Developer account (B4)",
+    "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",
+    "ALL-W1-api-contract: whole team fills contracts/openapi.yaml"
   ]
 }

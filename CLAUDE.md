@@ -3,7 +3,7 @@
 > Claude Code loads this file automatically. Keep it short and current; details live in the linked files.
 
 ## What this is
-SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and children: **Avoid** risky routes, **Reduce** risk during a journey (check-ins, Walk With Me companions), **Interrupt** harm (parallel escalation, duress PIN, offline SMS), and **Fix** causes (anonymous place reports → campus dashboard). Campus pilot in ~12 weeks, 4-person team.
+SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and children: **Avoid** risky routes, **Reduce** risk during a journey (check-ins, Walk With Me companions), **Interrupt** harm (parallel escalation, duress PIN, offline SMS), and **Fix** causes (anonymous place reports → campus dashboard). Campus pilot in ~12 weeks, 4-person team: **sumeet, tanisha (P1 Mobile), shruj, jival**. **iOS only for now**; Android later (`PLANNER.md` §3a).
 
 ## Read first, every session
 1. `progress.json` — **source of truth**: current phase, task statuses, blockers, next steps.
@@ -11,6 +11,7 @@ SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and chil
 3. `Docs/` — full design (HLD, team split, verification & anonymity). Read the relevant section before building a feature.
 
 ## After any work (required)
+- **Tag every update with the author's name**: `sumeet:`, `tanisha:`, `shruj:` or `jival:`. Start task `notes` with it, set `updated_by`, add `"by"` to new decisions/blockers, and put it in the `PROGRESS.md` heading (`## 2026-11-12 — tanisha: ...`). If you don't know who you're working with, ask before writing progress.
 - Update the task in `progress.json`: `status` (`todo | in_progress | blocked | done`), `notes`, plus `updated_at`, `next_steps`, and any new `decisions` / `blockers`.
 - Add a short dated entry at the top of `PROGRESS.md` (what changed, decisions, what's next).
 - New tasks get an ID `P<lane>-W<week>-<slug>` and go in both `PLANNER.md` and `progress.json`.
@@ -27,7 +28,7 @@ SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and chil
 ## Repo map
 | Path | Stack | Lane |
 |---|---|---|
-| `mobile/` | Flutter 3.47 (Android + iOS). Theme in `lib/core/theme/app_theme.dart` | P1 |
+| `mobile/` | Flutter 3.47, **iOS only for now** (`android/` kept, not built). Theme in `lib/core/theme/app_theme.dart` | P1 |
 | `backend/` | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, uv. One package per module in `app/` | P2 / P3 |
 | `insight/` | Same stack, separate service + DB (port 8001 / DB 5433) | P4 |
 | `dashboard/` | Next.js 15 + MapLibre, pnpm 10.18 via corepack | P4 |
@@ -41,7 +42,7 @@ docker compose -f infra/docker-compose.yml up -d --wait
 cd backend   && uv sync && uv run ruff check . && uv run pytest      # Core API :8000
 cd insight   && uv sync && uv run ruff check . && uv run pytest      # Insight API :8001
 cd dashboard && corepack pnpm install && corepack pnpm lint && corepack pnpm build
-cd mobile    && flutter pub get && flutter analyze && flutter test
+cd mobile    && flutter pub get && flutter analyze && flutter test   # run: flutter run -d iPhone
 ```
 Run the relevant checks locally before claiming work is done. There is no CI yet (set up later); do not add CI/CD unless asked.
 
@@ -50,4 +51,5 @@ Run the relevant checks locally before claiming work is done. There is no CI yet
 - Commit messages start with the task ID when there is one (`P2-W1: ...`).
 - Design colours: "Lamplight Lavender" (logo-sampled). Red only for SOS / strong evidence. Preview: https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz
 - Fonts must be bundled with the app, never fetched at runtime (privacy).
+- iOS can't send SMS silently, read hardware buttons, or block screenshots: use the §3a workarounds; don't add Android-only work.
 - pnpm 12 via corepack is broken on some machines; the dashboard pins `pnpm@10.18.0`.

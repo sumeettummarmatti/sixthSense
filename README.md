@@ -8,6 +8,8 @@
 | **Status** | [`PROGRESS.md`](PROGRESS.md) (for people) · [`progress.json`](progress.json) (for Claude) |
 | **AI context** | [`CLAUDE.md`](CLAUDE.md): loaded automatically by Claude Code |
 | **Design docs** | [`Docs/`](Docs/) (the product is called *SafeThread* there) |
+| **Platform** | **iOS only for now** (Android later; see `PLANNER.md` §3a) |
+| **Team** | Sumeet · Tanisha (P1 Mobile) · Shruj · Jival |
 | **Colours** | [Lamplight Lavender preview](https://claude.ai/artifact/5KNxV34PQeqNBWBQMXM6Xz) (private: ask Sumeet for access) |
 
 ---
@@ -49,10 +51,10 @@ brew link --overwrite --force node@22     # puts Node 22 on your PATH (it includ
 brew install --cask docker-desktop
 ```
 
-People who will run the mobile app (P1, plus anyone testing it):
+People who will run the mobile app (P1, plus anyone testing it). **Needs a Mac with Xcode** from the App Store:
 
 ```bash
-brew install --cask flutter android-studio
+brew install --cask flutter
 brew install cocoapods
 ```
 
@@ -70,19 +72,9 @@ docker info --format '{{.ServerVersion}}'   # a version number such as 27.3.1 (n
 gh auth status       # Logged in to github.com
 ```
 
-### Step 3: Mobile toolchain (skip if you won't run the app)
+### Step 3: iOS toolchain (skip if you won't run the app)
 
-**Android (about 15 minutes):**
-1. Open **Android Studio** from Applications. Choose **Do not import settings**, then **Standard** setup, accept every license, and click **Finish**. Wait for the downloads.
-2. On the welcome screen, click **More Actions → SDK Manager → SDK Tools** tab.
-3. Tick **Android SDK Command-line Tools (latest)**, **Android SDK Build-Tools** and **Android SDK Platform-Tools**. Click **Apply**, then **OK**.
-4. Back in Terminal:
-   ```bash
-   flutter config --android-sdk ~/Library/Android/sdk
-   flutter doctor --android-licenses      # type y and press Enter at each prompt
-   ```
-
-**iOS (Mac only, needs Xcode from the App Store):**
+We build for **iOS only** right now, so you don't need Android Studio. Install **Xcode** from the App Store first (about 15 GB), open it once, then in Terminal:
 
 ```bash
 sudo xcodebuild -runFirstLaunch          # asks for your Mac password; nothing shows while typing
@@ -90,7 +82,7 @@ sudo xcodebuild -license accept
 xcodebuild -downloadPlatform iOS         # downloads the iPhone simulator (~8 GB)
 ```
 
-✅ You should see: `flutter doctor` shows `[✓]` for **Flutter**, **Android toolchain** and **Xcode**. (`[!]` next to Chrome or Connected device is fine.)
+✅ You should see: `flutter doctor` shows `[✓]` for **Flutter** and **Xcode**. (`[!]` or `[✗]` next to Android toolchain, Chrome or Connected device is fine.)
 
 ### Step 4: Get the code
 
@@ -142,9 +134,7 @@ Open **one Terminal tab per app** (⌘ + T for a new tab). In each tab, `cd ~/De
 | 2 | Core API | `cd backend && uv run uvicorn app.main:app --reload --port 8000` | http://localhost:8000/docs |
 | 3 | Insight API | `cd insight && uv run uvicorn app.main:app --reload --port 8001` | http://localhost:8001/docs |
 | 4 | Dashboard | `cd dashboard && corepack pnpm dev` | http://localhost:3000 |
-| 5 | Mobile app | `cd mobile && flutter run` (pick a device when asked) | opens on the simulator or phone |
-
-To start an iPhone simulator first: `open -a Simulator`. For Android, start an emulator from **Android Studio → More Actions → Virtual Device Manager**.
+| 5 | Mobile app | `open -a Simulator`, then `cd mobile && flutter run -d iPhone` | opens in the iPhone simulator |
 
 **To stop:** press **Ctrl + C** in each tab. To stop the databases: `docker compose -f infra/docker-compose.yml down` (your data is kept).
 
@@ -182,8 +172,9 @@ The test counts grow as features are added; what matters is that nothing says `f
 | `Cannot connect to the Docker daemon` | Open Docker from Applications and wait until it says it is running. |
 | `port is already allocated` / `address already in use` | Something else uses that port. Find what is using it with `lsof -i :<port>`. Our databases use 5434 and 5433 so they do not clash with a local Postgres on 5432. |
 | `corepack pnpm` fails with `Cannot find module ... pnpm.cjs` | Always run pnpm from inside `dashboard/`; it is pinned to `10.18.0` there. Newer pnpm 12 is broken with corepack on some machines. |
-| `flutter doctor`: *cmdline-tools component is missing* | Redo step 3, Android, items 2–3 (SDK Manager → SDK Tools). |
-| `flutter doctor`: *Unable to get list of installed Simulator runtimes* | Run the three `sudo xcodebuild` / `xcodebuild` lines in step 3, iOS. |
+| `flutter doctor`: Android toolchain `[✗]` | Ignore it: we're iOS only for now. |
+| `flutter doctor`: *Unable to get list of installed Simulator runtimes* | Run the three `xcodebuild` lines in step 3. |
+| `flutter run -d iPhone`: *No supported devices* | Run `open -a Simulator` first, or `flutter devices` to see the name. |
 | `sudo: a terminal is required` | You ran `sudo` inside Claude Code. Run it in the macOS Terminal app instead. |
 | `alembic upgrade head` can't connect | The databases aren't running: run step 6's first line and wait for `healthy`. |
 
@@ -195,7 +186,7 @@ Still stuck? Paste the full error into Claude Code with: *"This setup step faile
 
 | Path | What | Lane |
 |---|---|---|
-| `mobile/` | Flutter app (traveller, companion, contact) | P1 |
+| `mobile/` | Flutter app (traveller, companion, contact), iOS only for now | P1 |
 | `backend/` | FastAPI: Core zone (identity, journey, escalation, walks, ...) | P2 / P3 |
 | `insight/` | FastAPI: Insight zone (anonymous reports, clustering, risk), with its **own database** | P4 |
 | `dashboard/` | Next.js + MapLibre campus dashboard | P4 |
@@ -209,7 +200,7 @@ Still stuck? Paste the full error into Claude Code with: *"This setup step faile
 
 | Lane | Owns | Start in |
 |---|---|---|
-| **P1 Mobile** | Everything the user touches; on-phone timers, SOS, offline SMS | `mobile/` |
+| **P1 Mobile** (Tanisha) | Everything the user touches; on-phone timers, SOS, offline fallback (iOS) | `mobile/` |
 | **P2 Safety Core** | Login, contacts, journeys, alerts, relay, infra | `backend/app/{identity,journey,escalation,notification,relay}`, `infra/` |
 | **P3 Trust** | Verification, Walk With Me, anonymity, trust & safety | `backend/app/{matching,walks,comms,trust_safety}` |
 | **P4 Insight** | Reports, clustering, risk labels, routing, dashboard | `insight/`, `dashboard/`, `routing-engine/` |
@@ -219,7 +210,9 @@ Still stuck? Paste the full error into Claude Code with: *"This setup step faile
 3. **Read** that task in [`PLANNER.md`](PLANNER.md) §6 and the matching section in [`Docs/`](Docs/).
 4. **Make a branch:** `git checkout -b p<lane>/<short-name>`, for example `git checkout -b p2/otp-device-auth`
 5. **Build it and test it**, keeping the [7 rules](#rules-we-never-break) intact. Run [Check everything works](#check-everything-works).
-6. **Update progress:** set your task's `status` and `notes` in `progress.json`, and add a dated line at the top of `PROGRESS.md`.
+6. **Update progress, tagged with your name** (`sumeet:`, `tanisha:`, `shruj:` or `jival:`):
+   - `progress.json`: set your task's `status`, start its `notes` with your name (`"tanisha: OTP screen done"`), and set `updated_by`.
+   - `PROGRESS.md`: add an entry at the top: `## 2026-11-12 — tanisha: Sign-up screens`.
 7. **Push and open a pull request:**
    ```bash
    git add -A && git commit -m "P2-W1: short description"
@@ -232,8 +225,14 @@ Still stuck? Paste the full error into Claude Code with: *"This setup step faile
 
 [`CLAUDE.md`](CLAUDE.md) is loaded automatically in every Claude Code session, so you don't need to re-explain the project. Prompts work best when they name the **task ID** and point at the **source section**:
 
+Start by saying who you are, so Claude tags progress with your name:
+
 ```text
-Work on P2-W1-otp-device-auth. Read progress.json, PLANNER.md §6 and
+I'm Tanisha (P1). Work on P1-W1-signup-contacts-ui.
+```
+
+```text
+I'm Shruj. Work on P2-W1-otp-device-auth. Read progress.json, PLANNER.md §6 and
 Docs/SafeThread_HLD_and_TechStack.md §4 (Auth & Identity) and §10 first.
 Make branch p2/otp-device-auth, add tests, then update progress.json and PROGRESS.md.
 ```

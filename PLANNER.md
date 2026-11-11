@@ -4,6 +4,8 @@
 > Code name: `sixthsense`. Design docs call it *SafeThread* — same product.
 > Source docs: `Docs/SafeThread_HLD_and_TechStack.md`, `Docs/SafeThread_Team_Split.md`, `Docs/SafeThread_Verification_and_Anonymity.md`.
 > Live status: `progress.json` (source of truth) · `PROGRESS.md` (session log). Task IDs below match `progress.json`.
+> **Platform: iOS only for now.** Android comes later (see §3a).
+> **Team:** Sumeet · Tanisha (P1 Mobile) · Shruj · Jival. Every progress update is prefixed with the author's name (see §8).
 
 ---
 
@@ -59,7 +61,7 @@ Edge: API gateway — TLS 1.3, rate limits, WAF, device attestation
 │ Routing · Trust & Safety                                   │   │                                 │
 │ Postgres+PostGIS (core) · Redis · NATS · KMS               │   │ Postgres+PostGIS (insight, sep.)│
 └────────────────────────────────────────────────────────────┘   └─────────────────────────────────┘
-External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · FCM/APNs · 112
+External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · APNs (FCM when Android lands) · 112
 ```
 
 ### Key decisions (ADRs)
@@ -93,11 +95,12 @@ External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · F
 
 | Layer | Choice | Status |
 |---|---|---|
-| Mobile | **Flutter** + Kotlin/Swift platform channels | MVP |
-| Mobile storage | Drift (SQLite) + SQLCipher; Keystore / Secure Enclave | MVP |
+| Mobile | **Flutter, iOS only for now** + Swift platform channels (Kotlin when Android lands) | MVP |
+| Mobile storage | Drift (SQLite) + SQLCipher; iOS Keychain / Secure Enclave | MVP |
 | Mobile E2E | libsignal (or OpenMLS) | MVP (W5–6) |
 | Maps | MapLibre GL + OSM tiles | MVP |
-| Integrity | Play Integrity / App Attest | MVP |
+| Integrity | App Attest (Play Integrity later) | MVP |
+| Push | APNs (FCM later) | MVP |
 | Backend | **Python 3.12 + FastAPI**, SQLAlchemy 2 + Alembic, pydantic-settings | MVP (Go for hot paths later) |
 | Realtime | FastAPI WebSockets | MVP |
 | DBs | **PostgreSQL 16 + PostGIS** ×2 (core, insight) | MVP |
@@ -113,15 +116,30 @@ External: KYC (Aadhaar app / DigiLocker) · Liveness SDK · SMS/Voice CPaaS · F
 | Observability | OpenTelemetry + Grafana/Prometheus + Sentry (PII scrub) | Later |
 | Vendors | KYC aggregator, liveness SDK, DLT-registered CPaaS | Pick in W1–2 (P3/P2) |
 
+### 3a. Platform: iOS only for now (decided 2026-11-11)
+We build and test **iOS only** until the pilot flow works; Android follows later. The Flutter code stays cross-platform, and `mobile/android/` is kept but **not built or tested**. Do not add Android-only work now.
+
+iOS blocks some things the docs assume. This is how we handle each one:
+
+| Docs assume | iOS limit | What we build on iOS |
+|---|---|---|
+| Phone sends SMS by itself when offline (rule 3, ADR-2) | Apps cannot send SMS silently | (1) **Server watchdog** sends SMS through CPaaS when heartbeats stop; (2) the phone shows a **pre-filled SMS** (one tap to send) plus a **one-tap call to 112** |
+| Covert SOS via power / volume buttons | Apps cannot read hardware buttons | **App Intents**: Action Button, Back Tap and Siri Shortcut trigger SOS; in-app hidden gesture |
+| Escalation timer keeps running in the background | iOS suspends apps | Check-ins scheduled as **local notifications**; background location mode only during an active journey; server watchdog as backup |
+| Block screenshots (`FLAG_SECURE`) | Not possible | Detect screenshots and recording (`UIScreen.isCaptured`), hide sensitive views while recording, flag to T&S |
+| FCM push | — | APNs (needs the paid Apple Developer account) |
+
+**Needs:** a Mac with Xcode for anyone building the app, plus an **Apple Developer account ($99/year)** for APNs, TestFlight and real-device installs.
+
 ---
 
 ## 4. Lanes (4-person team)
 
-### P1 — Mobile App (Flutter)
+### P1 — Mobile App (Flutter, iOS) · owner: **Tanisha**
 *"The phone is the safety net. It must work with no internet."*
 - **Never:** require ID to be protected · let a server problem stop an alert · upload exact report locations.
 - **Needs:** P2 auth/journey/alert APIs · P3 walk/verification/handshake APIs · P4 routes/labels/report APIs.
-- **Done when:** Wi-Fi + data off, miss a check-in → contact still gets an SMS with location.
+- **Done when (iOS):** Wi-Fi + data off, miss a check-in → the phone shows a pre-filled SMS + call-112 prompt, **and** the server watchdog SMSes the contact once heartbeats stop.
 
 ### P2 — Safety Core Backend + Infra
 *"When something goes wrong, the right people find out, fast."*
@@ -176,15 +194,16 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 ### Task IDs by lane
 | Wk | P1 Mobile | P2 Safety Core | P3 Trust | P4 Insight |
 |---|---|---|---|---|
-| 0 | `P1-W0-flutter-shell` | `P2-W0-monorepo` `P2-W0-local-stack` `P2-W0-backend-skeleton` `P2-W0-ci` | — | `P4-W0-insight-skeleton` `P4-W0-dashboard-shell` |
+| 0 | `P1-W0-flutter-shell` `P1-W0-ios-signing` | `P2-W0-monorepo` `P2-W0-local-stack` `P2-W0-backend-skeleton` `P2-W0-ci` | — | `P4-W0-insight-skeleton` `P4-W0-dashboard-shell` |
 | 1 | `ALL-W1-api-contract` | ← | ← | ← |
 | 1–2 | `P1-W1-signup-contacts-ui` | `P2-W1-otp-device-auth` `P2-W2-trusted-contacts` | `P3-W1-vendor-selection` | `P4-W1-report-model-separate-db` |
-| 3–4 | `P1-W3-journey-ui-timers` `P1-W4-sos-duress-pin` | `P2-W3-journey-state-machine` `P2-W4-watchdog-alert-ladder` | `P3-W3-tier1-verification` `P3-W4-tier2-campus` | `P4-W3-report-intake-filters` |
+| 3–4 | `P1-W3-journey-ui-timers` `P1-W3-ios-background-checkins` `P1-W4-sos-duress-pin` `P1-W4-ios-sos-shortcuts` | `P2-W3-journey-state-machine` `P2-W4-watchdog-alert-ladder` | `P3-W3-tier1-verification` `P3-W4-tier2-campus` | `P4-W3-report-intake-filters` |
 | 5–6 | `P1-W5-sms-fallback-lowbattery` `P1-W6-e2e-location` | `P2-W5-location-relay` `P2-W6-signed-alerts` | `P3-W5-matching-rules` | `P4-W5-clustering-threshold` `P4-W6-risk-labels` |
 | 7–8 | `P1-W7-walk-screens-handshake-chat` | `P2-W7-responder-alerts` | `P3-W7-walk-lifecycle` `P3-W8-close-wipe-escrow` | `P4-W7-valhalla-safety-costing` |
 | 9–10 | `P1-W9-map-routes-report-blur` | `P2-W9-load-test-monitoring` | `P3-W9-complaints-ts-console` | `P4-W9-campus-dashboard-before-after` |
 | 11 | `ALL-W11-red-team` | ← | ← | ← |
 | 12 | `ALL-W12-pilot-pentest` | ← | ← | ← |
+| Later | `P1-LATER-android-port` (Kotlin modules, auto-SMS, FLAG_SECURE, FCM) | | | |
 
 ---
 
@@ -194,7 +213,8 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 3. **Vendors:** KYC aggregator + liveness SDK + DLT-registered CPaaS — sandbox access first.
 4. **Escrow unseal policy:** approvers, timelines, user notification, transparency reporting.
 5. **Languages:** Kannada + Hindi first.
-6. **Local tooling:** Flutter not yet installed; pnpm via corepack.
+6. **Apple Developer account ($99/year)** for APNs, TestFlight and real-device testing; needed by week 3–4.
+7. **iOS offline gap:** the phone cannot send SMS alone; signed off as "server watchdog SMS + one-tap SMS/112 on phone" (§3a). Re-check with the team before pilot.
 
 ---
 
@@ -203,3 +223,7 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 - **After any work:** update task `status` (`todo | in_progress | blocked | done`) + `notes`, bump `updated_at`, refresh `next_steps`, add any `decisions`/`blockers`, and append a short dated entry to `PROGRESS.md`.
 - New tasks get an ID in the form `P<lane>-W<week>-<slug>` and are added to both this planner and `progress.json`.
 - Branch per task/milestone (e.g. `setup/foundation`, `p2/otp-device-auth`); never commit directly to `main`.
+- **Name every update** so we can tell who did what. Use lowercase `sumeet:`, `tanisha:`, `shruj:` or `jival:`:
+  - `progress.json`: start each task's `notes` with your name (e.g. `"tanisha: OTP screen done, needs API"`), set `updated_by`, and add `"by"` to new decisions and blockers.
+  - `PROGRESS.md`: entry heading `## 2026-11-12 — tanisha: Sign-up screens`.
+  - When using Claude Code, say who you are (e.g. *"I'm Tanisha, P1"*) so the update is tagged correctly.
