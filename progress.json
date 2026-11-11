@@ -252,9 +252,9 @@
         {
           "id": "P2-W3-journey-state-machine",
           "title": "Journey state machine + protocol config",
-          "status": "todo",
+          "status": "done",
           "week": 3,
-          "notes": ""
+          "notes": "shruj: backend/app/journey: pure state machine (state.py: active -> check_in_due -> private_prompt -> contact_alert -> full_escalation -> resolved, heartbeat loss, SOS, duress) + protocol settings + 9 endpoints (GET/PUT /journeys/protocol, POST /journeys, GET /journeys/current, POST /journeys/{id}/heartbeat|check-in|prompt|sos|arrive|end). Phone runs timers and checks the PIN; server mirrors as watchdog and applies due timer steps on every read/event. Duress PIN and covert SOS escalate but the phone keeps seeing 'active' (and 'resolved' after arrive/end). Real PIN never cancels a full escalation. No location/destination stored; journeys purged 7 days after ending. service.run_watchdog + purge_expired ready for W4 to schedule. Migration 0004 (core DB). 112 tests pass, ruff clean; live run OK. Branch p2/journey-state-machine."
         },
         {
           "id": "P2-W4-watchdog-alert-ladder",
@@ -577,6 +577,30 @@
       "decision": "Devices publish separate X25519 + Ed25519 public keys (PUT /auth/device/e2e-keys) for E2E location; the P-256 Keystore key is for sign-in only",
       "why": "Tanisha's P1-W6 envelope uses X25519 + Ed25519, which the Android Keystore P-256 key can't provide",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Journey PIN is checked on the phone; the server only receives check-in result 'ok' or 'duress' and returns identical responses",
+      "why": "PINs never leave the phone; a coercer watching the screen sees nothing different (HLD §4 Journey)",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Covert escalations (duress PIN, covert SOS) are shown to the phone as 'active', and as 'resolved' after arrive/end, while the real state stays full_escalation",
+      "why": "Refusing 'arrive' during a duress alarm would reveal it to whoever holds the phone",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "A real PIN never cancels a full escalation; only contacts/responders resolve it (W4)",
+      "why": "A coercer could force the real PIN after a duress PIN",
+      "by": "shruj"
+    },
+    {
+      "date": "2026-11-11",
+      "decision": "Journeys copy the protocol timers at start; the phone must send heartbeats at least every heartbeat_timeout_min / 2 (default timeout 10 min)",
+      "why": "Mid-journey settings edits can't move deadlines; server watchdog needs a liveness signal (no location)",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -608,7 +632,8 @@
   "next_steps": [
     "tanisha: connect onboarding to /auth/otp/request + /auth/otp/verify and add Keystore device sign-in (see contracts/openapi.yaml, PROGRESS.md 'shruj: Email OTP + device auth')",
     "tanisha: contacts screen -> invite link via share sheet + deep link to accept; keep name/number on the phone keyed by contact_link_id; upload E2E keys after sign-in (contracts/openapi.yaml)",
-    "shruj: P2-W3-journey-state-machine",
+    "tanisha: wire journey screens to /journeys (start, heartbeat every <=5 min, check-in ok/duress, prompt, sos, arrive/end); see contracts/openapi.yaml",
+    "shruj: P2-W4-watchdog-alert-ladder (schedule service.run_watchdog + purge_expired with Arq; FCM -> Telegram -> email; idempotent)",
     "sumeet: merge PR #1 (setup/foundation -> main)",
     "tanisha: later connect a physical Android phone over USB and test battery optimization on Xiaomi/Oppo/Vivo/Realme/Samsung (deferred at Tanisha's request)",
     "Assign lanes for sumeet, shruj, jival in progress.json (team + lanes.P*.owner)",

@@ -12,13 +12,27 @@
 |---|---|---|
 | ALL | Planner, progress tracking, colour system | `ALL-W1-api-contract`: agree on `contracts/openapi.yaml` together |
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
-| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`) | `P2-W3-journey-state-machine` |
+| P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`) | `P2-W4-watchdog-alert-ladder` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
 | P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. sumeet, jival: lanes not assigned yet (`progress.json` → `team` and `lanes.P*.owner`).
+
+## 2026-11-11 — shruj: Journey state machine
+- Shruj: Built `P2-W3-journey-state-machine` in `backend/app/journey/`, on branch `p2/journey-state-machine` (stacked on `p2/trusted-contacts`).
+- Shruj: **States:** active → check-in due → private prompt → contacts alerted → full escalation → resolved. A silent phone (no heartbeat) alerts contacts; SOS jumps straight to full escalation. The rules are plain functions in `state.py` with their own tests.
+- Shruj: **The phone runs the timers and checks the PIN** (ADR-2); the server mirrors the same timers as a watchdog and catches up whenever the phone calls in.
+- Shruj: **Duress:** the phone only sends `ok` or `duress` (the PIN never leaves it), and both get exactly the same response. A duress PIN or covert SOS escalates silently: the phone keeps seeing "active", and "resolved" if someone makes her tap Arrived, while the alarm keeps going. A real PIN never cancels a full escalation (a coercer could force it); contacts resolve it in W4.
+- Shruj: **Endpoints:** `GET/PUT /journeys/protocol` (her timers, auto-112, which contacts to alert), `POST /journeys`, `GET /journeys/current`, `POST /journeys/{id}/heartbeat | check-in | prompt | sos | arrive | end`.
+- Shruj: **Privacy:** no location, destination or route is sent or stored (rule 2). Journeys are deleted 7 days after they end.
+- Shruj: Ready for W4: `service.run_watchdog()` returns journeys that just escalated, and `service.purge_expired()` does the 7-day cleanup; W4 schedules them and sends the alerts. No alerts are sent yet.
+- Shruj: Migration `0004` (core DB): `protocols`, `journeys`. `contracts/openapi.yaml` updated (19 paths, matches the backend).
+- Shruj: Checks: ruff clean, 112 tests pass (46 new). Live run: duress check-in showed "active", arrive showed "resolved", database still `full_escalation`.
+- Shruj: **After pulling:** `cd backend && uv run alembic upgrade head`.
+- **Needs Tanisha:** send a heartbeat at least every 5 min during a journey (or the server alerts contacts after 10 min of silence); report check-ins as `ok`/`duress`, the missed-check-in prompt, SOS (covert or not), arrive/end; use the same timer values as `/journeys/protocol`.
+- **Next:** `P2-W4-watchdog-alert-ladder`.
 
 ## 2026-11-11 — shruj: Trusted contacts
 - Shruj: Built `P2-W2-trusted-contacts` in a new `backend/app/contacts/` module, on branch `p2/trusted-contacts` (stacked on `p2/email-otp-device-keys`, so it can be built before that PR merges).
