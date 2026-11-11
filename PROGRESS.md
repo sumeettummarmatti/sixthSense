@@ -20,6 +20,12 @@
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
 
+## 2026-11-12 — sumeet: Contact alert screen (on Tanisha's behalf)
+- sumeet: `main` now has everything (PR #2 merged; PR #1 counted as merged). Everyone branches off `main` from now on.
+- sumeet: New **People you support** screen (heart icon on *Plan a journey*): open alerts where you are a trusted contact, with the **verification code** to compare against the Telegram message, and **I'm on it** / **I've reached them, they're OK** / **I can't reach them, raise the alarm** (the last only for a missed check-in). Silent alarms say *don't call them*. Red only for full alerts.
+- sumeet: A **banner on the home screen** appears within ~10 s when someone needs you; tap it to respond.
+- sumeet: Checks: `flutter analyze` clean, 16 Flutter tests (3 new). Live: SOS -> contact sees it (code shown) -> ack 200 -> resolve 200 -> no open alerts.
+
 ## 2026-11-12 — sumeet: Offline safety fixes (on Tanisha's behalf, branch `p1/demo-offline-fixes`)
 - sumeet: **Missed check-in no longer texts straight away.** At the deadline the phone shows the private "check-in due" prompt; only if she still hasn't checked in 4 minutes later (server's grace 2 min + prompt 2 min) does it send the offline SMS. Checking in cancels it. A stale alarm can't fire after a check-in (it checks the deadline it was set for).
 - sumeet: **After a reboot** the journey service comes back (not just the alarm), with the saved SMS setting kept. If the check-in time passed while the phone was off, it prompts right away and texts 2 minutes later if she doesn't check in.

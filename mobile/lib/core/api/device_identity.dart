@@ -194,6 +194,26 @@ class DemoApi {
     return (hash >= 0 ? trimmed.substring(hash + 1) : trimmed).trim();
   }
 
+  /// Open alerts where this account is a trusted contact (GET /escalations/active).
+  Future<List<ContactAlert>> activeAlerts() async {
+    final result = await _request('GET', '/escalations/active');
+    return (result['escalations'] as List<dynamic>? ?? const [])
+        .map((item) => ContactAlert.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// "I'm on it": stops further alerts to everyone.
+  Future<void> acknowledgeAlert(String id) =>
+      _request('POST', '/escalations/$id/ack');
+
+  /// Contact confirmed the person is OK.
+  Future<void> resolveAlert(String id) =>
+      _request('POST', '/escalations/$id/resolve');
+
+  /// "I can't reach them": turns a missed check-in into a full alert.
+  Future<void> raiseAlarm(String id) =>
+      _request('POST', '/escalations/$id/raise');
+
   Future<String> createTelegramLink() async {
     final result = await _request('POST', '/notifications/telegram/link');
     return result['url'] as String;
@@ -360,4 +380,40 @@ class JourneySnapshot {
             (json['timers'] as Map<String, dynamic>)['heartbeat_timeout_min']
                 as int,
       );
+}
+
+class ContactAlert {
+  const ContactAlert({
+    required this.id,
+    required this.ownerLabel,
+    required this.fullEscalation,
+    required this.covert,
+    required this.openedAt,
+    required this.acknowledged,
+    required this.verificationCode,
+  });
+
+  final String id;
+  final String ownerLabel;
+
+  /// false = missed check-in (contacts asked first); true = full alert (SOS).
+  final bool fullEscalation;
+
+  /// Silent alarm: never call their phone.
+  final bool covert;
+  final DateTime openedAt;
+  final bool acknowledged;
+
+  /// Same code as in the Telegram message; if they differ, the message is fake.
+  final String verificationCode;
+
+  factory ContactAlert.fromJson(Map<String, dynamic> json) => ContactAlert(
+    id: json['id'] as String,
+    ownerLabel: json['owner_label'] as String,
+    fullEscalation: json['level'] == 'full_escalation',
+    covert: json['covert'] as bool? ?? false,
+    openedAt: DateTime.parse(json['opened_at'] as String).toLocal(),
+    acknowledged: json['acknowledged'] as bool? ?? false,
+    verificationCode: json['verification_code'] as String,
+  );
 }
