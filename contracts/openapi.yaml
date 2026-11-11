@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SixthSense API
-  version: 0.0.1
+  version: 0.1.0
   description: >
     Week-1 contract skeleton. Endpoints are filled in during ALL-W1-api-contract.
     Core zone = backend service; Insight zone = insight service (separate host, no user IDs).
@@ -37,3 +37,190 @@ paths:
                 properties:
                   status: {type: string, example: ok}
                   service: {type: string, enum: [core, insight]}
+  /auth/otp/request:
+    post:
+      tags: [auth]
+      summary: Email a 6-digit sign-in code
+      description: >
+        Sign-in and sign-up are the same flow. Always returns 202 {"status":"sent"} for any valid
+        address, whether or not an account exists. The code expires in 10 minutes and works once;
+        a new request replaces the previous code. Limits: 3 requests per email and 10 per IP
+        per 10 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/OtpRequest"}
+            example: {email: priya@college.edu}
+      responses:
+        "202":
+          description: Code sent (same response for every address)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OtpRequestAccepted"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+        "429":
+          description: "Rate limited (detail: rate_limited). Retry-After header in seconds."
+          headers:
+            Retry-After: {schema: {type: integer, example: 600}}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+              example: {detail: rate_limited}
+  /auth/otp/verify:
+    post:
+      tags: [auth]
+      summary: Check the emailed code and bind this phone's Keystore key
+      description: >
+        Max 5 attempts per code, then it locks (429) until a new code is requested. On success the
+        account is created if new (Tier 0, no ID needed) and this device's EC P-256 public key is
+        registered. Keep `device_id`: later sign-ins use /auth/device/* instead of email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/OtpVerify"}
+            example:
+              email: priya@college.edu
+              code: "042917"
+              device_public_key: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Session"}
+        "400":
+          description: "Wrong, expired or already-used code (detail: invalid_or_expired_code)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "403":
+          description: "Account suspended (detail: account_suspended)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "409":
+          description: "This device key is registered to another account or revoked (detail: device_key_in_use)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "422":
+          description: "Bad input, or device key is not EC P-256 (detail: invalid_device_key). The code is not used up."
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "429":
+          description: "Too many wrong attempts (detail: too_many_attempts). Request a new code."
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /auth/device/challenge:
+    post:
+      tags: [auth]
+      summary: Get a single-use nonce for the phone to sign
+      description: Valid for 120 seconds. Issued for any device_id (no probing for valid IDs).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DeviceChallengeRequest"}
+      responses:
+        "200":
+          description: Nonce to sign
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DeviceChallenge"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+  /auth/device/verify:
+    post:
+      tags: [auth]
+      summary: Sign in with the Keystore key (no email code)
+      description: >
+        Sign the UTF-8 bytes of `sixthsense-device-auth-v1|<device_id>|<nonce>` with the device's
+        Keystore key using SHA256withECDSA, and send the DER signature base64-encoded. The nonce
+        works once. Use this whenever the access token expires (every 15 minutes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DeviceVerify"}
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Session"}
+        "401":
+          description: "Bad/expired/used nonce, wrong signature, revoked device or suspended account (detail: device_auth_failed)"
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: "Access token from /auth/otp/verify or /auth/device/verify. Send as Authorization: Bearer <token>."
+  responses:
+    ValidationError:
+      description: Request body failed validation
+  schemas:
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail: {type: string}
+    OtpRequest:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+    OtpRequestAccepted:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [sent]}
+    OtpVerify:
+      type: object
+      required: [email, code, device_public_key]
+      properties:
+        email: {type: string, format: email}
+        code: {type: string, pattern: "^\\d{6}$", description: 6 digits, keep leading zeros}
+        device_public_key:
+          type: string
+          maxLength: 512
+          description: >
+            Base64 (standard, with padding) X.509 SubjectPublicKeyInfo DER of an EC P-256 key
+            generated in the Android Keystore (`keyStore.getCertificate(alias).publicKey.encoded`).
+    DeviceChallengeRequest:
+      type: object
+      required: [device_id]
+      properties:
+        device_id: {type: string, format: uuid}
+    DeviceChallenge:
+      type: object
+      required: [nonce, expires_in]
+      properties:
+        nonce: {type: string}
+        expires_in: {type: integer, example: 120}
+    DeviceVerify:
+      type: object
+      required: [device_id, nonce, signature]
+      properties:
+        device_id: {type: string, format: uuid}
+        nonce: {type: string, maxLength: 128}
+        signature:
+          type: string
+          maxLength: 256
+          description: "Base64 DER ECDSA signature (SHA256withECDSA) over sixthsense-device-auth-v1|<device_id>|<nonce>"
+    Session:
+      type: object
+      required: [access_token, token_type, expires_in, account_id, device_id]
+      properties:
+        access_token: {type: string}
+        token_type: {type: string, enum: [bearer]}
+        expires_in: {type: integer, example: 900, description: seconds}
+        account_id: {type: string, format: uuid}
+        device_id: {type: string, format: uuid, description: Store this on the phone}
