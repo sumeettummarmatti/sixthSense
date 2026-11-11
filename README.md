@@ -18,9 +18,66 @@
 | `contracts/` | `openapi.yaml`, the shared API contract | All |
 | `infra/` | Docker Compose local stack (later: Terraform) | P2 |
 
+## Check your setup
+
+Run these before the quick start. Each line shows the command and what you should see (versions listed are what the project was set up with; newer is usually fine).
+
+### 1. Core tools (everyone)
+
+| Tool | Command | Expected | Install if missing (macOS) |
+|---|---|---|---|
+| Git | `git --version` | `git version 2.x` | `xcode-select --install` |
+| Docker | `docker --version` | `Docker version 27.x` | [Docker Desktop](https://www.docker.com/products/docker-desktop/) |
+| Docker running | `docker info --format '{{.ServerVersion}}'` | a version number, not an error | Open Docker Desktop |
+| uv (Python) | `uv --version` | `uv 0.9.x` | `brew install uv` |
+| Python 3.12 | `uv python find 3.12` | a path to Python 3.12 | `uv python install 3.12` |
+| Node | `node --version` | `v22.x` | `brew install node@22` |
+| pnpm | `corepack pnpm --version` (inside `dashboard/`) | `10.18.0` | `corepack enable` |
+| GitHub CLI (optional) | `gh auth status` | `Logged in to github.com` | `brew install gh && gh auth login` |
+
+### 2. Mobile toolchain (P1, and anyone running the app)
+
+| Tool | Command | Expected | Install if missing |
+|---|---|---|---|
+| Flutter | `flutter --version` | `Flutter 3.47.x • channel stable` | `brew install --cask flutter` |
+| Everything Flutter needs | `flutter doctor` | `[✓]` on Flutter, Android toolchain, Xcode | follow what it says |
+| Android SDK | `ls ~/Library/Android/sdk` | `build-tools cmdline-tools emulator licenses platform-tools platforms` | Android Studio → More Actions → SDK Manager |
+| Android cmdline-tools | `ls ~/Library/Android/sdk/cmdline-tools` | `latest` | SDK Manager → SDK Tools → **Android SDK Command-line Tools** |
+| Android licenses | `flutter doctor --android-licenses` | `All SDK package licenses accepted` | type `y` at each prompt |
+| Xcode (iOS) | `xcodebuild -version` | `Xcode 26.x` | App Store |
+| Xcode first launch | `xcrun simctl list runtimes` | at least one `iOS ...` runtime | in Terminal: `sudo xcodebuild -runFirstLaunch && sudo xcodebuild -license accept` |
+| CocoaPods | `pod --version` | `1.17.x` | `brew install cocoapods` |
+| Devices | `flutter devices` | lists a simulator, emulator or phone | start one: `open -a Simulator` or Android Studio → Device Manager |
+
+### 3. Project checks (after cloning)
+
+```bash
+# Local services: all four should say "healthy"
+docker compose -f infra/docker-compose.yml up -d --wait
+docker compose -f infra/docker-compose.yml ps --format '{{.Service}}: {{.Status}}'
+
+# Backend: "All checks passed!" then "11 passed"
+cd backend && uv sync && uv run ruff check . && uv run pytest -q && cd ..
+
+# Insight: "All checks passed!" then "14 passed"
+cd insight && uv sync && uv run ruff check . && uv run pytest -q && cd ..
+
+# Dashboard: no lint errors, then "Compiled successfully"
+cd dashboard && corepack pnpm install && corepack pnpm lint && corepack pnpm build && cd ..
+
+# Mobile: "No issues found!" then "All tests passed!"
+cd mobile && flutter pub get && flutter analyze && flutter test && cd ..
+
+# APIs respond (with the servers from the quick start running)
+curl -s localhost:8000/healthz   # {"status":"ok","service":"core"}
+curl -s localhost:8001/healthz   # {"status":"ok","service":"insight"}
+```
+
+If a check fails, paste the output into Claude Code with: *"This setup check failed, help me fix it"*.
+
 ## Quick start (local)
 
-Prereqs: Docker, [uv](https://docs.astral.sh/uv/), Node 22 (pnpm via `corepack`), Flutter.
+Prereqs: everything in [Check your setup](#check-your-setup) passes.
 
 ```bash
 cp .env.example .env

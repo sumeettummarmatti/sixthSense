@@ -21,6 +21,7 @@
 
 ## 2026-11-11 — Team handoff
 - Added `CLAUDE.md` (auto-loaded project context for Claude Code), a README team guide with example prompts, and the status table above.
+- README: added "Check your setup" (tool versions, flutter doctor, project checks).
 - Pushed `setup/foundation` (commits authored by Sumeet only) and opened PR #1: https://github.com/sumeettummarmatti/sixthSense/pull/1
 
 ## 2026-11-11 — Colour system
