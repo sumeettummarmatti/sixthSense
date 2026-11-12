@@ -90,6 +90,12 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         smsFallbackEnabled: plan.smsFallbackEnabled,
       );
     } on PlatformException catch (error) {
+      // The phone timer did not start, so don't leave a journey open on the server.
+      if (serverJourneyId != null) {
+        unawaited(
+          widget.api.endJourney(serverJourneyId).then((_) {}, onError: (_) {}),
+        );
+      }
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       final exactAlarmNeeded = error.code == 'exact_alarm_permission_required';

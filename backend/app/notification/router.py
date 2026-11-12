@@ -143,11 +143,14 @@ def link_telegram_chats(db, redis, settings, senders: Senders) -> int:
         redis.set("tg:offset", update["update_id"] + 1)
         message = update.get("message") or {}
         text, chat = message.get("text", ""), message.get("chat", {})
-        if not text.startswith("/start ") or "id" not in chat:
+        if "id" not in chat or not (text == "/start" or text.startswith("/start ")):
             continue
-        token = text.removeprefix("/start ").strip()
-        account_id = redis.getdel(
-            f"tg:{security.keyed_hash(settings.token_secret, 'telegram-link', token)}"
+        token = text.removeprefix("/start").strip()
+        # A bare "/start" (no link code) gets the same "open the app" reply as an old link.
+        account_id = (
+            redis.getdel(f"tg:{security.keyed_hash(settings.token_secret, 'telegram-link', token)}")
+            if token
+            else None
         )
         if account_id is None:
             senders.telegram.send(str(chat["id"]), _TELEGRAM_EXPIRED)

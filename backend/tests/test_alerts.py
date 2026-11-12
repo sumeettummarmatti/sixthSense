@@ -438,6 +438,10 @@ def test_telegram_link_flow(client, db, redis, senders, people) -> None:
     assert link_telegram_chats(db, redis, get_settings(), senders) == 0
     assert senders.telegram.sent[-1][0] == "99" and "expired" in senders.telegram.sent[-1][1].body
     assert redis.get("tg:offset") == b"9"
+    # a bare /start (no link code) also gets that reply instead of silence
+    senders.telegram.updates = [{"update_id": 9, "message": {"text": "/start", "chat": {"id": 98}}}]
+    assert link_telegram_chats(db, redis, get_settings(), senders) == 0
+    assert senders.telegram.sent[-1][0] == "98" and "expired" in senders.telegram.sent[-1][1].body
 
 
 def test_telegram_link_needs_a_configured_bot(client, people) -> None:
