@@ -219,14 +219,24 @@ class DemoApi {
     return result['url'] as String;
   }
 
-  Future<JourneySnapshot> startJourney(int checkInIntervalMinutes) async =>
-      JourneySnapshot.fromJson(
-        await _request(
-          'POST',
-          '/journeys',
-          body: {'check_in_interval_min': checkInIntervalMinutes},
-        ),
-      );
+  /// Starts a journey. The app only calls this when it has no journey running,
+  /// so an open one on the server is left over (for example the phone timer
+  /// failed to start after the server journey was created): end it and retry.
+  Future<JourneySnapshot> startJourney(int checkInIntervalMinutes) async {
+    Future<Map<String, dynamic>> create() => _request(
+      'POST',
+      '/journeys',
+      body: {'check_in_interval_min': checkInIntervalMinutes},
+    );
+    try {
+      return JourneySnapshot.fromJson(await create());
+    } on ApiException catch (error) {
+      if (error.detail != 'journey_already_open') rethrow;
+      final current = await _request('GET', '/journeys/current');
+      await endJourney(current['id'] as String);
+      return JourneySnapshot.fromJson(await create());
+    }
+  }
 
   Future<JourneySnapshot> heartbeat(String journeyId) async =>
       JourneySnapshot.fromJson(

@@ -90,6 +90,12 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         smsFallbackEnabled: plan.smsFallbackEnabled,
       );
     } on PlatformException catch (error) {
+      // The phone timer did not start, so don't leave a journey open on the server.
+      if (serverJourneyId != null) {
+        unawaited(
+          widget.api.endJourney(serverJourneyId).then((_) {}, onError: (_) {}),
+        );
+      }
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       final exactAlarmNeeded = error.code == 'exact_alarm_permission_required';
@@ -177,6 +183,10 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         final remote = await widget.api.checkIn(journeyId, duress: duress);
         nextCheckIn = remote.nextCheckInAt;
       } on ApiException catch (error) {
+        if (error.detail == 'journey_over') {
+          await _journeyEndedOnServer();
+          return;
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -369,6 +379,33 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     }
   }
 
+  /// A contact confirmed the user is OK after a full alert, which ends the
+  /// journey on the server. Stop the phone timer too and say why.
+  Future<void> _journeyEndedOnServer() async {
+    try {
+      await widget.runtime.endJourney();
+    } on PlatformException {
+      // Still clear the screen; the timer only re-alerts for an active journey.
+    }
+    if (!mounted) return;
+    _ticker?.cancel();
+    _heartbeatTicker?.cancel();
+    setState(() {
+      _plan = null;
+      _serverJourneyId = null;
+      _nextCheckIn = null;
+      _remaining = Duration.zero;
+      _checkInDue = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Your contact confirmed you are OK, so this journey has ended. Start a new one any time.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _reportPromptShown() async {
     final journeyId = _serverJourneyId;
     if (journeyId == null || _promptReported) return;
@@ -385,7 +422,11 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (journeyId == null) return;
     try {
       await widget.api.heartbeat(journeyId);
-    } on ApiException {
+    } on ApiException catch (error) {
+      if (error.detail == 'journey_over') {
+        await _journeyEndedOnServer();
+        return;
+      }
       // A missed heartbeat is detected by the server watchdog; local timers remain active.
     }
   }
