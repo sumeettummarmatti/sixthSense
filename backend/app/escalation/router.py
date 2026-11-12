@@ -69,6 +69,7 @@ def active(
         escalations=[
             schemas.ActiveEscalation(
                 id=escalation.id,
+                journey_id=escalation.journey_id,
                 owner_label=recipient.owner_label,
                 level=escalation.level,
                 covert=escalation.covert,

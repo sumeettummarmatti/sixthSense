@@ -236,6 +236,20 @@
           "status": "todo",
           "week": "later",
           "notes": "sumeet: paused; Android first. Needs a Mac; $99 Apple account for real distribution"
+        },
+        {
+          "id": "P1-W1-demo-live-location",
+          "title": "Demo: precise live location to contacts during a journey (E2E relay) + map on the contact's alert",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "sumeet: 2026-11-12 phone publishes X25519/Ed25519 keys (seeds Keystore-encrypted), streams best-accuracy GPS every ~3 s during a journey, encrypts per contact device, sends over /relay/ws; contact decrypts and sees a map with accuracy, 'updated N s ago', directions button. Server forwards ciphertext only, stores nothing. Foreground only for now (background location service later)."
+        },
+        {
+          "id": "P1-W1-demo-home-people",
+          "title": "Demo: home tabs (Journey / My people / I support), add/remove contacts any time",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "sumeet: 2026-11-12 contact names stay on the phone (encrypted); server keeps link ids only. Alert badge + snackbar when someone I support needs help."
         }
       ]
     },
@@ -790,13 +804,11 @@
     }
   ],
   "next_steps": [
-    "shruj: stop your worker (bot token must run on one machine); install ZeroTier on phone(s), join 8d1c312afad78cd4, install SixthSense-demo-zerotier.apk",
-    "sumeet: start the worker on your laptop once Shruj confirms hers is stopped",
-    "sumeet + shruj: full 2-phone run (sign-up, invite, Telegram link, SOS, missed check-in, 'I'm on it' link, contact alert screen)",
-    "shruj (for tanisha): on a SIM phone: airplane mode + missed check-in (SMS ~4 min after due); reboot mid-journey (notification comes back)",
+    "sumeet + shruj: test live location (traveller starts journey -> contact sees map in I support during an alert)",
+    "sumeet: UI polish pass on journey setup and active screens",
+    "shruj (for tanisha): SIM phone offline SMS + reboot test",
     "jival: demo script + slides",
-    "everyone: rehearse with phones on ZeroTier",
-    "after demo: revoke bot token (@BotFather /revoke), assign P3/P4 owners, Vultr (check free trial), real Gmail SMTP, resume 12-week plan"
+    "after demo: revoke bot token, P3/P4 owners, Vultr, real Gmail SMTP"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
 }

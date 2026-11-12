@@ -44,6 +44,20 @@ class DeviceIdentity {
     });
   }
 
+  /// Small values kept only on this phone, encrypted with a Keystore key.
+  Future<void> saveValue(String name, String? value) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('saveValue', {
+      'name': name,
+      'value': value,
+    });
+  }
+
+  Future<String?> readValue(String name) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return null;
+    return _channel.invokeMethod<String>('readValue', {'name': name});
+  }
+
   Future<void> clearSession() async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
     await _channel.invokeMethod<void>('clearSession');
@@ -168,6 +182,54 @@ class DemoApi {
       authenticated: false,
     );
     await _saveSession(session);
+  }
+
+  /// A valid access token for the relay socket (signs in again with the device key if needed).
+  Future<String> freshAccessToken({bool renew = false}) async {
+    var token = renew ? null : await identity.accessToken();
+    if (token == null || token.isEmpty) {
+      final deviceId = await identity.deviceId();
+      if (deviceId == null || deviceId.isEmpty) {
+        throw const ApiException(401, 'not_authenticated');
+      }
+      await _signInWithDevice(deviceId);
+      token = await identity.accessToken();
+    }
+    if (token == null || token.isEmpty) {
+      throw const ApiException(401, 'not_authenticated');
+    }
+    return token;
+  }
+
+  /// Publishes this device's E2E public keys (base64 raw 32 bytes); returns the key id.
+  Future<String> uploadE2EKeys({
+    required String x25519PublicKey,
+    required String ed25519PublicKey,
+  }) async {
+    final result = await _request(
+      'PUT',
+      '/auth/device/e2e-keys',
+      body: {
+        'x25519_public_key': x25519PublicKey,
+        'ed25519_public_key': ed25519PublicKey,
+      },
+    );
+    return result['key_id'] as String;
+  }
+
+  /// My trusted contacts as the server knows them (ids and status only, no names).
+  Future<List<Map<String, dynamic>>> listContacts() async {
+    final result = await _request('GET', '/contacts');
+    return (result['contacts'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> removeContact(String linkId) =>
+      _request('DELETE', '/contacts/$linkId');
+
+  /// E2E public keys of an accepted contact's devices.
+  Future<List<Map<String, dynamic>>> contactKeys(String linkId) async {
+    final result = await _request('GET', '/contacts/$linkId/keys');
+    return (result['keys'] as List).cast<Map<String, dynamic>>();
   }
 
   Future<Map<String, dynamic>> createInvite(String ownerLabel) =>
@@ -346,6 +408,7 @@ class DemoApi {
         throw ApiException(response.statusCode, detail);
       }
       if (responseBody.isEmpty) return <String, dynamic>{};
+      if (responseBody.trim().isEmpty) return <String, dynamic>{}; // 204
       return jsonDecode(responseBody) as Map<String, dynamic>;
     } on SocketException catch (error) {
       throw ApiException(0, 'server_unreachable', cause: error);
@@ -402,10 +465,14 @@ class ContactAlert {
     required this.openedAt,
     required this.acknowledged,
     required this.verificationCode,
+    this.journeyId,
   });
 
   final String id;
   final String ownerLabel;
+
+  /// The traveller's journey; live location envelopes carry it as session id.
+  final String? journeyId;
 
   /// false = missed check-in (contacts asked first); true = full alert (SOS).
   final bool fullEscalation;
@@ -421,6 +488,7 @@ class ContactAlert {
   factory ContactAlert.fromJson(Map<String, dynamic> json) => ContactAlert(
     id: json['id'] as String,
     ownerLabel: json['owner_label'] as String,
+    journeyId: json['journey_id'] as String?,
     fullEscalation: json['level'] == 'full_escalation',
     covert: json['covert'] as bool? ?? false,
     openedAt: DateTime.parse(json['opened_at'] as String).toLocal(),

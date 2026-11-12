@@ -9,6 +9,9 @@ class ActiveEscalation(BaseModel):
     """An alert a contact is part of. Visible only while it is open (rule 4)."""
 
     id: uuid.UUID
+    journey_id: uuid.UUID | None = Field(
+        default=None, description="Matches session_id in live location envelopes"
+    )
     owner_label: str
     level: Literal["contact_alert", "full_escalation"]
     covert: bool = Field(description="Silent alarm: do not call their phone")

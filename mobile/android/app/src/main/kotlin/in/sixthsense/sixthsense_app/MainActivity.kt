@@ -117,6 +117,18 @@ class MainActivity : FlutterActivity() {
                         }
                         "getDeviceId" -> result.success(DeviceIdentityVault.sessionValue(this, "device_id"))
                         "getAccessToken" -> result.success(DeviceIdentityVault.sessionValue(this, "access_token"))
+                        "saveValue" -> {
+                            val name = call.argument<String>("name")
+                            if (name.isNullOrBlank()) {
+                                result.error("invalid_value", "Value name is missing.", null)
+                            } else {
+                                DeviceIdentityVault.saveValue(this, name, call.argument<String>("value"))
+                                result.success(null)
+                            }
+                        }
+                        "readValue" -> result.success(
+                            call.argument<String>("name")?.let { DeviceIdentityVault.readValue(this, it) },
+                        )
                         "clearSession" -> {
                             DeviceIdentityVault.clearSession(this)
                             result.success(null)

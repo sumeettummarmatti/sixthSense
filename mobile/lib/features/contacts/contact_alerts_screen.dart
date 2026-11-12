@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/api/device_identity.dart';
+import 'contact_alerts.dart';
+import 'live_location_panel.dart';
 
 /// The trusted contact's side of an alert. Shows only open alerts this person
 /// is part of (rule 4); everything disappears once the alert is closed.
@@ -95,6 +97,31 @@ class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('support-accept-invite'),
+                      onPressed: () async {
+                        await acceptInviteFlow(context, widget.api);
+                        await _refresh();
+                      },
+                      icon: const Icon(Icons.link_rounded),
+                      label: const Text('Accept invite'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('support-telegram'),
+                      onPressed: () => linkTelegramFlow(context, widget.api),
+                      icon: const Icon(Icons.send_rounded),
+                      label: const Text('Telegram'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -230,6 +257,13 @@ class _AlertCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+              ),
+            ],
+            if (alert.journeyId != null) ...[
+              const SizedBox(height: 14),
+              LiveLocationPanel(
+                journeyId: alert.journeyId!,
+                ownerLabel: alert.ownerLabel,
               ),
             ],
             const SizedBox(height: 14),

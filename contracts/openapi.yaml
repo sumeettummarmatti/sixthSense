@@ -981,6 +981,7 @@ components:
       required: [id, owner_label, level, covert, opened_at, acknowledged, verification_code]
       properties:
         id: {type: string, format: uuid}
+        journey_id: {type: string, format: uuid, nullable: true, description: "Matches session_id in live location envelopes"}
         owner_label: {type: string}
         level: {type: string, enum: [contact_alert, full_escalation]}
         covert: {type: boolean, description: "Silent alarm: do NOT call their phone"}

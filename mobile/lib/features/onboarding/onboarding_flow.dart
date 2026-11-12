@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/device_identity.dart';
 import '../contacts/contact_alerts.dart';
-import '../journey/journey_flow.dart';
+import '../../core/contacts/contact_book.dart';
+import '../../core/location/live_location.dart';
+import '../home/home_shell.dart';
 
 /// Demo onboarding connected to email OTP, Android device-key auth, contacts,
 /// and Telegram linking.
@@ -33,7 +35,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     if (!mounted) return;
     if (signedIn) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => JourneyFlow(api: widget.api)),
+        MaterialPageRoute<void>(builder: (_) => HomeShell(api: widget.api)),
       );
     }
   }
@@ -78,6 +80,16 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         email: _emailController.text.trim(),
         code: code,
       );
+      E2EKeyring.reset();
+      final email = _emailController.text.trim();
+      try {
+        // How contacts see me in invites and alerts: the email name for the demo.
+        await ContactBook(widget.api.identity).saveOwnerLabel(
+          email.contains('@') ? email.substring(0, email.indexOf('@')) : email,
+        );
+      } catch (_) {
+        // Not available in widget tests; the label falls back to a default.
+      }
       if (mounted) setState(() => _step = OnboardingStep.contacts);
     } on ApiException catch (error) {
       _showApiError(error);
@@ -111,6 +123,14 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         phone: contact.phone,
         contactLinkId: invite['contact_link_id'] as String,
       );
+      try {
+        await ContactBook(widget.api.identity).save(
+          linkedContact.contactLinkId,
+          LocalContact(name: contact.name, phone: contact.phone),
+        );
+      } catch (_) {
+        // Names are a convenience; the invite still works without them.
+      }
       await const DeviceIdentity().shareInvite(
         invite['invite_url'] as String,
         contact.name,
@@ -167,7 +187,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   void _finishOnboarding() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => JourneyFlow(api: widget.api)),
+      MaterialPageRoute<void>(builder: (_) => HomeShell(api: widget.api)),
     );
   }
 

@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/api/device_identity.dart';
 import '../../core/journey/journey_runtime.dart';
+import '../../core/location/live_location.dart';
 import '../../core/theme/app_theme.dart';
 import '../contacts/contact_alerts.dart';
 import '../contacts/contact_alerts_screen.dart';
@@ -19,8 +21,11 @@ class JourneyFlow extends StatefulWidget {
     this.api = const DemoApi(),
     this.onDuressRequested,
     this.onCovertSosRequested,
+    this.relay,
   });
 
+  /// Shares live location with contacts during a journey; null turns it off (tests).
+  final LiveLocationRelay? relay;
   final DateTime Function()? now;
   final JourneyRuntime runtime;
   final DemoApi api;
@@ -140,6 +145,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     );
     _heartbeatTicker?.cancel();
     if (serverJourneyId != null) {
+      unawaited(widget.relay?.startSharing(widget.api, serverJourneyId));
       final heartbeatMinutes = (heartbeatTimeoutMinutes ~/ 2).clamp(1, 60);
       _heartbeatTicker = Timer.periodic(
         Duration(minutes: heartbeatMinutes),
@@ -360,6 +366,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       if (!mounted) return;
       _ticker?.cancel();
       _heartbeatTicker?.cancel();
+      unawaited(widget.relay?.stopSharing());
       setState(() {
         _plan = null;
         _serverJourneyId = null;
@@ -390,6 +397,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (!mounted) return;
     _ticker?.cancel();
     _heartbeatTicker?.cancel();
+    unawaited(widget.relay?.stopSharing());
     setState(() {
       _plan = null;
       _serverJourneyId = null;
@@ -445,6 +453,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       onEnd: _endJourney,
       onSos: _requestSos,
       onRequestBatteryExemption: _requestBatteryExemption,
+      sharing: widget.relay?.sharing,
     );
   }
 
@@ -748,8 +757,11 @@ class ActiveJourneyScreen extends StatelessWidget {
     required this.onEnd,
     required this.onSos,
     required this.onRequestBatteryExemption,
+    this.sharing,
   });
 
+  /// Live location sharing status, if sharing is on.
+  final ValueListenable<SharingStatus>? sharing;
   final JourneyPlan plan;
   final Duration remaining;
   final bool isCheckInDue;
@@ -835,6 +847,14 @@ class ActiveJourneyScreen extends StatelessWidget {
                     style: text.headlineSmall,
                     textAlign: TextAlign.center,
                   ),
+                  if (sharing != null) ...[
+                    const SizedBox(height: 12),
+                    ValueListenableBuilder<SharingStatus>(
+                      valueListenable: sharing!,
+                      builder: (context, status, _) =>
+                          _SharingChip(status: status),
+                    ),
+                  ],
                   const Spacer(),
                   SizedBox(
                     width: timerDiameter,
@@ -899,7 +919,7 @@ class ActiveJourneyScreen extends StatelessWidget {
                         border: Border.all(color: AppColors.caution),
                       ),
                       child: Text(
-                        'A missed check-in does not alert your contacts yet.',
+                        'Check in soon, or your contacts get an alert.',
                         style: text.bodyMedium?.copyWith(
                           color: AppColors.caution,
                         ),
@@ -984,6 +1004,64 @@ class _CheckInPinDialogState extends State<_CheckInPinDialog> {
         ),
         FilledButton(onPressed: _submit, child: const Text('Continue')),
       ],
+    );
+  }
+}
+
+class _SharingChip extends StatelessWidget {
+  const _SharingChip({required this.status});
+
+  final SharingStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final (icon, label) = switch (status) {
+      SharingStatus(error: 'location_denied') => (
+        Icons.location_disabled_outlined,
+        'Location is off, so contacts cannot see where you are',
+      ),
+      SharingStatus(error: 'gps_unavailable') => (
+        Icons.gps_off_outlined,
+        'Waiting for GPS',
+      ),
+      SharingStatus(active: false) => (
+        Icons.location_off_outlined,
+        'Live location off',
+      ),
+      SharingStatus(recipients: 0) => (
+        Icons.person_off_outlined,
+        'No contact has accepted yet, so nobody sees your location',
+      ),
+      SharingStatus(accuracyMeters: null) => (
+        Icons.gps_not_fixed,
+        'Finding your location…',
+      ),
+      _ => (
+        Icons.my_location,
+        'Live location shared with your contacts · within ${status.accuracyMeters!.round()} m',
+      ),
+    };
+    return Container(
+      key: const ValueKey('sharing-status'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colors.onPrimaryContainer),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(color: colors.onPrimaryContainer, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

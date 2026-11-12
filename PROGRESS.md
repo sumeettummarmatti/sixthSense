@@ -20,6 +20,13 @@
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
 
+## 2026-11-12 — sumeet: 2-phone run passed; live location + new home
+- 2-phone run passed on emulators over ZeroTier: sign-up, invite, Telegram link, SOS alert with matching code, resolve, missed check-in.
+- Fixed on the way: worker crash on slow Wi-Fi (PR #4), signed-in POSTs never sent (PR #5), SOS 'no_server_journey' after a failed start + silent bare /start (PR #6), journey-over after a contact resolves.
+- New: precise live location to contacts during a journey, end-to-end encrypted over the relay (server stores nothing); map with accuracy on the contact's alert card.
+- New: home tabs Journey / My people / I support; add and remove contacts any time (names stay on the phone).
+- Next: test live location with Shruj, UI polish, SIM phone test, slides.
+
 ## 2026-11-12 — sumeet: demo server over ZeroTier
 - Joined Shruj's ZeroTier network (8d1c312afad78cd4); left the other one. Laptop = 10.41.90.84.
 - API runs on the laptop at http://10.41.90.84:8000; sign-up codes at http://10.41.90.84:8025 (Mailpit). `.env` PUBLIC_BASE_URL points there, so Telegram "I'm on it" links work on any ZeroTier device.
