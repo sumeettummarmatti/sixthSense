@@ -299,12 +299,13 @@ class DemoApi {
           .openUrl(method, uri)
           .timeout(const Duration(seconds: 15));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      // All headers must be set before the body is written; Dart locks them after.
+      if (token != null && token.isNotEmpty) {
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      }
       if (body != null) {
         request.headers.contentType = ContentType.json;
         request.write(jsonEncode(body));
-      }
-      if (token != null && token.isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       }
       final response = await request.close().timeout(
         const Duration(seconds: 15),
