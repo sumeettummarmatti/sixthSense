@@ -804,10 +804,12 @@
     }
   ],
   "next_steps": [
-    "sumeet + shruj: test live location (traveller starts journey -> contact sees map in I support during an alert)",
-    "sumeet: UI polish pass on journey setup and active screens",
+    "sumeet + shruj: test live location on branch p1/live-location-and-ui (Shruj: git checkout it; SOS -> map on I support), then PR + merge",
+    "sumeet: decide + build demo responder network (F6 campus version: verified switch, on-duty coarse presence 5 min TTL, SOS alerts on-duty within ~500 m, precise location only after 'I'm going')",
+    "sumeet: UI polish of journey setup/active screens; background location while screen is locked",
     "shruj (for tanisha): SIM phone offline SMS + reboot test",
     "jival: demo script + slides",
+    "to resume: docker compose up; cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000; uv run arq app.worker.WorkerSettings (only on sumeet's laptop)",
     "after demo: revoke bot token, P3/P4 owners, Vultr, real Gmail SMTP"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
