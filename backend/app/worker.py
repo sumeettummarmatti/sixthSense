@@ -6,6 +6,7 @@ Every 5 seconds: advance quiet journeys (watchdog), open/close escalations, send
 send all-clears, and link Telegram chats. Every night: drop expired journeys and escalations.
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -47,13 +48,15 @@ def nightly(now: datetime | None = None) -> dict[str, int]:
 
 
 async def _tick(ctx: dict) -> None:
-    result = tick()
+    # tick() is blocking (DB + Telegram calls). Run it in a thread so the worker's Redis
+    # heartbeat keeps running; on slow Wi-Fi a blocked loop made Redis time out and crash.
+    result = await asyncio.to_thread(tick)
     if any(result.values()):
         log.info("tick %s", result)
 
 
 async def _nightly(ctx: dict) -> None:
-    log.info("purge %s", nightly())
+    log.info("purge %s", await asyncio.to_thread(nightly))
 
 
 async def _startup(ctx: dict) -> None:
@@ -62,6 +65,7 @@ async def _startup(ctx: dict) -> None:
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
+    redis_settings.conn_timeout = 5
     on_startup = _startup
     cron_jobs = [
         cron(_tick, second=set(range(0, 60, 5)), run_at_startup=True, unique=True, timeout=30),

@@ -76,7 +76,7 @@
           "title": "Demo: Telegram bot, merge into demo branch, run server on laptop, phone reaches it",
           "status": "in_progress",
           "week": 1,
-          "notes": "sumeet: demo branch created from p2/signed-alerts (includes all P1 + P2 work) sumeet: 2026-11-12 merged Tanisha's app wiring + Shruj's Telegram demo + real-email option into demo; backend 185 tests, flutter analyze clean, 11 tests pass."
+          "notes": "sumeet: demo branch created from p2/signed-alerts (includes all P1 + P2 work) sumeet: 2026-11-12 merged Tanisha's app wiring + Shruj's Telegram demo + real-email option into demo; backend 185 tests, flutter analyze clean, 11 tests pass. sumeet: 2026-11-12 demo server = sumeet's laptop over ZeroTier (Shruj's network 8d1c312afad78cd4): API http://10.41.90.84:8000, sign-up codes at http://10.41.90.84:8025 (Mailpit), PUBLIC_BASE_URL set to it; demo APK built with that URL. Worker runs here only after Shruj stops hers."
         },
         {
           "id": "ALL-W1-demo-real-email",
@@ -790,17 +790,13 @@
     }
   ],
   "next_steps": [
-    "sumeet: merge p1/contact-alert-screen into main (PR) before the 2-phone run",
-    "sumeet/tanisha: full 2-phone run: owner signs up + adds contact -> contact signs up, pastes invite link, taps Get alerts on Telegram -> owner starts journey + SOS -> Telegram alert arrives (API + worker on one laptop)",
-    "tanisha/sumeet: on a real phone with a SIM, test p1/demo-offline-fixes: airplane mode + missed check-in (SMS ~4 min after due), reboot mid-journey, low battery",
-    "sumeet: create team Gmail App password, put it in .env, run: cd backend && uv run python scripts/send_test_email.py <your email>",
-    "sumeet: merge p2/demo-telegram-live into demo; on the demo laptop set PUBLIC_BASE_URL to the Wi-Fi IP/tunnel, run API with --host 0.0.0.0, run the worker on that laptop only",
-    "shruj: help tanisha with P1-W1-demo-api-wiring (server on shruj's laptop: http://192.168.1.9:8000 on the same Wi-Fi)",
-    "sumeet: create Telegram bot with @BotFather, send token + username to shruj (not in git)",
-    "sumeet: push demo branch; run docker + backend on laptop; give tanisha the laptop IP (same Wi-Fi) or a free cloudflared tunnel URL",
-    "tanisha: on demo branch, connect sign-up (/auth/otp/request, /auth/otp/verify, device key), contacts (invite + Get alerts on Telegram), journey (/journeys, heartbeat, check-in, sos, end)",
+    "shruj: stop your worker (bot token must run on one machine); install ZeroTier on phone(s), join 8d1c312afad78cd4, install SixthSense-demo-zerotier.apk",
+    "sumeet: start the worker on your laptop once Shruj confirms hers is stopped",
+    "sumeet + shruj: full 2-phone run (sign-up, invite, Telegram link, SOS, missed check-in, 'I'm on it' link, contact alert screen)",
+    "shruj (for tanisha): on a SIM phone: airplane mode + missed check-in (SMS ~4 min after due); reboot mid-journey (notification comes back)",
     "jival: demo script + slides",
-    "after demo: resume 12-week plan (see earlier next steps in PROGRESS.md)"
+    "everyone: rehearse with phones on ZeroTier",
+    "after demo: revoke bot token (@BotFather /revoke), assign P3/P4 owners, Vultr (check free trial), real Gmail SMTP, resume 12-week plan"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
 }

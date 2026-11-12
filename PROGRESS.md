@@ -20,6 +20,13 @@
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
 
+## 2026-11-12 — sumeet: demo server over ZeroTier
+- Joined Shruj's ZeroTier network (8d1c312afad78cd4); left the other one. Laptop = 10.41.90.84.
+- API runs on the laptop at http://10.41.90.84:8000; sign-up codes at http://10.41.90.84:8025 (Mailpit). `.env` PUBLIC_BASE_URL points there, so Telegram "I'm on it" links work on any ZeroTier device.
+- Demo APK built with `--dart-define=API_BASE_URL=http://10.41.90.84:8000` (~/Desktop/sixthsense-demo/).
+- Fixed worker crash: the 5-second tick blocked the event loop (Telegram call ~1.8 s on our Wi-Fi), so arq's Redis connect timed out after 1 s and the worker died. Tick now runs in a thread; Redis connect timeout 5 s. Branch p2/worker-nonblocking-tick.
+- Next: Shruj stops her worker, sumeet starts it; 2-phone run; SIM phone offline/reboot test; jival slides; rehearse.
+
 ## 2026-11-12 — sumeet: Contact alert screen (on Tanisha's behalf)
 - sumeet: `main` now has everything (PR #2 merged; PR #1 counted as merged). Everyone branches off `main` from now on.
 - sumeet: New **People you support** screen (heart icon on *Plan a journey*): open alerts where you are a trusted contact, with the **verification code** to compare against the Telegram message, and **I'm on it** / **I've reached them, they're OK** / **I can't reach them, raise the alarm** (the last only for a missed check-in). Silent alarms say *don't call them*. Red only for full alerts.
