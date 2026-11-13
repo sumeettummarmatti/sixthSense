@@ -40,7 +40,8 @@ class DestinationPicker extends StatefulWidget {
   State<DestinationPicker> createState() => _DestinationPickerState();
 }
 
-class _DestinationPickerState extends State<DestinationPicker> {
+class _DestinationPickerState extends State<DestinationPicker>
+    with WidgetsBindingObserver {
   static const _style = 'https://tiles.openfreemap.org/styles/liberty';
 
   MapLibreMapController? _map;
@@ -57,12 +58,39 @@ class _DestinationPickerState extends State<DestinationPicker> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onTyped);
+    WidgetsBinding.instance.addObserver(this);
     if (mapsEnabled) unawaited(_locate());
+  }
+
+  // Fresh map after its tab was hidden or the app was in the background
+  // (the old drawing surface goes black).
+  int _generation = 0;
+  bool _visible = true;
+
+  void _remount() {
+    _generation++;
+    _map = null;
+    _styleLoaded = false;
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = TickerMode.valuesOf(context).enabled;
+    if (visible && !_visible) _remount();
+    _visible = visible;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _remount();
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onTyped);
+    WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     super.dispose();
   }
@@ -103,7 +131,13 @@ class _DestinationPickerState extends State<DestinationPicker> {
     widget.onChanged(Destination(label: query), null);
     _debounce?.cancel();
     if (!mapsEnabled || query.length < 3) {
-      if (_suggestions.isNotEmpty) setState(() => _suggestions = const []);
+      _searchId++; // drop answers to older searches
+      if (_suggestions.isNotEmpty || _searching) {
+        setState(() {
+          _suggestions = const [];
+          _searching = false;
+        });
+      }
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 600), () => _search(query));
@@ -350,6 +384,7 @@ class _DestinationPickerState extends State<DestinationPicker> {
             child: SizedBox(
               height: 220,
               child: MapLibreMap(
+                key: ValueKey(_generation),
                 styleString: _style,
                 initialCameraPosition: const CameraPosition(
                   target: LatLng(

@@ -74,7 +74,8 @@ class LiveMap extends StatefulWidget {
   State<LiveMap> createState() => LiveMapState();
 }
 
-class LiveMapState extends State<LiveMap> with SingleTickerProviderStateMixin {
+class LiveMapState extends State<LiveMap>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const _style = 'https://tiles.openfreemap.org/styles/liberty';
   static const _colors = {
     'me': '#5B3FA8',
@@ -108,6 +109,32 @@ class LiveMapState extends State<LiveMap> with SingleTickerProviderStateMixin {
       _shown[actor.id] = actor.point;
     }
     _ticker = createTicker(_onTick)..start();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // The map's drawing surface is lost when its tab is hidden or the app goes
+  // to the background; build a fresh map when it is shown again.
+  int _generation = 0;
+  bool _visible = true;
+
+  void _remount() {
+    _generation++;
+    _map = null;
+    _ready = false;
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = TickerMode.valuesOf(context).enabled;
+    if (visible && !_visible) _remount();
+    _visible = visible;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _remount();
   }
 
   @override
@@ -131,6 +158,7 @@ class LiveMapState extends State<LiveMap> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     super.dispose();
   }
@@ -482,6 +510,7 @@ class LiveMapState extends State<LiveMap> with SingleTickerProviderStateMixin {
         return Listener(
           onPointerDown: (_) => _userTouchedAt = DateTime.now(),
           child: MapLibreMap(
+            key: ValueKey(_generation),
             styleString: _style,
             initialCameraPosition: CameraPosition(
               target: first.point,
