@@ -59,9 +59,7 @@ def load_device_key(b64_der: str) -> tuple[ec.EllipticCurvePublicKey, bytes]:
         key = load_der_public_key(der)
     except (binascii.Error, ValueError) as exc:
         raise InvalidDeviceKey("not a DER public key") from exc
-    if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(
-        key.curve, ec.SECP256R1
-    ):
+    if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(key.curve, ec.SECP256R1):
         raise InvalidDeviceKey("device key must be EC P-256")
     canonical = key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
     return key, canonical

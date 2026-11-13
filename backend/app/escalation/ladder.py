@@ -304,6 +304,9 @@ def acknowledge(db: Session, escalation: Escalation, contact_id: uuid.UUID, now:
         journey = db.get(Journey, escalation.journey_id)
         if journey is not None and journey.state == State.CONTACT_ALERT:
             journey.alert_acknowledged_at = journey.alert_acknowledged_at or now
+    from app.escalation import helpers  # local: helpers imports matching models
+
+    helpers.add(db, escalation, contact_id, "contact", now)
     if escalation.acknowledged_at is None:
         escalation.acknowledged_at = now
         escalation.acknowledged_by = contact_id

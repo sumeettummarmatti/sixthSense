@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.contacts.models import TrustedContact
+from app.escalation import helpers
 from app.identity.models import Device, DeviceE2EKeys
 from app.identity.router import CurrentSession
 from app.journey.models import Journey
@@ -64,14 +65,30 @@ def _validate(envelopes: object) -> uuid.UUID:
         raise RelayError("no_open_journey") from exc
 
 
+def _traveller_recipients(db: Session, journey: Journey) -> set[uuid.UUID]:
+    """Accepted contacts (or the protocol's alert list), plus responders who said "I'm going"
+    to an open alert on this journey."""
+    contacts = select(TrustedContact.contact_id).where(
+        TrustedContact.owner_id == journey.account_id, TrustedContact.contact_id.is_not(None)
+    )
+    if journey.alert_contact_ids is not None:
+        contacts = contacts.where(TrustedContact.id.in_(journey.alert_contact_ids))
+    return set(db.scalars(contacts)) | helpers.helper_accounts(db, journey.id, kind="responder")
+
+
 def route(db: Session, sender: CurrentSession, envelopes: object) -> Routed:
-    """Check a location message from the traveller and work out where each envelope goes."""
+    """Check a location message (traveller, or a helper on their way) and route each envelope."""
     journey_id = _validate(envelopes)
     envelopes = cast(list[dict], envelopes)
     journey = db.get(Journey, journey_id)
-    if journey is None or journey.account_id != sender.account_id:
+    if journey is None or journey.state == State.RESOLVED:
         raise RelayError("no_open_journey")
-    if journey.state == State.RESOLVED:
+    if journey.account_id == sender.account_id:
+        allowed_accounts = _traveller_recipients(db, journey)
+    elif sender.account_id in helpers.helper_accounts(db, journey.id):
+        # A helper on their way shares their own location with the traveller only.
+        allowed_accounts = {journey.account_id}
+    else:
         raise RelayError("no_open_journey")
 
     sender_keys = db.get(DeviceE2EKeys, sender.device_id)
@@ -79,13 +96,6 @@ def route(db: Session, sender: CurrentSession, envelopes: object) -> Routed:
         envelope["sender_key_id"] != str(sender_keys.key_id) for envelope in envelopes
     ):
         raise RelayError("stale_sender_key")
-
-    contacts = select(TrustedContact.contact_id).where(
-        TrustedContact.owner_id == sender.account_id, TrustedContact.contact_id.is_not(None)
-    )
-    if journey.alert_contact_ids is not None:
-        contacts = contacts.where(TrustedContact.id.in_(journey.alert_contact_ids))
-    allowed_accounts = set(db.scalars(contacts))
 
     wanted = set()
     for envelope in envelopes:

@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     ladder_cycle_seconds: int = 300  # then repeat the ladder every 5 minutes
     ladder_max_cycles: int = 12  # for about an hour, or until someone acknowledges
 
+    # Nearby responders (P3-W1). Rough areas only (~110 m grid), kept in Redis for minutes.
+    responder_auto_approve: bool = False  # pilot: approve by hand with scripts/responders.py
+    responder_presence_ttl_seconds: int = 300  # on-duty phones refresh every minute
+    responder_radii_m: tuple[int, ...] = (500, 1000, 2000)  # grows if nobody says "I'm going"
+    responder_radius_step_seconds: int = 60
+    responder_max_offers: int = 5  # people alerted per SOS, nearest first
+    responder_precise_limit: int = 2  # how many "I'm going" get precise live location
+    alert_area_ttl_seconds: int = 600
+
     # Signed alerts (P2-W6): base64 32-byte Ed25519 seed. The previous key stays published
     # after a rotation so apps holding older alerts can still verify them.
     alert_signing_key: str = "dev-only-alert-signing-key"

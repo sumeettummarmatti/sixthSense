@@ -13,11 +13,13 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 
 from app.core import audit
-from app.escalation import ladder, schemas
+from app.core.redis import get_redis
+from app.escalation import helpers, ladder, schemas
 from app.escalation.models import Escalation, EscalationRecipient
 from app.identity.router import CurrentSessionDep, DbDep, SettingsDep
 from app.journey.models import Journey
-from app.journey.state import Event, InvalidTransition, State, apply_event
+from app.journey.state import ESCALATED_STATES, Event, InvalidTransition, State, apply_event
+from app.matching import nearby
 from app.notification import signing
 from app.notification.channels import Senders, get_senders
 
@@ -25,6 +27,7 @@ router = APIRouter(prefix="/escalations", tags=["escalation"])
 
 _NOT_FOUND = HTTPException(status.HTTP_404_NOT_FOUND, "escalation_not_found")
 SendersDep = Annotated[Senders, Depends(get_senders)]
+RedisDep = Annotated[object, Depends(get_redis)]
 
 
 def _now() -> datetime:
@@ -75,6 +78,8 @@ def active(
                 covert=escalation.covert,
                 opened_at=escalation.opened_at,
                 acknowledged=escalation.acknowledged_at is not None,
+                i_am_helping=helpers.is_helping(db, escalation.id, session.account_id),
+                helpers_going=helpers.count_going(db, escalation.id),
                 verification_code=signing.verification_code(
                     settings.token_secret, str(escalation.id), str(session.account_id)
                 ),
@@ -93,6 +98,56 @@ def acknowledge(
     ladder.acknowledge(db, escalation, session.account_id, now)
     db.commit()
     return schemas.Acknowledged(owner_label=recipient.owner_label)
+
+
+@router.get("/{escalation_id}/owner-keys", response_model=schemas.OwnerKeys)
+def owner_keys(
+    escalation_id: uuid.UUID, session: CurrentSessionDep, db: DbDep
+) -> schemas.OwnerKeys:
+    """For a contact who said "I'm on it": the traveller's keys, to share their own location
+    back so the traveller sees them coming. Only while the alert is open."""
+    escalation, _ = _open_for_recipient(db, escalation_id, session.account_id)
+    if escalation.journey_id is None or not helpers.is_helping(
+        db, escalation.id, session.account_id
+    ):
+        raise _NOT_FOUND
+    return schemas.OwnerKeys(
+        journey_id=escalation.journey_id, keys=helpers.device_keys(db, escalation.owner_id)
+    )
+
+
+def _owned_open_journey(db: DbDep, account_id: uuid.UUID, journey_id: uuid.UUID) -> Journey:
+    journey = db.get(Journey, journey_id)
+    if journey is None or journey.account_id != account_id or journey.state == State.RESOLVED:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no_open_journey")
+    return journey
+
+
+@router.get("/help/{journey_id}", response_model=schemas.HelpView)
+def help_view(journey_id: uuid.UUID, session: CurrentSessionDep, db: DbDep) -> schemas.HelpView:
+    """The traveller's view: is an alert open, and who said they are coming."""
+    journey = _owned_open_journey(db, session.account_id, journey_id)
+    return schemas.HelpView(
+        full_alert=journey.state == State.FULL_ESCALATION,
+        any_alert=journey.state in {s.value for s in ESCALATED_STATES},
+        helpers=helpers.for_owner(db, session.account_id, journey.id),
+    )
+
+
+@router.put("/area/{journey_id}", status_code=status.HTTP_204_NO_CONTENT)
+def put_area(
+    journey_id: uuid.UUID,
+    body: schemas.AlertArea,
+    session: CurrentSessionDep,
+    db: DbDep,
+    redis: RedisDep,
+    settings: SettingsDep,
+) -> None:
+    """Rough area during a full alert so nearby responders can be asked. Ignored otherwise."""
+    journey = _owned_open_journey(db, session.account_id, journey_id)
+    if journey.state != State.FULL_ESCALATION:
+        raise HTTPException(status.HTTP_409_CONFLICT, "no_full_alert")
+    nearby.set_alert_area(redis, journey.id, nearby.rough(body.latitude, body.longitude), settings)
 
 
 @router.post("/{escalation_id}/resolve", response_model=schemas.Resolved)
