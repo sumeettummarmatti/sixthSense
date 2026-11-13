@@ -433,7 +433,6 @@ class _OfferCard extends StatelessWidget {
 
   Widget _roughMap() => LiveMap(
     height: 180,
-    threeD: true,
     roughRadiusMeters: 150,
     actors: [
       MapActor(

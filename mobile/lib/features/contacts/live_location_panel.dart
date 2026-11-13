@@ -114,8 +114,7 @@ class _LiveLocationPanelState extends State<LiveLocationPanel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               LiveMap(
-                height: 230,
-                threeD: true,
+                height: 230, // flat in cards: 3D is for the full-screen map
                 route: widget.helping ? _route?.points : null,
                 actors: [
                   MapActor(
