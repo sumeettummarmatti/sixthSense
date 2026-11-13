@@ -38,3 +38,6 @@ build/
 
 # Routing engine data (large)
 routing-engine/data/
+
+# Raw Overpass responses saved next to area files (large; rebuildable)
+insight/data/areas/.overpass-*.json

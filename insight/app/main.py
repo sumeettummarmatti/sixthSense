@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 
-from app import clustering, reports, risk
+from app import clustering, reports, risk, routing
 from app.core.logging import configure_logging
 
-MODULES = [reports, clustering, risk]
+MODULES = [reports, clustering, risk, routing]
 
 
 def create_app() -> FastAPI:
