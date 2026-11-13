@@ -1,6 +1,6 @@
 {
   "project": "sixthsense",
-  "updated_at": "2026-11-12",
+  "updated_at": "2026-11-13T17:15:00+05:30",
   "updated_by": "sumeet",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
@@ -240,16 +240,30 @@
         {
           "id": "P1-W1-demo-live-location",
           "title": "Demo: precise live location to contacts during a journey (E2E relay) + map on the contact's alert",
-          "status": "in_progress",
+          "status": "done",
           "week": 1,
-          "notes": "sumeet: 2026-11-12 phone publishes X25519/Ed25519 keys (seeds Keystore-encrypted), streams best-accuracy GPS every ~3 s during a journey, encrypts per contact device, sends over /relay/ws; contact decrypts and sees a map with accuracy, 'updated N s ago', directions button. Server forwards ciphertext only, stores nothing. Foreground only for now (background location service later)."
+          "notes": "sumeet: 2026-11-13 tested with shruj over ZeroTier: SOS -> live map on I support, dot moves with emulator GPS, directions work. Helpers now share location back (P3-W1-nearby-responders)."
         },
         {
           "id": "P1-W1-demo-home-people",
           "title": "Demo: home tabs (Journey / My people / I support), add/remove contacts any time",
-          "status": "in_progress",
+          "status": "done",
           "week": 1,
-          "notes": "sumeet: 2026-11-12 contact names stay on the phone (encrypted); server keeps link ids only. Alert badge + snackbar when someone I support needs help."
+          "notes": "sumeet: 2026-11-12 contact names stay on the phone (encrypted); server keeps link ids only. Alert badge + snackbar when someone I support needs help. 2026-11-13: 4th tab Respond with badge + snackbar for nearby requests."
+        },
+        {
+          "id": "P1-W1-demo-map-picker",
+          "title": "Demo: Uber-style destination picker (search suggestions, long-press pin, distance + walk time, suggested check-in)",
+          "status": "done",
+          "week": 1,
+          "notes": "sumeet: 2026-11-13 Photon (OpenStreetMap) search, free, no key; destination stays on the phone (rule 2). Verified on emulator: Brigade Millennium -> Elita Promenade 480 m ~8 min."
+        },
+        {
+          "id": "P1-W1-demo-background-location",
+          "title": "Demo: live location keeps sharing with the screen off",
+          "status": "done",
+          "week": 1,
+          "notes": "sumeet: 2026-11-13 geolocator foreground service (type location) with visible notice; FOREGROUND_SERVICE_LOCATION permission. Needs a real-phone lock-screen test."
         }
       ]
     },
@@ -366,6 +380,13 @@
     "P3": {
       "owner": "Trust (TBD)",
       "tasks": [
+        {
+          "id": "P3-W1-nearby-responders",
+          "title": "Demo: who is coming + verified responders nearby (F6 campus version)",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "sumeet: 2026-11-13 branch p3/nearby-responders. Backend: escalation_helpers, responder_profiles, responder_offers (migration 0006); on-duty rough area (~110 m) in Redis 5 min; traveller's rough area during full alert 10 min; worker asks nearest approved on-duty responders 500 m -> 1 km -> 2 km (1 step/min), max 5 asked, first 2 'I'm going' get E2E precise location; helpers share location back to traveller only. Approve: backend/scripts/responders.py. 198 backend + 21 app tests pass; live smoke test: offer 4 s after SOS. Not yet tested on multiple emulators."
+        },
         {
           "id": "P3-W1-vendor-selection",
           "title": "Free verification design: college email + security sign-off, ML Kit face check",
@@ -767,6 +788,12 @@
       "decision": "main holds the demo build (PR #2 merged: all P1 + P2 work); team branches off main from now on",
       "why": "One branch for everyone before the demo",
       "by": "sumeet"
+    },
+    {
+      "date": "2026-11-13",
+      "by": "sumeet",
+      "decision": "Nearby alerts go only to approved, on-duty responders (not any app user); rough area until 'I'm going'; only SOS/full alerts, never a single missed check-in; contacts still alerted in parallel",
+      "why": "Rules 1 and 4: a stalker must not be able to install the app and get pinged with women's live positions"
     }
   ],
   "blockers": [
@@ -804,13 +831,11 @@
     }
   ],
   "next_steps": [
-    "sumeet + shruj: test live location on branch p1/live-location-and-ui (Shruj: git checkout it; SOS -> map on I support), then PR + merge",
-    "sumeet: decide + build demo responder network (F6 campus version: verified switch, on-duty coarse presence 5 min TTL, SOS alerts on-duty within ~500 m, precise location only after 'I'm going')",
-    "sumeet: UI polish of journey setup/active screens; background location while screen is locked",
-    "shruj (for tanisha): SIM phone offline SMS + reboot test",
-    "jival: demo script + slides",
-    "to resume: docker compose up; cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000; uv run arq app.worker.WorkerSettings (only on sumeet's laptop)",
-    "after demo: revoke bot token, P3/P4 owners, Vultr, real Gmail SMTP"
+    "sumeet + shruj: multi-emulator test of p3/nearby-responders (sumeet = traveller at Brigade Millennium + 2-3 responder emulators; shruj = contact + responder at Elita Promenade), then PR p1/live-location-and-ui and p3/nearby-responders into main",
+    "sumeet: real-phone test of background location (screen locked, phone in pocket)",
+    "sumeet: approve responders with: cd backend && uv run python scripts/responders.py approve-all (demo only)",
+    "shruj (for tanisha): SIM phone offline SMS + reboot test; jival: script + slides (add the responder story)",
+    "after demo: revoke Telegram bot token (@BotFather /revoke), assign P3/P4 owners, Vultr free trial, real Gmail SMTP"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
 }

@@ -30,6 +30,11 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | shruj | `P2-W1-demo-telegram-live` | Put bot token in `.env`, prove a real Telegram alert arrives end to end, fix bugs |
 | tanisha | `P1-W1-demo-api-wiring` | Connect sign-up, contacts (+ "Get alerts on Telegram"), journey and SOS to the server; test on a real phone |
 | jival | `ALL-W1-demo-script-slides` | Demo script + slides; rehearse |
+| sumeet | `P1-W1-demo-live-location` | E2E live location to contacts during a journey (map on "I support") |
+| sumeet | `P1-W1-demo-home-people` | Home tabs (Journey / My people / I support / Respond); add contacts any time |
+| sumeet | `P1-W1-demo-map-picker` | Uber-style destination: search suggestions or long-press pin, distance + walk time, suggested check-in |
+| sumeet | `P1-W1-demo-background-location` | Live location keeps going with the screen off (foreground service notice) |
+| sumeet | `P3-W1-nearby-responders` | Who is coming (contacts + responders, distance, two-way E2E location); verified responders on duty, SOS asks those within 500 m → 1 km → 2 km |
 
 ---
 
@@ -248,7 +253,7 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 | 9–10 | `P1-W9-map-routes-report-blur` | `P2-W9-load-test-monitoring` | `P3-W9-complaints-ts-console` | `P4-W9-campus-dashboard-before-after` |
 | 11 | `ALL-W11-red-team` | ← | ← | ← |
 | 12 | `ALL-W12-pilot-pentest` | ← | ← | ← |
-| Demo (now) | `P1-W1-demo-api-wiring` | `P2-W1-demo-telegram-live` | — | — |
+| Demo (now) | `P1-W1-demo-api-wiring` `P1-W1-demo-live-location` `P1-W1-demo-home-people` `P1-W1-demo-map-picker` `P1-W1-demo-background-location` | `P2-W1-demo-telegram-live` | `P3-W1-nearby-responders` | — |
 | Demo (now) | `ALL-W1-demo-branch-server` `ALL-W1-demo-script-slides` | ← | ← | ← |
 | Later | `P1-LATER-ios-port` (Swift modules; iOS can't auto-send SMS or read hardware buttons; needs a Mac + Apple account) | `P2-LATER-whatsapp-phone-otp` (Twilio WhatsApp code as 2nd sign-up check) `P2-LATER-fcm-push` | | |
 

@@ -3,6 +3,17 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-13 — sumeet: live location tested; who-is-coming, nearby responders, map picker, background location
+
+- **Tested** live location with shruj over ZeroTier (no hosting needed): SOS → map on her "I support", dot follows my emulator GPS, directions open. Emulator freezes fixed (hardware GPU + 4 GB RAM).
+- **Who is coming:** "I'm on it" (contact) or "I'm going" (responder) now shows on my journey screen with name, distance and walk time, plus a small map; their phone shares its location back to me only (E2E).
+- **Nearby responders (F6 campus version, `P3-W1-nearby-responders`):** approved responders go on duty (rough ~110 m area, Redis, 5 min). On SOS my phone sends a rough area; the worker asks the nearest within 500 m, then 1 km, then 2 km (one step a minute), max 5; the first 2 who say "I'm going" get my precise live location. Contacts are never asked twice. Approve by hand: `backend/scripts/responders.py`.
+- **Map picker:** search with suggestions (OpenStreetMap/Photon, free) or long-press to drop a pin; distance, walk time, arrival time and a suggested check-in interval. Destination stays on the phone.
+- **Background location:** sharing keeps going with the screen off (foreground service notice).
+- Decision: nearby alerts only to verified on-duty responders, never "any user" (rules 1 and 4).
+- Checks: backend 198 tests, app 21 tests, analyze clean; live smoke test: responder asked 4 s after SOS.
+- Next: multi-emulator test (me as traveller + responders, shruj as contact + responder), then PRs to main.
+
 ## Status at a glance (updated 2026-11-11)
 
 **Phase:** **2-day demo** from branch `demo` (12-week plan paused; see `PLANNER.md` §0)

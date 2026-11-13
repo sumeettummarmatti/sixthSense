@@ -779,6 +779,159 @@ paths:
            connection alive and notice an expired token early.
       responses:
         "101": {description: Switching protocols to WebSocket}
+  /escalations/{escalation_id}/owner-keys:
+    get:
+      tags: [escalation]
+      summary: "Traveller's device keys, for a contact who said I'm on it"
+      description: "Lets the helper share their own location back to the traveller (E2E). 404 unless open and helping."
+      security: [{bearer: []}]
+      parameters:
+        - {name: escalation_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OwnerKeys"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escalations/help/{journey_id}:
+    get:
+      tags: [escalation]
+      summary: "Who is coming to help (traveller only)"
+      description: "Polled by the traveller's phone during a journey. Helpers carry device keys so the phone adds responders to its E2E live location and verifies helpers' locations."
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/HelpView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escalations/area/{journey_id}:
+    put:
+      tags: [escalation]
+      summary: "Rough area during a full alert"
+      description: "Rounded to ~110 m on the server, kept in Redis 10 minutes, used only to find on-duty responders nearby. 409 no_full_alert otherwise."
+      security: [{bearer: []}]
+      parameters:
+        - {name: journey_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/LatLng"}
+      responses:
+        "204": {description: Done}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /responders/apply:
+    post:
+      tags: [matching]
+      summary: "Apply to be a responder"
+      description: "Pilot: approved by hand after an in-person check (scripts/responders.py). No ID stored."
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ResponderApply"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ResponderMe"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /responders/me:
+    get:
+      tags: [matching]
+      summary: "My responder status"
+      description: "none | pending | approved | revoked, and whether I'm on duty."
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ResponderMe"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /responders/presence:
+    put:
+      tags: [matching]
+      summary: "On duty: refresh my rough area (about every minute)"
+      description: "Approved responders only. Rounded to ~110 m, kept in Redis, forgotten 5 minutes after the last refresh."
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/LatLng"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OnDuty"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+    delete:
+      tags: [matching]
+      summary: "Go off duty"
+      description: "Forget my rough area now."
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Done}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /responders/offers:
+    get:
+      tags: [matching]
+      summary: "Nearby requests I was asked to help with"
+      description: "Only open alerts. Rough area and distance until I say I'm going; journey_id after it."
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ResponderOffers"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /responders/offers/{offer_id}/going:
+    post:
+      tags: [matching]
+      summary: "I'm going"
+      description: "The first two get the traveller's precise live location (E2E); 409 enough_helpers after that. Returns the traveller's keys so I can share my location back."
+      security: [{bearer: []}]
+      parameters:
+        - {name: offer_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OwnerKeys"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /responders/offers/{offer_id}/decline:
+    post:
+      tags: [matching]
+      summary: "I can't right now"
+      description: ""
+      security: [{bearer: []}]
+      parameters:
+        - {name: offer_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "204": {description: Done}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /responders/offers/{offer_id}/arrived:
+    post:
+      tags: [matching]
+      summary: "I've reached them"
+      description: "Shown to the traveller."
+      security: [{bearer: []}]
+      parameters:
+        - {name: offer_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "204": {description: Done}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
 components:
   securitySchemes:
     bearer:
@@ -987,12 +1140,88 @@ components:
         covert: {type: boolean, description: "Silent alarm: do NOT call their phone"}
         opened_at: {type: string, format: date-time}
         acknowledged: {type: boolean}
+        i_am_helping: {type: boolean, description: "I said I'm on it, so I share my location back"}
+        helpers_going: {type: integer}
         verification_code: {type: string, example: 7KQ2-9M4D, description: "Same code as in the Telegram/email alert; if they differ, that message is fake"}
     ActiveEscalations:
       type: object
       required: [escalations]
       properties:
         escalations: {type: array, items: {$ref: "#/components/schemas/ActiveEscalation"}}
+    HelperKey:
+      type: object
+      required: [key_id, x25519_public_key, ed25519_public_key]
+      properties:
+        key_id: {type: string, format: uuid}
+        x25519_public_key: {type: string, format: byte}
+        ed25519_public_key: {type: string, format: byte}
+    OwnerKeys:
+      type: object
+      required: [journey_id, keys]
+      properties:
+        journey_id: {type: string, format: uuid}
+        keys: {type: array, items: {$ref: "#/components/schemas/HelperKey"}}
+    Helper:
+      type: object
+      required: [id, kind, status, accepted_at, keys]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [contact, responder]}
+        label: {type: string, nullable: true, description: "Responder's display name; contacts are named on the phone"}
+        contact_link_id: {type: string, format: uuid, nullable: true}
+        status: {type: string, enum: [going, arrived]}
+        accepted_at: {type: string, format: date-time}
+        keys: {type: array, items: {$ref: "#/components/schemas/HelperKey"}}
+    HelpView:
+      type: object
+      required: [full_alert, any_alert, helpers]
+      properties:
+        full_alert: {type: boolean}
+        any_alert: {type: boolean}
+        helpers: {type: array, items: {$ref: "#/components/schemas/Helper"}}
+    LatLng:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
+    ResponderApply:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: {type: string, minLength: 1, maxLength: 40}
+    ResponderMe:
+      type: object
+      required: [status, on_duty]
+      properties:
+        status: {type: string, enum: [none, pending, approved, revoked]}
+        display_name: {type: string, nullable: true}
+        on_duty: {type: boolean}
+    OnDuty:
+      type: object
+      required: [on_duty, expires_in_seconds]
+      properties:
+        on_duty: {type: boolean}
+        expires_in_seconds: {type: integer}
+    ResponderOffer:
+      type: object
+      required: [id, status, distance_m, walk_minutes, covert, opened_at, helpers_going]
+      properties:
+        id: {type: string, format: uuid}
+        journey_id: {type: string, format: uuid, nullable: true, description: "Only after I'm going"}
+        status: {type: string, enum: [offered, going, declined]}
+        distance_m: {type: integer, description: "From rough areas (+-150 m)"}
+        walk_minutes: {type: integer}
+        rough_area: {allOf: [{$ref: "#/components/schemas/LatLng"}], nullable: true}
+        covert: {type: boolean}
+        opened_at: {type: string, format: date-time}
+        helpers_going: {type: integer}
+        arrived: {type: boolean}
+    ResponderOffers:
+      type: object
+      required: [offers]
+      properties:
+        offers: {type: array, items: {$ref: "#/components/schemas/ResponderOffer"}}
     LinkAck:
       type: object
       required: [token]
