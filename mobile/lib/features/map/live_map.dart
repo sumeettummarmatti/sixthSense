@@ -262,6 +262,12 @@ class LiveMapState extends State<LiveMap>
 
   Future<void> _setup() async {
     final map = _map!;
+    if (!widget.threeD) {
+      // Flat, ride-app style: no extruded buildings.
+      try {
+        await map.setLayerVisibility('building-3d', false);
+      } catch (_) {}
+    }
     final empty = _collection(const []);
     for (final id in [
       'ss-area',
@@ -351,6 +357,7 @@ class LiveMapState extends State<LiveMap>
         circleStrokeColor: '#FFFFFF',
         circleStrokeWidth: 3,
         circlePitchAlignment: 'map',
+        circleSortKey: ['get', 'z'],
       ),
       filter: [
         '!=',
@@ -365,13 +372,18 @@ class LiveMapState extends State<LiveMap>
         textField: ['get', 'label'],
         textFont: ['Noto Sans Bold'],
         textSize: 12.5,
-        textOffset: [0, 1.5],
-        textAnchor: 'top',
+        // Labels step aside (below, above, left, right) instead of piling up.
+        textVariableAnchor: ['top', 'bottom', 'left', 'right'],
+        textRadialOffset: 1.3,
+        textJustify: 'auto',
         textColor: '#1C1B1F',
         textHaloColor: '#FFFFFF',
         textHaloWidth: 2,
-        textAllowOverlap: true,
-        textIgnorePlacement: true,
+        symbolSortKey: [
+          '-',
+          10,
+          ['get', 'z'],
+        ],
       ),
     );
     _ready = true;
@@ -443,6 +455,10 @@ class LiveMapState extends State<LiveMap>
           'kind': actor.kind.name,
           'color': _colors[actor.kind.name],
           'label': actor.label,
+          // Me / the person in danger on top of helpers standing next to them.
+          'z': actor.kind == ActorKind.me || actor.kind == ActorKind.traveller
+              ? 3
+              : 1,
         }),
       );
     }
@@ -546,7 +562,8 @@ class LiveMapState extends State<LiveMap>
           constraints.maxWidth.isFinite ? constraints.maxWidth : 360,
           constraints.maxHeight.isFinite ? constraints.maxHeight : 240,
         );
-        return Listener(
+        final fullScreen = widget.height == null;
+        final mapView = Listener(
           onPointerDown: (_) => _userTouchedAt = DateTime.now(),
           child: MapLibreMap(
             key: ValueKey(_generation),
@@ -556,16 +573,25 @@ class LiveMapState extends State<LiveMap>
               zoom: 15.5,
               tilt: widget.threeD ? 55 : 0,
             ),
-            compassEnabled: widget.height == null,
-            rotateGesturesEnabled: widget.height == null,
-            tiltGesturesEnabled: widget.height == null,
-            gestureRecognizers: {
-              Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
-            },
+            compassEnabled: fullScreen,
+            rotateGesturesEnabled: fullScreen,
+            tiltGesturesEnabled: false,
+            scrollGesturesEnabled: fullScreen,
+            zoomGesturesEnabled: fullScreen,
+            doubleClickZoomEnabled: fullScreen,
+            gestureRecognizers: fullScreen
+                ? {
+                    Factory<OneSequenceGestureRecognizer>(
+                      EagerGestureRecognizer.new,
+                    ),
+                  }
+                : const {},
             onMapCreated: (map) => _map = map,
             onStyleLoadedCallback: () => unawaited(_setup()),
           ),
         );
+        // A card map is a picture: the page scrolls over it.
+        return fullScreen ? mapView : IgnorePointer(child: mapView);
       },
     );
     if (widget.height == null) return map;

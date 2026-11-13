@@ -399,8 +399,12 @@ class _DestinationPickerState extends State<DestinationPicker>
                   ),
                 },
                 onMapCreated: (map) => _map = map,
+                tiltGesturesEnabled: false,
                 onStyleLoadedCallback: () {
                   _styleLoaded = true;
+                  _map
+                      ?.setLayerVisibility('building-3d', false)
+                      .catchError((_) {});
                   unawaited(_draw(moveCamera: true));
                 },
                 onMapLongClick: (_, point) => _dropPin(point),

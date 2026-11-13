@@ -62,7 +62,6 @@ class _TravellerLiveMapPageState extends State<TravellerLiveMapPage> {
                             : LiveMap(
                                 key: mapKey,
                                 actors: actors,
-                                threeD: true,
                                 searchRadiusMeters:
                                     (view.search?.going ?? 2) < 2
                                     ? view.search!.radiusMeters.toDouble()
@@ -224,7 +223,6 @@ class _HelperLiveMapPageState extends State<HelperLiveMapPage> {
                       : LiveMap(
                           key: _mapKey,
                           actors: actors,
-                          threeD: true,
                           route: route?.points,
                           padding: const EdgeInsets.fromLTRB(40, 140, 40, 230),
                         ),
