@@ -121,6 +121,8 @@ class LiveMapState extends State<LiveMap>
     _generation++;
     _map = null;
     _ready = false;
+    _lastActorsDrawn = '';
+    _lastStaticDrawn = '';
     if (mounted) setState(() {});
   }
 
@@ -169,10 +171,16 @@ class LiveMapState extends State<LiveMap>
     _maybeFit(force: true);
   }
 
+  bool _drawing = false;
+  String _lastActorsDrawn = '';
+
   void _onTick(Duration elapsed) {
     _elapsed = elapsed;
-    // ~20 frames a second is smooth enough and kind to the battery.
-    if (!_ready || elapsed - _lastFrame < const Duration(milliseconds: 50)) {
+    // ~10 frames a second, and never start a frame before the last one is
+    // done: piling up map updates froze the app on slower phones.
+    if (!_ready ||
+        _drawing ||
+        elapsed - _lastFrame < const Duration(milliseconds: 100)) {
       return;
     }
     _lastFrame = elapsed;
@@ -191,7 +199,8 @@ class LiveMapState extends State<LiveMap>
       );
       if (t >= 1) _from.remove(actor.id);
     }
-    unawaited(_drawMoving());
+    _drawing = true;
+    _drawMoving().whenComplete(() => _drawing = false);
   }
 
   // ---- drawing --------------------------------------------------------------
@@ -371,9 +380,23 @@ class LiveMapState extends State<LiveMap>
     _maybeFit(force: true);
   }
 
+  String _lastStaticDrawn = '';
+
   Future<void> _drawStatic() async {
     final map = _map;
     if (map == null) return;
+    final anchor = _traveller?.point;
+    final signature = [
+      widget.searchRadiusMeters,
+      anchor?.latitude.toStringAsFixed(4),
+      anchor?.longitude.toStringAsFixed(4),
+      widget.route?.length,
+      widget.route?.lastOrNull,
+      for (final a in widget.actors.where((a) => a.kind == ActorKind.roughArea))
+        a.point,
+    ].join('|');
+    if (signature == _lastStaticDrawn) return;
+    _lastStaticDrawn = signature;
     final areas = <Map<String, dynamic>>[];
     final centre = _traveller;
     final radius = widget.searchRadiusMeters;
@@ -399,6 +422,19 @@ class LiveMapState extends State<LiveMap>
   Future<void> _drawMoving() async {
     final map = _map;
     if (map == null) return;
+    final signature = [
+      for (final a in widget.actors)
+        '${a.id}:${(_shown[a.id] ?? a.point).latitude.toStringAsFixed(6)},'
+            '${(_shown[a.id] ?? a.point).longitude.toStringAsFixed(6)}:${a.label}',
+    ].join('|');
+    final moved = signature != _lastActorsDrawn;
+    final pulsing = widget.actors.any((a) => a.inDanger);
+    if (!moved && !pulsing) return; // nothing changed: send nothing
+    if (!moved) {
+      await _drawPulse(map);
+      return;
+    }
+    _lastActorsDrawn = signature;
     final features = <Map<String, dynamic>>[];
     for (final actor in widget.actors) {
       final at = _shown[actor.id] ?? actor.point;
@@ -411,19 +447,7 @@ class LiveMapState extends State<LiveMap>
       );
     }
     await map.setGeoJsonSource('ss-actors', _collection(features));
-
-    // Pulse: a ring that grows and fades every 1.6 s around anyone in danger.
-    final phase = (_elapsed.inMilliseconds % 1600) / 1600;
-    await map.setGeoJsonSource(
-      'ss-pulse',
-      _collection([
-        for (final actor in widget.actors.where((a) => a.inDanger))
-          _point(_shown[actor.id] ?? actor.point, {
-            'r': 10 + 34 * phase,
-            'o': 0.45 * (1 - phase),
-          }),
-      ]),
-    );
+    if (pulsing) await _drawPulse(map);
 
     if (widget.linkHelpersToTraveller) {
       final target = _traveller;
@@ -440,6 +464,21 @@ class LiveMapState extends State<LiveMap>
         ]),
       );
     }
+  }
+
+  /// A ring that grows and fades every 1.6 s around anyone in danger.
+  Future<void> _drawPulse(MapLibreMapController map) async {
+    final phase = (_elapsed.inMilliseconds % 1600) / 1600;
+    await map.setGeoJsonSource(
+      'ss-pulse',
+      _collection([
+        for (final actor in widget.actors.where((a) => a.inDanger))
+          _point(_shown[actor.id] ?? actor.point, {
+            'r': 10 + 34 * phase,
+            'o': 0.45 * (1 - phase),
+          }),
+      ]),
+    );
   }
 
   // ---- camera ---------------------------------------------------------------

@@ -1003,7 +1003,10 @@ class ActiveJourneyScreen extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 520),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-              child: Column(
+              // During an alert the helpers panel makes this taller than the
+              // screen, so it scrolls; otherwise it fills the screen.
+              child: _ScrollWhen(
+                scroll: alertOpen,
                 children: [
                   const SizedBox(height: 12),
                   Text(
@@ -1030,7 +1033,7 @@ class ActiveJourneyScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     helpersPanel!,
                   ],
-                  const Spacer(),
+                  _Gap(scroll: alertOpen),
                   SizedBox(
                     width: timerDiameter,
                     height: timerDiameter,
@@ -1082,7 +1085,7 @@ class ActiveJourneyScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Spacer(),
+                  _Gap(scroll: alertOpen),
                   if (isCheckInDue)
                     Container(
                       width: double.infinity,
@@ -1129,6 +1132,31 @@ class ActiveJourneyScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A column that fills the screen normally and scrolls when it can't fit.
+class _ScrollWhen extends StatelessWidget {
+  const _ScrollWhen({required this.scroll, required this.children});
+
+  final bool scroll;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!scroll) return Column(children: children);
+    return SingleChildScrollView(child: Column(children: children));
+  }
+}
+
+/// Flexible space normally; a fixed gap inside a scrolling column.
+class _Gap extends StatelessWidget {
+  const _Gap({required this.scroll});
+
+  final bool scroll;
+
+  @override
+  Widget build(BuildContext context) =>
+      scroll ? const SizedBox(height: 20) : const Spacer();
 }
 
 class _CheckInPinDialog extends StatefulWidget {
