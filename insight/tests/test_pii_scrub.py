@@ -1,8 +1,9 @@
+import io
 import logging
 
 import pytest
 
-from app.core.logging import PIIScrubFilter, scrub
+from app.core.logging import PIIScrubFilter, configure_logging, scrub
 
 
 @pytest.mark.parametrize(
@@ -29,3 +30,26 @@ def test_filter_redacts_args() -> None:
     record = logging.LogRecord("t", logging.INFO, __file__, 1, "user %s", ("9876543210",), None)
     PIIScrubFilter().filter(record)
     assert "9876543210" not in record.getMessage()
+
+
+def test_uvicorn_access_log_is_scrubbed() -> None:
+    """A route request line carries start and destination in its query string."""
+    configure_logging()
+    access = logging.getLogger("uvicorn.access")
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)  # stands in for uvicorn's own access handler
+    access.addHandler(handler)
+    try:
+        access.info(
+            '%s - "%s %s HTTP/%s" %d',
+            "127.0.0.1:1234",
+            "GET",
+            "/routes?from=12.9719,77.6412&to=12.9610,77.6390&at=night",
+            "1.1",
+            200,
+        )
+    finally:
+        access.removeHandler(handler)
+    text = stream.getvalue()
+    assert "12.9719" not in text and "77.6390" not in text
+    assert "REDACTED_COORDS" in text and "GET" in text

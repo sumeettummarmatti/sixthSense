@@ -21,10 +21,9 @@
   .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
   label { font-size: 13px; color: var(--muted); }
   select, button { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--haze); background: var(--paper); color: var(--ink); }
-  button.primary { background: var(--lavender); color: #fff; border-color: var(--lavender); }
   button.on { background: var(--deep); color: #fff; border-color: var(--deep); }
   #status { font-size: 13px; color: var(--muted); min-height: 1.4em; margin: 6px 0 10px; }
-  .route { border: 1px solid var(--haze); border-radius: 12px; padding: 10px 12px; margin: 8px 0; cursor: pointer; }
+  .route { border: 1px solid var(--haze); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
   .route.recommended { border-color: var(--lavender); background: var(--mist); }
   .route h3 { margin: 0 0 4px; font-size: 15px; display: flex; justify-content: space-between; }
   .route .why { color: var(--deep); font-size: 13px; }
@@ -83,7 +82,8 @@
 (function () {
   const api = "";  // same origin as this page (the Insight service)
   const $ = (id) => document.getElementById(id);
-  let mode = "route", start = null, end = null, area = null, markers = [];
+  let mode = "route", start = null, end = null, area = null, markers = [], shown = [];
+  let map = null, mapReady = false;
   const reporter = (() => {
     try {
       let t = localStorage.getItem("ss-reporter");
@@ -92,49 +92,77 @@
     } catch (e) { return crypto.randomUUID(); }
   })();
 
-  const map = new maplibregl.Map({
-    container: "map",
-    style: {
-      version: 8,
-      sources: { osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256,
-        attribution: "© OpenStreetMap contributors" } },
-      layers: [{ id: "osm", type: "raster", source: "osm" }]
-    },
-    center: [77.64, 12.975], zoom: 14
-  });
-  map.addControl(new maplibregl.NavigationControl(), "top-right");
+  // The list on the left works on its own; the map is drawn when (and if) MapLibre starts.
+  try {
+    map = new maplibregl.Map({
+      container: "map",
+      style: {
+        version: 8,
+        sources: { osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256,
+          attribution: "© OpenStreetMap contributors" } },
+        layers: [{ id: "osm", type: "raster", source: "osm" }]
+      },
+      center: [77.64, 12.975], zoom: 14
+    });
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.on("load", () => {
+      map.addSource("bbox", { type: "geojson", data: emptyFC() });
+      map.addLayer({ id: "bbox", type: "line", source: "bbox", paint: { "line-color": "#6E6790", "line-width": 1, "line-dasharray": [2, 2] } });
+      map.addSource("cells", { type: "geojson", data: emptyFC() });
+      map.addLayer({ id: "cells", type: "circle", source: "cells",
+        paint: { "circle-radius": 9, "circle-color": "#8A5A00", "circle-opacity": 0.45, "circle-stroke-color": "#8A5A00", "circle-stroke-width": 1 } });
+      map.addSource("routes", { type: "geojson", data: emptyFC() });
+      const line = { "line-cap": "round", "line-join": "round" };
+      map.addLayer({ id: "routes-other", type: "line", source: "routes", filter: ["==", ["get", "kind"], "alternative"], paint: { "line-color": "#DCD1F6", "line-width": 5 }, layout: line });
+      map.addLayer({ id: "routes-shortest", type: "line", source: "routes", filter: ["==", ["get", "kind"], "shortest"], paint: { "line-color": "#6E6790", "line-width": 4, "line-dasharray": [1.5, 1.5] }, layout: line });
+      map.addLayer({ id: "routes-recommended", type: "line", source: "routes", filter: ["==", ["get", "kind"], "recommended"], paint: { "line-color": "#7C55C6", "line-width": 6 }, layout: line });
+      mapReady = true;
+      drawArea(true); drawRoutes(); drawMarkers();
+    });
+    map.on("click", (ev) => onPick([ev.lngLat.lat, ev.lngLat.lng]));
+  } catch (e) {
+    $("map").innerHTML = '<p style="padding:16px;color:#6E6790">The map could not start in this browser (no WebGL). The route list still works with ?from=lat,lon&amp;to=lat,lon in the address.</p>';
+  }
 
   function emptyFC() { return { type: "FeatureCollection", features: [] }; }
 
-  map.on("load", async () => {
-    map.addSource("bbox", { type: "geojson", data: emptyFC() });
-    map.addLayer({ id: "bbox", type: "line", source: "bbox", paint: { "line-color": "#6E6790", "line-width": 1, "line-dasharray": [2, 2] } });
-    map.addSource("cells", { type: "geojson", data: emptyFC() });
-    map.addLayer({ id: "cells", type: "circle", source: "cells",
-      paint: { "circle-radius": 9, "circle-color": "#8A5A00", "circle-opacity": 0.45, "circle-stroke-color": "#8A5A00", "circle-stroke-width": 1 } });
-    map.addSource("routes", { type: "geojson", data: emptyFC() });
-    map.addLayer({ id: "routes-other", type: "line", source: "routes", filter: ["==", ["get", "kind"], "alternative"],
-      paint: { "line-color": "#DCD1F6", "line-width": 5 }, layout: { "line-cap": "round", "line-join": "round" } });
-    map.addLayer({ id: "routes-shortest", type: "line", source: "routes", filter: ["==", ["get", "kind"], "shortest"],
-      paint: { "line-color": "#6E6790", "line-width": 4, "line-dasharray": [1.5, 1.5] }, layout: { "line-cap": "round", "line-join": "round" } });
-    map.addLayer({ id: "routes-recommended", type: "line", source: "routes", filter: ["==", ["get", "kind"], "recommended"],
-      paint: { "line-color": "#7C55C6", "line-width": 6 }, layout: { "line-cap": "round", "line-join": "round" } });
-    await loadArea(true);
-  });
-
-  async function loadArea(fit) {
-    const resp = await fetch(api + "/routes/area");
-    area = await resp.json();
+  function drawArea(fit) {
+    if (!mapReady || !area) return;
     const [s, w, n, e] = area.bbox;
     map.getSource("bbox").setData({ type: "FeatureCollection", features: [{ type: "Feature", properties: {},
       geometry: { type: "LineString", coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] } }] });
     map.getSource("cells").setData({ type: "FeatureCollection", features: area.published_cells.map(c => ({
       type: "Feature", properties: { count: c.count }, geometry: { type: "Point", coordinates: [c.lon, c.lat] } })) });
+    if (fit && !start) map.fitBounds([[w, s], [e, n]], { padding: 30 });
+  }
+
+  function drawRoutes() {
+    if (!mapReady) return;
+    map.getSource("routes").setData({ type: "FeatureCollection", features: shown.map(r => ({
+      type: "Feature", properties: { kind: r.kind }, geometry: { type: "LineString", coordinates: r.points.map(p => [p[1], p[0]]) } })) });
+  }
+
+  function drawMarkers() {
+    if (!mapReady) return;
+    markers.forEach(m => m.remove()); markers = [];
+    for (const [p, text] of [[start, "A"], [end, "B"]]) {
+      if (!p) continue;
+      const el = document.createElement("div");
+      el.textContent = text;
+      el.style.cssText = "background:#2E2658;color:#fff;border-radius:50%;width:26px;height:26px;display:grid;place-items:center;font-weight:600;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.3)";
+      markers.push(new maplibregl.Marker({ element: el }).setLngLat([p[1], p[0]]).addTo(map));
+    }
+    if (start && end) map.fitBounds([[Math.min(start[1], end[1]), Math.min(start[0], end[0])], [Math.max(start[1], end[1]), Math.max(start[0], end[0])]], { padding: 80, maxZoom: 16 });
+  }
+
+  async function loadArea(fit) {
+    const resp = await fetch(api + "/routes/area");
+    area = await resp.json();
     const c = area.counts;
     $("areaLabel").textContent = `${area.label}: ${c.lamp} streetlights, ${c.shop + c.food + c.pharmacy + c.atm + c.fuel} places, ${c.bus_stop} bus stops, ${c.station} stations, ${c.police} police, ${c.hospital} hospitals.`;
     $("thresholds").textContent = `Published report spots: ${area.published_cells.length}. A spot is published after ${area.publish_min_reports} reports from ${area.publish_min_devices} different reporters; below that it is not shown to anyone.`;
     $("simulateWrap").hidden = !area.demo;
-    if (fit) map.fitBounds([[w, s], [e, n]], { padding: 30 });
+    drawArea(fit);
   }
 
   function setMode(m) {
@@ -147,24 +175,16 @@
   $("modeRoute").onclick = () => setMode("route");
   $("modeReport").onclick = () => setMode("report");
   $("band").onchange = () => { if (start && end) plan(); };
-  $("clear").onclick = () => { start = end = null; markers.forEach(m => m.remove()); markers = []; map.getSource("routes").setData(emptyFC()); $("routes").innerHTML = ""; setMode("route"); };
+  $("clear").onclick = () => { start = end = null; shown = []; drawMarkers(); drawRoutes(); $("routes").innerHTML = ""; setMode("route"); };
 
-  map.on("click", (ev) => {
-    const p = [ev.lngLat.lat, ev.lngLat.lng];
+  function onPick(p) {
     if (mode === "report") return report(p);
     if (!start || (start && end)) {
-      $("clear").onclick(); start = p; addMarker(p, "A");
+      $("clear").onclick(); start = p; drawMarkers();
       $("status").textContent = "Now click the destination.";
     } else {
-      end = p; addMarker(p, "B"); plan();
+      end = p; drawMarkers(); plan();
     }
-  });
-
-  function addMarker(p, text) {
-    const el = document.createElement("div");
-    el.textContent = text;
-    el.style.cssText = "background:#2E2658;color:#fff;border-radius:50%;width:26px;height:26px;display:grid;place-items:center;font-weight:600;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.3)";
-    markers.push(new maplibregl.Marker({ element: el }).setLngLat([p[1], p[0]]).addTo(map));
   }
 
   async function plan() {
@@ -177,14 +197,13 @@
       return;
     }
     const data = await resp.json();
-    const order = ["recommended", "shortest", "alternative"];
     // Recommended, shortest, then the best two other ways; more lines than that only clutter.
+    const order = ["recommended", "shortest", "alternative"];
     const others = data.routes.filter(r => r.kind === "alternative").sort((a, b) => b.score - a.score).slice(0, 2);
-    const list = data.routes.filter(r => r.kind !== "alternative").concat(others)
+    shown = data.routes.filter(r => r.kind !== "alternative").concat(others)
       .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
-    map.getSource("routes").setData({ type: "FeatureCollection", features: list.map(r => ({
-      type: "Feature", properties: { kind: r.kind }, geometry: { type: "LineString", coordinates: r.points.map(p => [p[1], p[0]]) } })) });
-    $("routes").innerHTML = list.map((r) => {
+    drawRoutes();
+    $("routes").innerHTML = shown.map((r) => {
       const mins = Math.round(r.duration_s / 60);
       const title = r.kind === "recommended" ? "Recommended" : r.kind === "shortest" ? "Shortest" : "Another way";
       const chip = r.evidence.startsWith("Strong") ? "strong" : r.evidence.startsWith("Some") ? "some" : "";
@@ -195,7 +214,7 @@
         <span class="chip ${chip}">${r.evidence}</span>
       </div>`;
     }).join("");
-    $("status").textContent = `${data.time_band[0].toUpperCase()}${data.time_band.slice(1)} ranking: ${data.routes.length} ways compared, ${list.length} shown.`;
+    $("status").textContent = `${data.time_band[0].toUpperCase()}${data.time_band.slice(1)} ranking: ${data.routes.length} ways compared, ${shown.length} shown.`;
   }
 
   async function report(p) {
@@ -215,6 +234,20 @@
     await loadArea(false);
     if (start && end) plan();
   }
+
+  async function init() {
+    try { await loadArea(true); } catch (e) { $("areaLabel").textContent = "The Insight service is not reachable."; return; }
+    // Deep link for demos and screenshots: /routes/demo?from=lat,lon&to=lat,lon&at=night
+    const q = new URLSearchParams(location.search);
+    if (q.get("at")) $("band").value = q.get("at");
+    if (q.get("from") && q.get("to")) {
+      start = q.get("from").split(",").map(Number);
+      end = q.get("to").split(",").map(Number);
+      drawMarkers();
+      await plan();
+    }
+  }
+  init();
 })();
 </script>
 </body>
