@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/device_identity.dart';
 import '../../core/location/live_location.dart';
+import '../../core/sos/live_audio.dart';
 import '../contacts/contact_alerts_screen.dart';
 import '../contacts/my_people_screen.dart';
 import '../journey/journey_flow.dart';
@@ -42,6 +43,8 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     // Listen for live locations of people I support (decrypted on this phone).
     unawaited(_relay.start(widget.api));
+    // Live audio of people I support, only for sessions I choose to hear.
+    LiveAudioPlayer.instance.start(_relay);
     _checkAlerts();
     _poll = Timer.periodic(widget.pollInterval, (_) => _checkAlerts());
   }

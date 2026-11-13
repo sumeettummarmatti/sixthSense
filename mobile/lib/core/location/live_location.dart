@@ -99,8 +99,25 @@ class ReceivedLocation {
   final int sequence;
 }
 
-/// The single relay socket for this phone: sends my location during my
-/// journey and receives locations from people I support.
+/// A voice clip from someone I support (SOS recording or Audio Escort),
+/// decrypted on this phone. It is played and then discarded.
+class ReceivedAudio {
+  const ReceivedAudio({
+    required this.sessionId,
+    required this.kind,
+    required this.sequence,
+    required this.bytes,
+  });
+
+  final String sessionId;
+  final String kind;
+  final int sequence;
+  final List<int> bytes;
+}
+
+/// The single relay socket for this phone: sends my location (and audio
+/// during an alert or escort) on my journey, and receives both from people I
+/// support.
 class LiveLocationRelay {
   LiveLocationRelay._();
 
@@ -111,6 +128,13 @@ class LiveLocationRelay {
 
   /// What my own sharing is doing, for the journey screen.
   final sharing = ValueNotifier<SharingStatus>(SharingStatus.off);
+
+  /// Voice clips from people I support, as they arrive.
+  final _audio = StreamController<ReceivedAudio>.broadcast();
+  Stream<ReceivedAudio> get audio => _audio.stream;
+
+  /// When the last clip arrived, per journey (session) of people I support.
+  final liveAudio = ValueNotifier<Map<String, DateTime>>({});
 
   DemoApi? _api;
   WebSocket? _socket;
@@ -191,6 +215,8 @@ class LiveLocationRelay {
         if (!(_ready?.isCompleted ?? true)) _ready!.complete();
       case 'location':
         await _onLocation(frame);
+      case 'audio':
+        await _onAudio(frame);
       case 'sent':
         final delivered = frame['delivered'] as int? ?? 0;
         if (sharing.value.active) {
@@ -246,6 +272,78 @@ class LiveLocationRelay {
     }
   }
 
+  Future<void> _onAudio(Map<String, dynamic> frame) async {
+    final api = _api;
+    if (api == null) return;
+    try {
+      final keyring = await E2EKeyring.load(api);
+      final envelope = LiveLocationEnvelope.fromJson(
+        (frame['envelope'] as Map).cast<String, dynamic>(),
+      );
+      final sender = (frame['sender'] as Map).cast<String, dynamic>();
+      final clip = await _cipher.decryptAudio(
+        envelope: envelope,
+        expectedSessionId: envelope.sessionId,
+        expectedRecipientKeyId: keyring.keyId,
+        recipientKeyPair: keyring.agreement,
+        sender: LocationSenderVerificationKey(
+          keyId: sender['key_id'] as String,
+          signingPublicKey: SimplePublicKey(
+            base64Decode(sender['ed25519_public_key'] as String),
+            type: KeyPairType.ed25519,
+          ),
+        ),
+      );
+      liveAudio.value = {
+        ...liveAudio.value,
+        envelope.sessionId: DateTime.now(),
+      };
+      _audio.add(
+        ReceivedAudio(
+          sessionId: envelope.sessionId,
+          kind: clip.kind,
+          sequence: clip.sequence,
+          bytes: clip.audio,
+        ),
+      );
+    } catch (error) {
+      debugPrint('LiveLocationRelay dropped an audio clip: $error');
+    }
+  }
+
+  /// Sends one recorded clip of my journey, end to end encrypted, to everyone
+  /// who may hear it. The server only forwards it to people alerted or
+  /// listening to my escort (rule 4). False if it could not be sent now.
+  Future<bool> sendAudio(AudioClip clip) async {
+    final api = _api;
+    final journeyId = _journeyId;
+    if (api == null || journeyId == null) return false;
+    await _connect();
+    if (_socket == null) return false;
+    if (_contactRecipients.isEmpty) await _loadContactRecipients();
+    final recipients = _journeyRecipients;
+    if (recipients.isEmpty) return false;
+    try {
+      final keyring = await E2EKeyring.load(api);
+      final envelopes = <Map<String, Object>>[];
+      for (final recipient in recipients.take(10)) {
+        final envelope = await _cipher.encryptAudio(
+          sessionId: journeyId,
+          senderKeyId: keyring.keyId,
+          senderSigningKeyPair: keyring.signing,
+          recipient: recipient,
+          clip: clip,
+        );
+        envelopes.add(envelope.toJson());
+      }
+      _send({'type': 'audio', 'envelopes': envelopes});
+      return true;
+    } catch (error) {
+      debugPrint('LiveLocationRelay could not send audio: $error');
+      return false;
+    }
+  }
+
   // ---- Sharing my location ----
   //
   // Two kinds of session, both end-to-end encrypted:
@@ -274,6 +372,7 @@ class LiveLocationRelay {
     _api = api;
     _journeyId = journeyId;
     sharing.value = const SharingStatus(active: true);
+    unawaited(_loadContactRecipients()); // audio needs them even without GPS
     if (!await _locationAllowed()) {
       sharing.value = const SharingStatus(error: 'location_denied');
       return;

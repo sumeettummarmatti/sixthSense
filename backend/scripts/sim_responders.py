@@ -42,6 +42,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # run from back
 
 STATE = Path(__file__).resolve().parent.parent / ".sim" / "responders.json"
 PROTOCOL = "sixthsense/live-location/v1"
+AUDIO_PROTOCOL = "sixthsense/audio-clip/v1"
+AUDIO_DIR = Path(__file__).resolve().parent.parent / ".sim" / "audio"
 DEVICE_AUTH = "sixthsense-device-auth-v1"
 WALK_MPS = 1.4
 
@@ -148,7 +150,13 @@ def encrypt(
     }
 
 
-def decrypt(envelope: dict, my_key_id: str, agreement: X25519PrivateKey, sender_ed: bytes) -> dict:
+def decrypt(
+    envelope: dict,
+    my_key_id: str,
+    agreement: X25519PrivateKey,
+    sender_ed: bytes,
+    protocol: str = PROTOCOL,
+) -> dict | bytes:
     head = header_bytes(
         envelope["session_id"],
         envelope["sender_key_id"],
@@ -165,9 +173,20 @@ def decrypt(envelope: dict, my_key_id: str, agreement: X25519PrivateKey, sender_
         hashes.SHA256(),
         32,
         salt=eph,
-        info=f"{PROTOCOL}|{envelope['session_id']}|{my_key_id}".encode(),
+        info=f"{protocol}|{envelope['session_id']}|{my_key_id}".encode(),
     ).derive(shared)
-    return json.loads(AESGCM(key).decrypt(nonce, cipher + mac, head))
+    clear = AESGCM(key).decrypt(nonce, cipher + mac, head)
+    return clear if protocol == AUDIO_PROTOCOL else json.loads(clear)
+
+
+def save_audio_clip(bot_name: str, clear: bytes) -> Path:
+    """An audio clip is [4-byte header length][JSON header][AAC]. Saved so you can play it."""
+    length = int.from_bytes(clear[:4], "big")
+    meta = json.loads(clear[4 : 4 + length])
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    path = AUDIO_DIR / f"{bot_name}-{meta['kind']}-{meta['sequence']:04d}.aac"
+    path.write_bytes(clear[4 + length :])
+    return path
 
 
 @dataclass
@@ -188,6 +207,7 @@ class Bot:
     route_for: tuple[float, float] | None = None
     arrived: bool = False
     seq: int = 0
+    clips: int = 0
 
     # --- identity ------------------------------------------------------------------------
 
@@ -456,10 +476,25 @@ async def drain(ws, bot: Bot) -> None:
             frame = json.loads(await asyncio.wait_for(ws.recv(), timeout=0.05))
         except TimeoutError:
             return
-        if frame.get("type") != "location":
+        if frame.get("type") not in ("location", "audio"):
             continue
         envelope = frame["envelope"]
         if envelope["session_id"] != bot.journey:
+            continue
+        if frame["type"] == "audio":
+            # Responders on their way hear the person after an SOS (end-to-end encrypted).
+            try:
+                clear = decrypt(
+                    envelope,
+                    bot.state["key_id"],
+                    bot.agreement,
+                    base64.b64decode(frame["sender"]["ed25519_public_key"]),
+                    AUDIO_PROTOCOL,
+                )
+                save_audio_clip(bot.name, clear)
+                bot.clips += 1
+            except Exception:  # noqa: S112
+                continue
             continue
         try:
             point = decrypt(
@@ -481,7 +516,8 @@ async def show(bots: list[Bot], centre) -> None:
         ]
         for bot in bots:
             away = dist(bot.position, centre)
-            lines.append(f"  {bot.name:6} {away:5.0f} m from centre · {bot.status}")
+            heard = f" · heard {bot.clips} audio clips" if bot.clips else ""
+            lines.append(f"  {bot.name:6} {away:5.0f} m from centre · {bot.status}{heard}")
         print("\n".join(lines), flush=True)
         await asyncio.sleep(5)
 

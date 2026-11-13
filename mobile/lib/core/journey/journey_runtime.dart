@@ -6,15 +6,26 @@ class JourneyRuntime {
 
   static const _channel = MethodChannel('in.sixthsense/journey_runtime');
 
+  /// [journeyId] and [apiBaseUrl] let the phone send a sudden SOS from
+  /// native code, even with the app closed. [listenForWords] turns on Voice
+  /// SOS for this journey.
   Future<void> startJourney({
     required DateTime nextCheckIn,
     List<String> smsNumbers = const [],
     bool smsFallbackEnabled = false,
+    String? journeyId,
+    String? apiBaseUrl,
+    bool? listenForWords,
   }) => _invokeTimer(
     'startJourney',
     nextCheckIn: nextCheckIn,
     smsNumbers: smsNumbers,
     smsFallbackEnabled: smsFallbackEnabled,
+    extra: {
+      'journeyId': ?journeyId,
+      'apiBaseUrl': ?apiBaseUrl,
+      'listenForWords': ?listenForWords,
+    },
   );
 
   Future<void> checkIn({
@@ -33,12 +44,14 @@ class JourneyRuntime {
     required DateTime nextCheckIn,
     required List<String> smsNumbers,
     required bool smsFallbackEnabled,
+    Map<String, Object> extra = const {},
   }) async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
     await _channel.invokeMethod<void>(method, {
       'deadlineMillis': nextCheckIn.millisecondsSinceEpoch,
       'smsNumbers': smsNumbers,
       'smsFallbackEnabled': smsFallbackEnabled,
+      ...extra,
     });
   }
 

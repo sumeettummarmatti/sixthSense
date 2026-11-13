@@ -3,6 +3,17 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-14 — sumeet: Sudden SOS (volume buttons, voice), SOS recording, Audio Escort
+
+- **Volume Down ×5 (or hold)** during a journey → 5 s silent countdown → SOS sent from native code (works with the app closed), plus SMS when offline. Only the PIN cancels; the duress PIN looks like a cancel and sends a silent alarm. Quick Settings tile and widget use the same countdown. Power button can't be used by apps (Android reserves it).
+- **Voice SOS**: "help", "bachao", "madad", "bacha lo", heard offline on the phone (Vosk Hindi + Indian English, ~80 MB voice pack downloaded in the app). Countdown 3–9 s: shorter when shouted/struggling, longer when the phone lies still. Practice mode shows what it heard and sends nothing. Tests: 0/16 false alarms, 11/13 caught; Kannada not available.
+- **SOS recording**: keeps the 15 s before the trigger (RAM only), records 5 s AAC clips encrypted on the phone, plays them live (E2E) to contacts and responders on their way; export as one .aac for a police complaint; owner deletes.
+- **Audio Escort**: owner starts it (or accepts a contact's request), picks listeners and up to 3 h; listeners hear live and see location; stop needs the PIN; duress PIN looks stopped and raises a silent alarm.
+- Relay now carries encrypted audio; for offline listeners the server keeps only ciphertext, at most 30 min of clips for 24 h, dropped once they may no longer hear.
+- Fixed: silent alarm no longer shrinks the timer (a visible giveaway).
+- Tests: backend 216, Flutter 33, Kotlin 12 pass. Verified live on the emulator: volume SOS, pre-roll recording, E2E audio decrypted by simulated responders, export, escort start/stop, duress.
+- Not yet verified: screen-off volume presses and English voice on a real phone (emulator limits). Next: shruj tests on her phone.
+
 ## 2026-11-13 — sumeet: test session with shruj, simulated responders, stability fixes
 
 - Tested with shruj: map picker and SOS with responders passed; Shruj walking to me partly done.

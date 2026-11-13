@@ -396,6 +396,78 @@ class DemoApi {
         await _request('POST', '/journeys/$journeyId/end'),
       );
 
+  // ---- Audio Escort (P1-W3) ----
+
+  Future<Escort> startEscort({
+    required String journeyId,
+    required int minutes,
+    required List<String> contactLinkIds,
+    String? requestId,
+  }) async => Escort.fromJson(
+    await _request(
+      'POST',
+      '/escorts',
+      body: {
+        'journey_id': journeyId,
+        'minutes': minutes,
+        'contact_link_ids': contactLinkIds,
+        'request_id': ?requestId,
+      },
+    ),
+  );
+
+  /// My running escort, or null.
+  Future<Escort?> currentEscort() async {
+    try {
+      return Escort.fromJson(await _request('GET', '/escorts/current'));
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// [duress] gets the same answer but also raises a silent alarm.
+  Future<void> stopEscort(String escortId, {required bool duress}) => _request(
+    'POST',
+    '/escorts/$escortId/stop',
+    body: {'result': duress ? 'duress' : 'ok'},
+  );
+
+  /// Escorts I can listen to right now.
+  Future<List<ListeningEscort>> listeningEscorts() async {
+    final result = await _request('GET', '/escorts/listening');
+    return [
+      for (final item in result['escorts'] as List)
+        ListeningEscort.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  /// People who made me their trusted contact.
+  Future<List<SupportedPerson>> supporting() async {
+    final result = await _request('GET', '/escorts/supporting');
+    return [
+      for (final item in result['people'] as List)
+        SupportedPerson.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  Future<void> askForEscort(String contactLinkId) => _request(
+    'POST',
+    '/escorts/requests',
+    body: {'contact_link_id': contactLinkId},
+  );
+
+  Future<List<EscortRequestView>> escortRequests() async {
+    final result = await _request('GET', '/escorts/requests');
+    return [
+      for (final item in result['requests'] as List)
+        EscortRequestView.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  Future<void> declineEscortRequest(String requestId) =>
+      _request('POST', '/escorts/requests/$requestId/decline');
+
   Future<void> _saveSession(Map<String, dynamic> json) async {
     await identity.saveSession(
       deviceId: json['device_id'] as String,
@@ -754,4 +826,78 @@ class ResponderOffer {
       roughLongitude: (area?['longitude'] as num?)?.toDouble(),
     );
   }
+}
+
+class Escort {
+  const Escort({
+    required this.id,
+    required this.journeyId,
+    required this.endsAt,
+    required this.listenerLinkIds,
+  });
+
+  factory Escort.fromJson(Map<String, dynamic> json) => Escort(
+    id: json['id'] as String,
+    journeyId: json['journey_id'] as String,
+    endsAt: DateTime.parse(json['ends_at'] as String).toLocal(),
+    listenerLinkIds: [
+      for (final id in json['listener_link_ids'] as List) id as String,
+    ],
+  );
+
+  final String id;
+  final String journeyId;
+  final DateTime endsAt;
+  final List<String> listenerLinkIds;
+}
+
+class ListeningEscort {
+  const ListeningEscort({
+    required this.escortId,
+    required this.journeyId,
+    required this.ownerLabel,
+    required this.endsAt,
+  });
+
+  factory ListeningEscort.fromJson(Map<String, dynamic> json) =>
+      ListeningEscort(
+        escortId: json['escort_id'] as String,
+        journeyId: json['journey_id'] as String,
+        ownerLabel: json['owner_label'] as String,
+        endsAt: DateTime.parse(json['ends_at'] as String).toLocal(),
+      );
+
+  final String escortId;
+  final String journeyId;
+  final String ownerLabel;
+  final DateTime endsAt;
+}
+
+class SupportedPerson {
+  const SupportedPerson({
+    required this.contactLinkId,
+    required this.ownerLabel,
+  });
+
+  factory SupportedPerson.fromJson(Map<String, dynamic> json) =>
+      SupportedPerson(
+        contactLinkId: json['contact_link_id'] as String,
+        ownerLabel: json['owner_label'] as String,
+      );
+
+  final String contactLinkId;
+  final String ownerLabel;
+}
+
+class EscortRequestView {
+  const EscortRequestView({required this.id, required this.contactLinkId});
+
+  factory EscortRequestView.fromJson(Map<String, dynamic> json) =>
+      EscortRequestView(
+        id: json['id'] as String,
+        contactLinkId: json['contact_link_id'] as String,
+      );
+
+  final String id;
+  final String contactLinkId;
 }

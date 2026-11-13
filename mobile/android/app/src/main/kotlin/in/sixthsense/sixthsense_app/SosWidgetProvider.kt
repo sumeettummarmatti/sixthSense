@@ -32,7 +32,9 @@ class SosWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_REQUEST_SOS) LocalSosNotifier.show(context)
+        if (intent.action == ACTION_REQUEST_SOS) {
+            SosGuard.current?.trigger(TriggerSource.BUTTON, "widget") ?: LocalSosNotifier.show(context)
+        }
     }
 
     private companion object {

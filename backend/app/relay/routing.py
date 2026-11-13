@@ -1,9 +1,10 @@
-"""Who may receive a location envelope. The server reads only the plain routing fields
-(session_id, sender_key_id, recipient_key_id); coordinates stay encrypted end to end."""
+"""Who may receive a location or audio envelope. The server reads only the plain routing fields
+(session_id, sender_key_id, recipient_key_id); coordinates and audio stay encrypted end to end."""
 
 import base64
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import cast
 
 from sqlalchemy import select
@@ -11,10 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.contacts.models import TrustedContact
 from app.escalation import helpers
+from app.escort import service as escort_service
 from app.identity.models import Device, DeviceE2EKeys
 from app.identity.router import CurrentSession
 from app.journey.models import Journey
-from app.journey.state import State
+from app.journey.state import ESCALATED_STATES, State
 
 ENVELOPE_FIELDS = frozenset(
     {
@@ -31,6 +33,8 @@ ENVELOPE_FIELDS = frozenset(
 )
 MAX_ENVELOPES = 10
 MAX_FIELD_LENGTH = 2048
+# A 5 s voice clip is ~10 KB of AAC; base64 twice (inside and outside the cipher) ~18 KB.
+MAX_AUDIO_CIPHERTEXT = 65536
 
 
 class RelayError(ValueError):
@@ -43,7 +47,7 @@ class Routed:
     not_allowed: int = 0
 
 
-def _validate(envelopes: object) -> uuid.UUID:
+def _validate(envelopes: object, max_ciphertext: int = MAX_FIELD_LENGTH) -> uuid.UUID:
     if not isinstance(envelopes, list) or not 1 <= len(envelopes) <= MAX_ENVELOPES:
         raise RelayError("bad_envelopes")
     session_ids = set()
@@ -54,7 +58,8 @@ def _validate(envelopes: object) -> uuid.UUID:
             raise RelayError("unsupported_version")
         for name in ENVELOPE_FIELDS - {"v"}:
             value = envelope[name]
-            if not isinstance(value, str) or not 0 < len(value) <= MAX_FIELD_LENGTH:
+            limit = max_ciphertext if name == "ciphertext" else MAX_FIELD_LENGTH
+            if not isinstance(value, str) or not 0 < len(value) <= limit:
                 raise RelayError("bad_envelope")
         session_ids.add(envelope["session_id"])
     if len(session_ids) != 1:
@@ -91,6 +96,56 @@ def route(db: Session, sender: CurrentSession, envelopes: object) -> Routed:
     else:
         raise RelayError("no_open_journey")
 
+    return _deliveries(db, sender, envelopes, allowed_accounts, "location")
+
+
+def audio_recipients(db: Session, journey: Journey, now: datetime) -> set[uuid.UUID]:
+    """Who may hear the traveller: everyone alerted during an alert (contacts and responders on
+    their way), plus the listeners of a running audio escort. Nobody otherwise (rule 4)."""
+    allowed: set[uuid.UUID] = set()
+    if journey.state in {state.value for state in ESCALATED_STATES}:
+        allowed |= _traveller_recipients(db, journey)
+    escort = escort_service.running(db, journey.id, now)
+    if escort is not None:
+        allowed |= escort_service.listener_accounts(db, escort)
+    return allowed
+
+
+def route_audio(db: Session, sender: CurrentSession, envelopes: object, now: datetime) -> Routed:
+    """Check an audio clip message from the traveller and route each envelope."""
+    journey_id = _validate(envelopes, MAX_AUDIO_CIPHERTEXT)
+    envelopes = cast(list[dict], envelopes)
+    journey = db.get(Journey, journey_id)
+    if (
+        journey is None
+        or journey.state == State.RESOLVED
+        or journey.account_id != sender.account_id
+    ):
+        raise RelayError("no_open_journey")
+    allowed = audio_recipients(db, journey, now)
+    if not allowed:
+        raise RelayError("not_listening")
+    return _deliveries(db, sender, envelopes, allowed, "audio")
+
+
+def may_still_hear(db: Session, journey_id: str, account_id: uuid.UUID, now: datetime) -> bool:
+    """A clip queued for an offline listener is dropped once they may no longer hear it."""
+    try:
+        journey = db.get(Journey, uuid.UUID(journey_id))
+    except ValueError:
+        return False
+    if journey is None or journey.state == State.RESOLVED:
+        return False
+    return account_id in audio_recipients(db, journey, now)
+
+
+def _deliveries(
+    db: Session,
+    sender: CurrentSession,
+    envelopes: list[dict],
+    allowed_accounts: set[uuid.UUID],
+    kind: str,
+) -> Routed:
     sender_keys = db.get(DeviceE2EKeys, sender.device_id)
     if sender_keys is None or any(
         envelope["sender_key_id"] != str(sender_keys.key_id) for envelope in envelopes
@@ -123,6 +178,6 @@ def route(db: Session, sender: CurrentSession, envelopes: object) -> Routed:
             routed.not_allowed += 1
             continue
         routed.deliveries.append(
-            (target[0], {"type": "location", "envelope": envelope, "sender": sender_block})
+            (target[0], {"type": kind, "envelope": envelope, "sender": sender_block})
         )
     return routed

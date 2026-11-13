@@ -34,6 +34,7 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
@@ -46,4 +47,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Offline speech recognition for Voice SOS (Apache 2.0). Models are downloaded on request.
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+    testImplementation("junit:junit:4.13.2")
 }

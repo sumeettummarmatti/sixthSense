@@ -777,6 +777,15 @@ paths:
            LiveLocationCipher.decrypt using the sender block as the verification key.
         4. Either side: {"type": "ping"} -> {"type": "pong"}. Send a ping every ~30 s to keep the
            connection alive and notice an expired token early.
+        5. Audio (P2-W2-encrypted-audio-relay): the traveller sends
+           {"type": "audio", "envelopes": [...]}: one 5 s AAC clip per frame, encrypted with
+           LiveLocationCipher.encryptAudio (HKDF info "sixthsense/audio-clip/v1"), ciphertext up to
+           65536 chars, at most 8 frames per 20 s. Allowed only during an alert (contacts on the alert
+           list + responders on their way) or a running audio escort (its listeners); otherwise
+           error not_listening. Listeners receive {"type": "audio", "envelope": ..., "sender": ...}.
+           For a listener who is offline the server keeps the ciphertext (which it cannot read) in
+           Redis only: last 30 min of clips, 24 h at most, handed over right after "ready" on
+           reconnect, and dropped unread once they may no longer hear the traveller.
       responses:
         "101": {description: Switching protocols to WebSocket}
   /escalations/{escalation_id}/owner-keys:
@@ -932,6 +941,132 @@ paths:
       responses:
         "204": {description: Done}
         "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escorts:
+    post:
+      tags: [escort]
+      summary: "Start an audio escort (owner's phone only)"
+      description: "Chosen contacts hear the owner live (E2E audio over /relay/ws) until it ends. 5-180 minutes. 404 no_open_journey, 422 unknown_contact, 409 escort_already_on."
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/EscortStart"}
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EscortView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escorts/current:
+    get:
+      tags: [escort]
+      summary: "My running escort (404 no_escort)"
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EscortView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escorts/{escort_id}/stop:
+    post:
+      tags: [escort]
+      summary: "Stop with the PIN checked on the phone"
+      description: "ok and duress get the same answer; duress also starts a covert SOS on the journey, so contacts are alerted and keep hearing the owner."
+      security: [{bearer: []}]
+      parameters:
+        - {name: escort_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CheckIn"}
+      responses:
+        "200":
+          description: Stopped
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Stopped"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escorts/listening:
+    get:
+      tags: [escort]
+      summary: "Escorts I may listen to right now"
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ListeningList"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escorts/supporting:
+    get:
+      tags: [escort]
+      summary: "People who made me their trusted contact (to ask for an escort)"
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SupportedList"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escorts/requests:
+    post:
+      tags: [escort]
+      summary: "A contact asks the owner to start an escort"
+      description: "One pending request per link for 10 minutes. The owner is notified; only they can start one."
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contact_link_id]
+              properties:
+                contact_link_id: {type: string, format: uuid}
+      responses:
+        "201":
+          description: Asked
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EscortRequestView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+    get:
+      tags: [escort]
+      summary: "Pending requests to me (last 10 minutes)"
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items: {$ref: "#/components/schemas/EscortRequestView"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /escorts/requests/{request_id}/decline:
+    post:
+      tags: [escort]
+      summary: "Say no to a request"
+      security: [{bearer: []}]
+      parameters:
+        - {name: request_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Stopped"}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
 components:
   securitySchemes:
     bearer:
@@ -944,6 +1079,55 @@ components:
     NotAuthenticated:
       description: "Missing, expired or unknown access token (detail: not_authenticated)"
   schemas:
+    EscortStart:
+      type: object
+      required: [journey_id, minutes, contact_link_ids]
+      properties:
+        journey_id: {type: string, format: uuid}
+        minutes: {type: integer, minimum: 5, maximum: 180}
+        contact_link_ids: {type: array, minItems: 1, maxItems: 5, items: {type: string, format: uuid}}
+        request_id: {type: string, format: uuid, nullable: true}
+    EscortView:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        journey_id: {type: string, format: uuid}
+        started_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+        listener_link_ids: {type: array, items: {type: string, format: uuid}}
+    Stopped:
+      type: object
+      properties:
+        stopped: {type: boolean}
+    ListeningList:
+      type: object
+      properties:
+        escorts:
+          type: array
+          items:
+            type: object
+            properties:
+              escort_id: {type: string, format: uuid}
+              journey_id: {type: string, format: uuid}
+              contact_link_id: {type: string, format: uuid}
+              owner_label: {type: string}
+              ends_at: {type: string, format: date-time}
+    SupportedList:
+      type: object
+      properties:
+        people:
+          type: array
+          items:
+            type: object
+            properties:
+              contact_link_id: {type: string, format: uuid}
+              owner_label: {type: string}
+    EscortRequestView:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        contact_link_id: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
     Error:
       type: object
       required: [detail]

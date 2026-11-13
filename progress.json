@@ -1,6 +1,6 @@
 {
   "project": "sixthsense",
-  "updated_at": "2026-11-13T18:45:00+05:30",
+  "updated_at": "2026-11-14",
   "updated_by": "sumeet",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
@@ -264,6 +264,41 @@
           "status": "done",
           "week": 1,
           "notes": "sumeet: 2026-11-13 geolocator foreground service (type location) with visible notice; FOREGROUND_SERVICE_LOCATION permission. Needs a real-phone lock-screen test."
+        },
+        {
+          "id": "P1-W2-background-volume-sos",
+          "title": "Sudden SOS: Volume Down x5 / hold, screen off, silent countdown, native send",
+          "status": "in_progress",
+          "week": 2,
+          "notes": "sumeet: 2026-11-14 built and tested on emulator with the app open or in the background: 5 presses -> 5 s countdown -> SOS sent from Kotlin (re-signs in if token expired) + rough area; real PIN cancels, duress PIN looks cancelled and sends a covert SOS; tile/widget use the same countdown. Screen-off press could not be tested on the emulator (adb/console key injection does not reach media sessions when asleep): needs shruj's real phone, screen off, in pocket."
+        },
+        {
+          "id": "P1-W2-sos-audio-evidence",
+          "title": "SOS recording with 15 s pre-roll, live to helpers, export for FIR",
+          "status": "done",
+          "week": 2,
+          "notes": "sumeet: 2026-11-14 verified live: 15 s pre-roll (RAM only) + live 5 s AAC clips, Keystore-encrypted on the phone; delivered E2E to 2 simulated responders who decrypted valid AAC (16 kHz mono); export = one 137 s .aac via share sheet (decrypted copy deleted at next export/app start); recording stops when the alert is resolved."
+        },
+        {
+          "id": "P1-W2-voice-sos-spike",
+          "title": "Voice SOS engine choice (free, offline)",
+          "status": "done",
+          "week": 2,
+          "notes": "sumeet: 2026-11-14 Vosk small hi + en-in, full transcription + word spotting. Laptop and on-phone: 0/16 false alarms on everyday sentences (8 sentences x clean/noisy), 11/13 distress clips caught (single 'help' heard as 'hill'/'health'; 'help help' works). Grammar mode rejected: many false alarms. Porcupine rejected: not free for commercial use. Kannada: no free model."
+        },
+        {
+          "id": "P1-W2-voice-sos",
+          "title": "Voice SOS during a journey (help/bachao/madad/bacha lo), adaptive countdown, practice mode",
+          "status": "in_progress",
+          "week": 2,
+          "notes": "sumeet: 2026-11-14 built; voice pack (~80 MB) downloads in-app; Practice mode shows what it heard. Live mic test on emulator: 'bachao bachao' caught (9 s countdown, phone still), normal sentence ignored; English via laptop speaker too distorted. Needs a real-phone test with the team's own voices."
+        },
+        {
+          "id": "P1-W3-audio-escort",
+          "title": "Audio Escort: owner starts/accepts request, picks listeners and <=3 h, PIN stop, duress",
+          "status": "in_progress",
+          "week": 3,
+          "notes": "sumeet: 2026-11-14 backend + UI done; verified on emulator: start (contact + 30 min), clips reach the listener queue, wrong PIN refused, real PIN stops. Listener side (Listen live button, escort card, Ask to keep someone company) covered by code + server tests; needs a two-phone test with shruj."
         }
       ]
     },
@@ -374,6 +409,13 @@
           "status": "todo",
           "week": "later",
           "notes": "sumeet: skipped for demo"
+        },
+        {
+          "id": "P2-W2-encrypted-audio-relay",
+          "title": "Relay carries E2E audio clips; offline queue (ciphertext, 30 min / 24 h)",
+          "status": "done",
+          "week": 2,
+          "notes": "sumeet: 2026-11-14 'audio' frames (64 KB ciphertext, 8 per 20 s), only during an alert or running escort; offline listeners get ciphertext from Redis on reconnect, dropped once they may no longer hear. 18 new tests; 216 backend tests pass."
         }
       ]
     },
@@ -794,6 +836,18 @@
       "by": "sumeet",
       "decision": "Nearby alerts go only to approved, on-duty responders (not any app user); rough area until 'I'm going'; only SOS/full alerts, never a single missed check-in; contacts still alerted in parallel",
       "why": "Rules 1 and 4: a stalker must not be able to install the app and get pinged with women's live positions"
+    },
+    {
+      "date": "2026-11-14",
+      "by": "sumeet",
+      "decision": "Sudden SOS: Volume Down x5 (or hold) and voice words both start a silent countdown; only the PIN cancels; duress PIN = covert SOS. Power button cannot be used by apps. Voice listening only during a journey (mic notification), engine Vosk hi+en-in full transcription, models downloaded on request.",
+      "why": "Works without unlocking; no false SOS from TV via countdown; free and offline (rules 3, budget)"
+    },
+    {
+      "date": "2026-11-14",
+      "by": "sumeet",
+      "decision": "Audio (SOS recording, escort) goes E2E through the relay; server keeps only ciphertext for offline listeners (Redis, last 30 min, max 24 h); evidence stays encrypted on the owner's phone until they delete it",
+      "why": "Rule 2: server never holds readable audio or location; FIR evidence stays under the owner's control"
     }
   ],
   "blockers": [
@@ -833,15 +887,22 @@
       "by": "sumeet",
       "date": "2026-11-13",
       "blocker": "A full alert can only be ended by a trusted contact; with responders only (no contacts) it can't be closed. Needs a decision (e.g. traveller's real PIN after a responder has arrived)."
+    },
+    {
+      "date": "2026-11-14",
+      "by": "sumeet",
+      "blocker": "Screen-off volume trigger and English voice words not verifiable on the emulator; need real-phone tests (shruj)",
+      "owner": "shruj"
     }
   ],
   "next_steps": [
+    "shruj: install ~/Desktop/sixthsense-demo/sixthsense-sudden-sos.apk (or flutter run on p1/sudden-sos); screen off, phone in pocket, press Volume Down 5x -> SOS must arrive",
+    "shruj + sumeet: download voice pack, Practice mode with our own voices (help help / bachao / madad / bacha lo), and 10 min of TV/street noise for false alarms",
+    "shruj + sumeet: Audio Escort two-phone test (shruj listens; Ask to keep someone company; duress stop)",
+    "sumeet: legal review line in privacy notice for audio recording; decide evidence retention policy text",
     "sumeet + shruj: resume the scene list from Scene 3 (Shruj walks to Sumeet), then Scenes 4-12; responders: cd backend && uv run python scripts/sim_responders.py --scenario <normal|slow|far|busy> --center 12.8870,77.5785",
     "sumeet: decide who can end a full alert without contacts (suggested: traveller's real PIN after a helper says arrived)",
-    "sumeet: resume live sharing + journey after an app restart (today a crash stops sharing until a new journey)",
-    "sumeet: after tests pass, PR p1/live-location-and-ui and p3/nearby-responders into main (with approval)",
-    "shruj (for tanisha): SIM phone offline SMS + reboot test; jival: script + slides (add the responder story)",
-    "after demo: revoke Telegram bot token (@BotFather /revoke), assign P3/P4 owners, Vultr free trial, real Gmail SMTP, own Valhalla instead of the public walking router"
+    "sumeet: resume live sharing + journey after an app restart (today a crash stops sharing until a new journey)"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
 }

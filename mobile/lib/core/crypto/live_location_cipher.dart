@@ -88,6 +88,69 @@ class LiveLocationPoint {
   }
 }
 
+/// One voice clip inside an audio envelope: what kind, its order, and the AAC bytes.
+/// Layout: 4-byte big-endian length of a small JSON header, the header, then the audio.
+class AudioClip {
+  const AudioClip({
+    required this.kind,
+    required this.sequence,
+    required this.recordedAt,
+    required this.audio,
+  });
+
+  /// `sos` (recording after an SOS) or `escort` (Audio Escort).
+  final String kind;
+  final int sequence;
+  final DateTime recordedAt;
+  final List<int> audio;
+
+  List<int> toBytes() {
+    final meta = utf8.encode(
+      jsonEncode({
+        'kind': kind,
+        'sequence': sequence,
+        'recorded_at_ms': recordedAt.toUtc().millisecondsSinceEpoch,
+      }),
+    );
+    final length = meta.length;
+    return [
+      (length >> 24) & 0xFF,
+      (length >> 16) & 0xFF,
+      (length >> 8) & 0xFF,
+      length & 0xFF,
+      ...meta,
+      ...audio,
+    ];
+  }
+
+  factory AudioClip.fromBytes(List<int> bytes) {
+    if (bytes.length < 4) {
+      throw const FormatException('Audio clip is too short.');
+    }
+    final length =
+        (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+    if (length <= 0 || length > 1024 || bytes.length < 4 + length) {
+      throw const FormatException('Audio clip header is invalid.');
+    }
+    final meta = jsonDecode(
+      utf8.decode(bytes.sublist(4, 4 + length)),
+    ) as Map<String, dynamic>;
+    final kind = meta['kind'];
+    if (kind != 'sos' && kind != 'escort') {
+      throw const FormatException('Audio clip kind is invalid.');
+    }
+    return AudioClip(
+      kind: kind as String,
+      sequence: meta['sequence'] as int,
+      recordedAt: DateTime.fromMillisecondsSinceEpoch(
+        meta['recorded_at_ms'] as int,
+        isUtc: true,
+      ),
+      audio: bytes.sublist(4 + length),
+    );
+  }
+}
+
 /// Versioned, signed ciphertext envelope for one recipient and one location.
 /// Metadata contains identifiers only; coordinates and time are encrypted.
 class LiveLocationEnvelope {
@@ -162,12 +225,90 @@ class LiveLocationCipher {
   final AesGcm _aesGcm;
   final Ed25519 _ed25519;
 
+  /// Separate key derivation for audio, so a clip can never be read as a location or back.
+  static const audioProtocolInfo = 'sixthsense/audio-clip/v1';
+
   Future<LiveLocationEnvelope> encrypt({
     required String sessionId,
     required String senderKeyId,
     required KeyPair senderSigningKeyPair,
     required LocationRecipientKeys recipient,
     required LiveLocationPoint point,
+  }) => _seal(
+    info: protocolInfo,
+    sessionId: sessionId,
+    senderKeyId: senderKeyId,
+    senderSigningKeyPair: senderSigningKeyPair,
+    recipient: recipient,
+    clearText: utf8.encode(jsonEncode(point.toJson())),
+  );
+
+  Future<LiveLocationPoint> decrypt({
+    required LiveLocationEnvelope envelope,
+    required String expectedSessionId,
+    required String expectedRecipientKeyId,
+    required KeyPair recipientKeyPair,
+    required LocationSenderVerificationKey sender,
+    int? lastAcceptedSequence,
+  }) async {
+    final clearText = await _open(
+      info: protocolInfo,
+      envelope: envelope,
+      expectedSessionId: expectedSessionId,
+      expectedRecipientKeyId: expectedRecipientKeyId,
+      recipientKeyPair: recipientKeyPair,
+      sender: sender,
+    );
+    final point = LiveLocationPoint.fromJson(
+      jsonDecode(utf8.decode(clearText)) as Map<String, dynamic>,
+    );
+    if (lastAcceptedSequence != null &&
+        point.sequence <= lastAcceptedSequence) {
+      throw const FormatException('Location point is stale or replayed.');
+    }
+    return point;
+  }
+
+  /// One AAC voice clip (SOS recording or Audio Escort), same scheme as locations.
+  Future<LiveLocationEnvelope> encryptAudio({
+    required String sessionId,
+    required String senderKeyId,
+    required KeyPair senderSigningKeyPair,
+    required LocationRecipientKeys recipient,
+    required AudioClip clip,
+  }) => _seal(
+    info: audioProtocolInfo,
+    sessionId: sessionId,
+    senderKeyId: senderKeyId,
+    senderSigningKeyPair: senderSigningKeyPair,
+    recipient: recipient,
+    clearText: clip.toBytes(),
+  );
+
+  Future<AudioClip> decryptAudio({
+    required LiveLocationEnvelope envelope,
+    required String expectedSessionId,
+    required String expectedRecipientKeyId,
+    required KeyPair recipientKeyPair,
+    required LocationSenderVerificationKey sender,
+  }) async => AudioClip.fromBytes(
+    await _open(
+      info: audioProtocolInfo,
+      envelope: envelope,
+      expectedSessionId: expectedSessionId,
+      expectedRecipientKeyId: expectedRecipientKeyId,
+      recipientKeyPair: recipientKeyPair,
+      sender: sender,
+    ),
+  );
+
+  Future<LiveLocationEnvelope> _seal({
+    required String info,
+    required String sessionId,
+    required String senderKeyId,
+    required KeyPair senderSigningKeyPair,
+    required LocationRecipientKeys recipient,
+    required List<int> clearText,
   }) async {
     _requireId(sessionId, 'session id');
     _requireId(senderKeyId, 'sender key id');
@@ -189,10 +330,10 @@ class LiveLocationCipher {
           .deriveKey(
             secretKey: sharedSecret,
             nonce: ephemeralPublicKey.bytes,
-            info: utf8.encode('$protocolInfo|$sessionId|${recipient.keyId}'),
+            info: utf8.encode('$info|$sessionId|${recipient.keyId}'),
           );
       final secretBox = await _aesGcm.encrypt(
-        utf8.encode(jsonEncode(point.toJson())),
+        clearText,
         secretKey: encryptionKey,
         aad: headerBytes,
       );
@@ -218,13 +359,13 @@ class LiveLocationCipher {
     }
   }
 
-  Future<LiveLocationPoint> decrypt({
+  Future<List<int>> _open({
+    required String info,
     required LiveLocationEnvelope envelope,
     required String expectedSessionId,
     required String expectedRecipientKeyId,
     required KeyPair recipientKeyPair,
     required LocationSenderVerificationKey sender,
-    int? lastAcceptedSequence,
   }) async {
     if (envelope.version != 1 ||
         envelope.sessionId != expectedSessionId ||
@@ -271,24 +412,14 @@ class LiveLocationCipher {
         .deriveKey(
           secretKey: sharedSecret,
           nonce: ephemeralPublicKey.bytes,
-          info: utf8.encode(
-            '$protocolInfo|$expectedSessionId|$expectedRecipientKeyId',
-          ),
+          info: utf8.encode('$info|$expectedSessionId|$expectedRecipientKeyId'),
         );
     try {
-      final clearText = await _aesGcm.decrypt(
+      return await _aesGcm.decrypt(
         secretBox,
         secretKey: encryptionKey,
         aad: headerBytes,
       );
-      final point = LiveLocationPoint.fromJson(
-        jsonDecode(utf8.decode(clearText)) as Map<String, dynamic>,
-      );
-      if (lastAcceptedSequence != null &&
-          point.sequence <= lastAcceptedSequence) {
-        throw const FormatException('Location point is stale or replayed.');
-      }
-      return point;
     } finally {
       encryptionKey.destroy();
     }

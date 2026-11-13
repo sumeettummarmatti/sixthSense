@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 import '../../core/api/device_identity.dart';
 import '../../core/location/geo.dart';
 import '../../core/location/live_location.dart';
+import '../../core/sos/live_audio.dart';
+import '../sos/sos_widgets.dart';
 import 'contact_alerts.dart';
 import 'live_location_panel.dart';
 
@@ -32,6 +34,7 @@ class ContactAlertsScreen extends StatefulWidget {
 
 class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
   List<ContactAlert>? _alerts;
+  List<ListeningEscort> _escorts = const [];
   String? _error;
   final _busy = <String>{};
   Timer? _timer;
@@ -62,8 +65,68 @@ class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
         });
       }
       await _syncSharingBack(alerts);
+      await _refreshEscorts(alerts);
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not reach the server.');
+    }
+  }
+
+  /// Audio escorts I can listen to; stop playing anything that has ended.
+  Future<void> _refreshEscorts(List<ContactAlert> alerts) async {
+    if (widget.relay == null) return;
+    try {
+      final escorts = await widget.api.listeningEscorts();
+      if (mounted) setState(() => _escorts = escorts);
+      await LiveAudioPlayer.instance.keepOnly({
+        for (final alert in alerts)
+          if (alert.journeyId != null) alert.journeyId!,
+        for (final escort in escorts) escort.journeyId,
+      });
+    } catch (_) {
+      // Escorts are optional; alerts still work.
+    }
+  }
+
+  Future<void> _askForEscort() async {
+    List<SupportedPerson> people;
+    try {
+      people = await widget.api.supporting();
+    } catch (_) {
+      _show('Could not reach the server.');
+      return;
+    }
+    if (!mounted) return;
+    if (people.isEmpty) {
+      _show('Nobody has added you as a trusted contact yet.');
+      return;
+    }
+    final chosen = await showDialog<SupportedPerson>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Ask to keep someone company'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+              'They get a request. Only they can start an audio escort, and they choose for how long.',
+            ),
+          ),
+          for (final person in people)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(person),
+              child: Text(person.ownerLabel),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null) return;
+    try {
+      await widget.api.askForEscort(chosen.contactLinkId);
+      _show(
+        'Asked ${chosen.ownerLabel}. You will be able to listen if they start one.',
+      );
+    } catch (_) {
+      _show('Could not send the request.');
     }
   }
 
@@ -163,6 +226,54 @@ class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
                   ),
                 ],
               ),
+              if (widget.relay != null) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('ask-escort'),
+                    onPressed: _askForEscort,
+                    icon: const Icon(Icons.hearing_outlined),
+                    label: const Text('Ask to keep someone company'),
+                  ),
+                ),
+                for (final escort in _escorts)
+                  Card(
+                    key: ValueKey('escort-${escort.escortId}'),
+                    margin: const EdgeInsets.only(top: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${escort.ownerLabel} started an audio escort',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Until ${TimeOfDay.fromDateTime(escort.endsAt).format(context)}. '
+                            'Nothing is kept on your phone. If something sounds wrong, call them or 112.',
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: LiveAudioButton(
+                              sessionId: escort.journeyId,
+                              relay: widget.relay!,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          LiveLocationPanel(
+                            journeyId: escort.journeyId,
+                            ownerLabel: escort.ownerLabel,
+                            relay: widget.relay,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
               const SizedBox(height: 16),
               if (_error != null)
                 Padding(
@@ -314,6 +425,16 @@ class _AlertCard extends StatelessWidget {
                 relay: relay,
                 helping: alert.iAmHelping,
               ),
+              if (relay != null) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: LiveAudioButton(
+                    sessionId: alert.journeyId!,
+                    relay: relay!,
+                  ),
+                ),
+              ],
             ],
             const SizedBox(height: 14),
             Text('Verification code', style: text.labelMedium),

@@ -7,6 +7,7 @@ import '../../core/api/device_identity.dart';
 import '../../core/location/geo.dart';
 import '../../core/location/live_location.dart';
 import '../contacts/live_location_panel.dart';
+import '../sos/sos_widgets.dart';
 import '../map/live_map.dart';
 
 /// Verified responders (F6): go on duty, get asked when someone nearby
@@ -540,6 +541,16 @@ class _OfferCard extends StatelessWidget {
                       ? null
                       : _roughMap(),
                 ),
+              if (offer.journeyId != null && relay != null) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: LiveAudioButton(
+                    sessionId: offer.journeyId!,
+                    relay: relay!,
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               if (offer.arrived)
                 Text(

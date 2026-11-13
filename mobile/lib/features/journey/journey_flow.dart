@@ -8,12 +8,16 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../core/api/device_identity.dart';
 import '../../core/contacts/contact_book.dart';
+import '../../core/crypto/live_location_cipher.dart';
 import '../../core/journey/journey_runtime.dart';
 import '../../core/location/live_location.dart';
+import '../../core/sos/sudden_sos.dart';
 import '../../core/theme/app_theme.dart';
 import '../contacts/contact_alerts.dart';
 import '../contacts/contact_alerts_screen.dart';
 import '../help/helpers_panel.dart';
+import '../sos/sos_widgets.dart';
+import '../sos/sudden_sos_screen.dart';
 import 'destination_picker.dart';
 import '../walk/walk_flow.dart';
 import '../map/map_route_screen.dart';
@@ -27,10 +31,14 @@ class JourneyFlow extends StatefulWidget {
     this.onDuressRequested,
     this.onCovertSosRequested,
     this.relay,
+    this.sos,
   });
 
   /// Shares live location with contacts during a journey; null turns it off (tests).
   final LiveLocationRelay? relay;
+
+  /// Sudden SOS on the phone (volume buttons, voice, recording, escort).
+  final SuddenSos? sos;
   final DateTime Function()? now;
   final JourneyRuntime runtime;
   final DemoApi api;
@@ -61,11 +69,24 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   DateTime _lastAreaSent = DateTime.fromMillisecondsSinceEpoch(0);
   var _covertSos = false;
 
+  // Sudden SOS and Audio Escort.
+  SuddenSos get _sos => widget.sos ?? SuddenSos.instance;
+  StreamSubscription<GuardEvent>? _sosEvents;
+  Timer? _audioPump;
+  var _pumping = false;
+  Timer? _escortPoll;
+  Escort? _escort;
+  List<EscortRequestView> _escortRequests = const [];
+  var _wasAlert = false;
+  var _countdownWrongPins = 0;
+
   @override
   void initState() {
     super.initState();
     _now = widget.now ?? DateTime.now;
     WidgetsBinding.instance.addObserver(this);
+    _sos.attach();
+    _sosEvents = _sos.events.listen(_onSosEvent);
   }
 
   @override
@@ -74,11 +95,244 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     _ticker?.cancel();
     _heartbeatTicker?.cancel();
     _helpPoll?.cancel();
+    _audioPump?.cancel();
+    _escortPoll?.cancel();
+    _sosEvents?.cancel();
     _help.dispose();
     super.dispose();
   }
 
+  // ---- Sudden SOS ----
+
+  void _onSosEvent(GuardEvent event) {
+    if (event.name == 'fired' && _plan != null) {
+      unawaited(_onSuddenSosSent(event.args));
+    }
+  }
+
+  /// The phone sent an SOS by itself (volume buttons, voice, tile, widget).
+  Future<void> _onSuddenSosSent(Map<String, Object?> args) async {
+    final journeyId = _serverJourneyId;
+    final covert = args['covert'] == true;
+    _covertSos = covert;
+    if (journeyId != null && args['serverOk'] != true) {
+      try {
+        await widget.api.requestSos(journeyId, covert: covert);
+      } catch (_) {
+        // Offline: the phone already tried SMS (if set up).
+      }
+    }
+    if (journeyId != null && widget.relay != null) {
+      unawaited(
+        _sendArea(journeyId, now: true).then((_) => _pollHelp(journeyId)),
+      );
+    }
+    if (!mounted || covert) return;
+    unawaited(HapticFeedback.heavyImpact());
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            args['serverOk'] == true || journeyId != null
+                ? 'SOS sent. Your contacts and verified responders nearby are being alerted. Recording has started.'
+                : args['smsSent'] == true
+                ? 'No internet: SOS sent by SMS. Call 112 if you can.'
+                : 'Could not reach the server. Call 112 if you can.',
+          ),
+        ),
+      );
+  }
+
+  Future<void> _cancelCountdownWithPin() async {
+    final plan = _plan;
+    if (plan == null) return;
+    final pin = await askPin(context, title: 'Enter your PIN to cancel');
+    if (!mounted || pin == null) return;
+    if (pin == plan.realPin) {
+      _countdownWrongPins = 0;
+      await _sos.cancelCountdown();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('SOS cancelled.')));
+    } else if (pin == plan.duressPin) {
+      // Looks cancelled; a silent alarm goes out.
+      _countdownWrongPins = 0;
+      _covertSos = true;
+      await _sos.fireNow(covert: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('SOS cancelled.')));
+    } else {
+      _countdownWrongPins++;
+      if (_countdownWrongPins >= 3) {
+        _countdownWrongPins = 0;
+        _covertSos = true;
+        await _sos.fireNow(covert: true);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That PIN did not match. Try again.')),
+      );
+    }
+  }
+
+  /// Hands recorded clips (SOS recording, audio escort) to the relay, which
+  /// encrypts them for the people allowed to hear.
+  Future<void> _pumpAudio() async {
+    final relay = widget.relay;
+    if (relay == null || _pumping) return;
+    _pumping = true;
+    try {
+      for (final kind in const ['sos', 'escort']) {
+        for (final clip in await _sos.takeClips(kind)) {
+          await relay.sendAudio(
+            AudioClip(
+              kind: clip.kind,
+              sequence: clip.sequence,
+              recordedAt: DateTime.now(),
+              audio: clip.bytes,
+            ),
+          );
+        }
+      }
+    } finally {
+      _pumping = false;
+    }
+  }
+
+  // ---- Audio Escort ----
+
+  Future<void> _pollEscort() async {
+    try {
+      final escort = await widget.api.currentEscort();
+      final requests = escort == null
+          ? await widget.api.escortRequests()
+          : const <EscortRequestView>[];
+      if (!mounted) return;
+      if (_escort != null && escort == null) {
+        unawaited(_sos.stopEscortRecording());
+      }
+      setState(() {
+        _escort = escort;
+        _escortRequests = requests;
+      });
+    } catch (_) {
+      // Offline: try again on the next poll.
+    }
+  }
+
+  Future<void> _startEscort(String? requestId) async {
+    final journeyId = _serverJourneyId;
+    if (journeyId == null) return;
+    final requester = requestId == null
+        ? null
+        : _escortRequests.where((r) => r.id == requestId).firstOrNull;
+    final choice = await chooseEscort(
+      context,
+      widget.api,
+      _names,
+      preselectedLinkId: requester?.contactLinkId,
+    );
+    if (choice == null || !mounted) return;
+    final (linkIds, minutes) = choice;
+    try {
+      final escort = await widget.api.startEscort(
+        journeyId: journeyId,
+        minutes: minutes,
+        contactLinkIds: linkIds,
+        requestId: requestId,
+      );
+      final recording = await _sos.startEscortRecording(
+        journeyId,
+        escort.endsAt,
+      );
+      if (!mounted) return;
+      setState(() {
+        _escort = escort;
+        _escortRequests = const [];
+      });
+      if (!recording && defaultTargetPlatform == TargetPlatform.android) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The microphone is off for this journey, so they will not hear anything. '
+              'Allow the microphone and start a new journey.',
+            ),
+          ),
+        );
+      }
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not start the escort (${error.detail}).'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not reach the server.')),
+      );
+    }
+  }
+
+  Future<void> _declineEscort(String requestId) async {
+    try {
+      await widget.api.declineEscortRequest(requestId);
+    } catch (_) {}
+    if (mounted) {
+      setState(
+        () => _escortRequests = _escortRequests
+            .where((r) => r.id != requestId)
+            .toList(),
+      );
+    }
+  }
+
+  Future<void> _stopEscort() async {
+    final escort = _escort;
+    final plan = _plan;
+    if (escort == null || plan == null) return;
+    final pin = await askPin(context, title: 'Enter your PIN to stop');
+    if (!mounted || pin == null) return;
+    final duress = pin == plan.duressPin;
+    if (!duress && pin != plan.realPin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That PIN did not match. Try again.')),
+      );
+      return;
+    }
+    try {
+      await widget.api.stopEscort(escort.id, duress: duress);
+    } catch (_) {
+      // Offline: the escort still ends at its time.
+    }
+    if (duress) {
+      // Looks stopped; contacts are alerted and keep hearing (silent alarm).
+      _covertSos = true;
+    } else {
+      await _sos.stopEscortRecording();
+    }
+    if (!mounted) return;
+    setState(() => _escort = null);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Audio escort stopped.')));
+  }
+
   void _startHelpPolling(String journeyId) {
+    _audioPump?.cancel();
+    _audioPump = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _pumpAudio(),
+    );
+    _escortPoll?.cancel();
+    unawaited(_pollEscort());
+    _escortPoll = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _pollEscort(),
+    );
     _helpPoll?.cancel();
     _knownHelpers.clear();
     _help.value = HelpView.none;
@@ -93,6 +347,12 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   }
 
   void _stopHelpPolling() {
+    _audioPump?.cancel();
+    _escortPoll?.cancel();
+    if (_escort != null) unawaited(_sos.stopEscortRecording());
+    _escort = null;
+    _escortRequests = const [];
+    _wasAlert = false;
     _helpPoll?.cancel();
     _helpPoll = null;
     _knownHelpers.clear();
@@ -109,6 +369,8 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     }
     if (!mounted || _serverJourneyId != journeyId) return;
     _help.value = view;
+    if (_wasAlert && !view.anyAlert) unawaited(_sos.alertOver());
+    _wasAlert = view.anyAlert;
     widget.relay?.setJourneyHelpers([
       for (final helper in view.helpers) ...helper.keys,
     ]);
@@ -165,10 +427,16 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed && _plan != null) {
       _updateCountdown();
       _sendHeartbeat();
+      unawaited(_sos.refresh()); // a countdown may have started in a pocket
     }
   }
 
   Future<void> _startJourney(JourneyPlan plan) async {
+    if (plan.listenForWords || plan.recordAudio) {
+      // Before the timer starts: Android only lets the journey use the
+      // microphone if it was allowed when the journey began.
+      await _sos.requestMicPermission();
+    }
     var nextCheckIn = _now().add(plan.checkInInterval);
     String? serverJourneyId;
     var heartbeatTimeoutMinutes = 10;
@@ -190,6 +458,9 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         nextCheckIn: nextCheckIn,
         smsNumbers: plan.smsNumbers,
         smsFallbackEnabled: plan.smsFallbackEnabled,
+        journeyId: serverJourneyId,
+        apiBaseUrl: widget.api.baseUri.toString(),
+        listenForWords: plan.listenForWords,
       );
     } on PlatformException catch (error) {
       // The phone timer did not start, so don't leave a journey open on the server.
@@ -552,9 +823,22 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       return JourneySetupScreen(onStart: _startJourney, api: widget.api);
     }
     // Rebuild when helpers change so the timer can shrink to make room.
-    return ValueListenableBuilder<HelpView>(
-      valueListenable: _help,
-      builder: (context, _, _) => _activeScreen(plan),
+    return Stack(
+      children: [
+        ValueListenableBuilder<HelpView>(
+          valueListenable: _help,
+          builder: (context, _, _) => _activeScreen(plan),
+        ),
+        ValueListenableBuilder<SosCountdown?>(
+          valueListenable: _sos.countdown,
+          builder: (context, countdown, _) => countdown == null
+              ? const SizedBox.shrink()
+              : SosCountdownOverlay(
+                  countdown: countdown,
+                  onEnterPin: _cancelCountdownWithPin,
+                ),
+        ),
+      ],
     );
   }
 
@@ -580,7 +864,18 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
                       names: _names,
                     ),
             ),
-      compact: _help,
+      // A silent alarm must not change the screen at all (no shrinking timer).
+      compact: _covertSos ? null : _help,
+      escortPanel: _serverJourneyId == null || widget.relay == null
+          ? null
+          : EscortPanel(
+              escort: _escort,
+              requests: _escortRequests,
+              names: _names,
+              onStart: _startEscort,
+              onDecline: _declineEscort,
+              onStop: _stopEscort,
+            ),
     );
   }
 
@@ -609,9 +904,17 @@ class JourneyPlan {
     this.smsFallbackEnabled = false,
     this.destinationLatitude,
     this.destinationLongitude,
+    this.listenForWords = false,
+    this.recordAudio = true,
   });
 
   final String destination;
+
+  /// Voice SOS ("help", "bachao", ...) during this journey.
+  final bool listenForWords;
+
+  /// Record audio after an SOS (and allow Audio Escort).
+  final bool recordAudio;
 
   /// Picked on the map; kept on this phone only (never sent to the server).
   final double? destinationLatitude;
@@ -644,7 +947,24 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
   final _smsNumberController = TextEditingController();
   var _selectedMinutes = 5;
   var _smsFallbackEnabled = false;
+  var _listenForWords = false;
+  var _recordAudio = true;
+  var _voicePackReady = false;
   Destination? _destination;
+
+  @override
+  void initState() {
+    super.initState();
+    SuddenSos.instance.installedVoiceModels().then((models) {
+      if (!mounted) return;
+      final ready = models.length == 2;
+      setState(() {
+        _voicePackReady = ready;
+        _listenForWords = ready;
+      });
+    });
+  }
+
   int? _suggestedFor;
 
   void _onDestination(Destination destination, int? walkMinutes) {
@@ -719,8 +1039,22 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
         duressPin: duressPin,
         smsNumbers: _smsFallbackEnabled ? [smsNumber] : const [],
         smsFallbackEnabled: _smsFallbackEnabled,
+        listenForWords: _listenForWords && _voicePackReady,
+        recordAudio: _recordAudio,
       ),
     );
+  }
+
+  Future<void> _openSuddenSos() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const SuddenSosScreen()));
+    final models = await SuddenSos.instance.installedVoiceModels();
+    if (!mounted) return;
+    setState(() {
+      final ready = models.length == 2;
+      if (ready && !_voicePackReady) _listenForWords = true;
+      _voicePackReady = ready;
+    });
   }
 
   @override
@@ -750,6 +1084,12 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
             tooltip: 'Get alerts on Telegram',
             onPressed: () => linkTelegramFlow(context, widget.api),
             icon: const Icon(Icons.notifications_active_outlined),
+          ),
+          IconButton(
+            key: const ValueKey('open-sudden-sos'),
+            tooltip: 'Sudden SOS',
+            onPressed: _openSuddenSos,
+            icon: const Icon(Icons.record_voice_over_outlined),
           ),
         ],
       ),
@@ -851,6 +1191,39 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
                     'With your permission, safety alerts can text one contact if internet is unavailable. At 10% battery or lower, alerts use SMS. Carrier SMS charges may apply.',
                   ),
                 ),
+                SwitchListTile.adaptive(
+                  key: const ValueKey('voice-sos-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _listenForWords && _voicePackReady,
+                  onChanged: _voicePackReady
+                      ? (on) => setState(() => _listenForWords = on)
+                      : null,
+                  title: const Text('Voice SOS'),
+                  subtitle: Text(
+                    _voicePackReady
+                        ? 'Saying “help”, “bachao”, “madad” or “bacha lo” starts an SOS countdown. Heard on this phone only.'
+                        : 'Download the voice pack first (Sudden SOS, top right).',
+                  ),
+                ),
+                SwitchListTile.adaptive(
+                  key: const ValueKey('record-audio-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _recordAudio,
+                  onChanged: (on) => setState(() => _recordAudio = on),
+                  title: const Text('Record audio after an SOS'),
+                  subtitle: const Text(
+                    'Includes the 15 seconds before. Encrypted, played live to the people helping you, kept on this phone until you delete it. Also needed for Audio Escort.',
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    'No time to unlock? Press Volume Down 5 times quickly during the journey.',
+                    style: text.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
                 if (_smsFallbackEnabled) ...[
                   const SizedBox(height: 8),
                   TextField(
@@ -916,10 +1289,14 @@ class ActiveJourneyScreen extends StatelessWidget {
     this.sharing,
     this.helpersPanel,
     this.compact,
+    this.escortPanel,
   });
 
   /// Who is coming to help, while an alert is open.
   final Widget? helpersPanel;
+
+  /// Start or stop an Audio Escort.
+  final Widget? escortPanel;
 
   /// When an alert is open the timer shrinks to make room for helpers.
   final ValueListenable<HelpView>? compact;
@@ -1032,6 +1409,10 @@ class ActiveJourneyScreen extends StatelessWidget {
                   if (helpersPanel != null) ...[
                     const SizedBox(height: 12),
                     helpersPanel!,
+                  ],
+                  if (escortPanel != null) ...[
+                    const SizedBox(height: 12),
+                    escortPanel!,
                   ],
                   _Gap(scroll: alertOpen),
                   SizedBox(

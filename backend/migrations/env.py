@@ -8,6 +8,7 @@ from app.core import audit  # noqa: F401
 from app.core.config import get_settings
 from app.core.db import Base
 from app.escalation import models as escalation_models  # noqa: F401
+from app.escort import models as escort_models  # noqa: F401
 from app.identity import models  # noqa: F401
 from app.journey import models as journey_models  # noqa: F401
 from app.matching import models as matching_models  # noqa: F401

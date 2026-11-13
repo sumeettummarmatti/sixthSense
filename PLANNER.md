@@ -35,6 +35,12 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | sumeet | `P1-W1-demo-map-picker` | Uber-style destination: search suggestions or long-press pin, distance + walk time, suggested check-in |
 | sumeet | `P1-W1-demo-background-location` | Live location keeps going with the screen off (foreground service notice) |
 | sumeet | `P3-W1-nearby-responders` | Who is coming (contacts + responders, distance, two-way E2E location); verified responders on duty, SOS asks those within 500 m → 1 km → 2 km |
+| sumeet | `P1-W2-background-volume-sos` | Volume Down ×5 (or hold) with the screen off during a journey → silent 5 s countdown → SOS sent from native code (works with the app closed); PIN cancels, duress PIN sends a silent alarm; tile/widget use the same countdown |
+| sumeet | `P2-W2-encrypted-audio-relay` | Relay carries 5 s AAC clips E2E (separate HKDF info); only during an alert or a running escort; offline listeners get ciphertext from Redis (30 min / 24 h max), dropped once they may no longer hear |
+| sumeet | `P1-W2-sos-audio-evidence` | After an SOS the phone records (with the 15 s before, kept in RAM only until then), encrypted with a Keystore key; contacts/responders can listen live; export as one .aac for an FIR; owner deletes |
+| sumeet | `P1-W2-voice-sos-spike` | Vosk small Hindi + Indian-English, full transcription + word spotting: 0/16 false alarms, 12/13 caught clean (10/13 with noise) on synthetic voices; grammar mode rejected (false alarms). Needs real voices from the team |
+| sumeet | `P1-W2-voice-sos` | "help / bachao / madad / bacha lo" heard offline during a journey → 3–9 s adaptive countdown (shout/struggle shorter, still phone longer); voice pack downloaded on request; Practice mode sends nothing |
+| sumeet | `P1-W3-audio-escort` | Owner starts (or accepts a contact's request), picks listeners and ≤ 3 h; listeners hear live and see location; stop needs the PIN, duress PIN looks stopped but raises a covert SOS |
 
 ---
 
@@ -254,6 +260,7 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 | 11 | `ALL-W11-red-team` | ← | ← | ← |
 | 12 | `ALL-W12-pilot-pentest` | ← | ← | ← |
 | Demo (now) | `P1-W1-demo-api-wiring` `P1-W1-demo-live-location` `P1-W1-demo-home-people` `P1-W1-demo-map-picker` `P1-W1-demo-background-location` | `P2-W1-demo-telegram-live` | `P3-W1-nearby-responders` | — |
+| Demo (now) | `P1-W2-background-volume-sos` `P1-W2-sos-audio-evidence` `P1-W2-voice-sos-spike` `P1-W2-voice-sos` `P1-W3-audio-escort` | `P2-W2-encrypted-audio-relay` | — | — |
 | Demo (now) | `ALL-W1-demo-branch-server` `ALL-W1-demo-script-slides` | ← | ← | ← |
 | Later | `P1-LATER-ios-port` (Swift modules; iOS can't auto-send SMS or read hardware buttons; needs a Mac + Apple account) | `P2-LATER-whatsapp-phone-otp` (Twilio WhatsApp code as 2nd sign-up check) `P2-LATER-fcm-push` | | |
 
