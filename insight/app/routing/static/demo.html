@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SixthSense routes demo</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root {
+    --ink: #2E2658; --lavender: #7C55C6; --deep: #4C3892; --mist: #F7F0FD; --haze: #DCD1F6;
+    --muted: #6E6790; --strong: #C8364B; --caution: #8A5A00; --paper: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--mist); }
+  #app { display: grid; grid-template-columns: 360px 1fr; height: 100vh; }
+  aside { padding: 16px; overflow: auto; background: var(--paper); border-right: 1px solid var(--haze); }
+  #map { height: 100%; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  label { font-size: 13px; color: var(--muted); }
+  select, button { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--haze); background: var(--paper); color: var(--ink); }
+  button.on { background: var(--deep); color: #fff; border-color: var(--deep); }
+  #status { font-size: 13px; color: var(--muted); min-height: 1.4em; margin: 6px 0 10px; }
+  .route { border: 1px solid var(--haze); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+  .route.recommended { border-color: var(--lavender); background: var(--mist); }
+  .route h3 { margin: 0 0 4px; font-size: 15px; display: flex; justify-content: space-between; }
+  .route .why { color: var(--deep); font-size: 13px; }
+  .route .facts { color: var(--muted); font-size: 13px; }
+  .chip { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--haze); color: var(--muted); margin-top: 6px; }
+  .chip.strong { border-color: var(--strong); color: var(--strong); }
+  .chip.some { border-color: var(--caution); color: var(--caution); }
+  .rule { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--haze); font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-block; width: 22px; height: 0; border-top: 4px solid; margin-right: 6px; vertical-align: middle; }
+  @media (max-width: 760px) { #app { grid-template-columns: 1fr; grid-template-rows: 1fr 45vh; } aside { order: 2; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>SixthSense routes <small style="font-weight:normal;color:var(--muted)">demo</small></h1>
+    <p class="sub" id="areaLabel">Loading the area…</p>
+
+    <div class="row">
+      <label>Time</label>
+      <select id="band">
+        <option value="">Now</option>
+        <option value="day">Day (06–18)</option>
+        <option value="evening">Evening (18–22)</option>
+        <option value="night">Night (22–06)</option>
+      </select>
+      <button id="modeRoute" class="on">Route</button>
+      <button id="modeReport">Report a place</button>
+    </div>
+    <div class="row" id="reportRow" hidden>
+      <label>Category</label>
+      <select id="category">
+        <option value="dark">Dark / no lighting</option>
+        <option value="no_footpath">No footpath</option>
+        <option value="harassment">Harassment happened here</option>
+        <option value="unsafe_crossing">Unsafe crossing</option>
+        <option value="other">Other</option>
+      </select>
+      <label id="simulateWrap" hidden><input type="checkbox" id="simulate"> simulate enough reporters (dev only)</label>
+    </div>
+    <div class="row">
+      <button id="clear">Clear</button>
+      <span class="legend"><span style="border-color:var(--lavender)"></span>recommended
+        <span style="border-color:var(--muted);border-top-style:dashed"></span>shortest
+        <span style="border-color:var(--haze)"></span>other</span>
+    </div>
+    <div id="status">Click the map for a start point, then a destination.</div>
+    <div id="routes"></div>
+    <div class="rule" id="thresholds"></div>
+    <div class="rule">Routes are ranked by what is around them at this hour: streetlights, places open, bus stops, stations, police, hospitals, and published reports of concern. No route is called "safe", and nothing on this map is green. Labels used: <em>Strong evidence of concern</em>, <em>Some reports of concern</em>, <em>Insufficient data</em>. Start and destination are not stored.</div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script>
+(function () {
+  const api = "";  // same origin as this page (the Insight service)
+  const $ = (id) => document.getElementById(id);
+  let mode = "route", start = null, end = null, area = null, markers = [], shown = [];
+  let map = null, mapReady = false;
+  const reporter = (() => {
+    try {
+      let t = localStorage.getItem("ss-reporter");
+      if (!t) { t = crypto.randomUUID(); localStorage.setItem("ss-reporter", t); }
+      return t;
+    } catch (e) { return crypto.randomUUID(); }
+  })();
+
+  // The list on the left works on its own; the map is drawn when (and if) MapLibre starts.
+  try {
+    map = new maplibregl.Map({
+      container: "map",
+      style: {
+        version: 8,
+        sources: { osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256,
+          attribution: "© OpenStreetMap contributors" } },
+        layers: [{ id: "osm", type: "raster", source: "osm" }]
+      },
+      center: [77.64, 12.975], zoom: 14
+    });
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.on("load", () => {
+      map.addSource("bbox", { type: "geojson", data: emptyFC() });
+      map.addLayer({ id: "bbox", type: "line", source: "bbox", paint: { "line-color": "#6E6790", "line-width": 1, "line-dasharray": [2, 2] } });
+      map.addSource("cells", { type: "geojson", data: emptyFC() });
+      map.addLayer({ id: "cells", type: "circle", source: "cells",
+        paint: { "circle-radius": 9, "circle-color": "#8A5A00", "circle-opacity": 0.45, "circle-stroke-color": "#8A5A00", "circle-stroke-width": 1 } });
+      map.addSource("routes", { type: "geojson", data: emptyFC() });
+      const line = { "line-cap": "round", "line-join": "round" };
+      map.addLayer({ id: "routes-other", type: "line", source: "routes", filter: ["==", ["get", "kind"], "alternative"], paint: { "line-color": "#DCD1F6", "line-width": 5 }, layout: line });
+      map.addLayer({ id: "routes-shortest", type: "line", source: "routes", filter: ["==", ["get", "kind"], "shortest"], paint: { "line-color": "#6E6790", "line-width": 4, "line-dasharray": [1.5, 1.5] }, layout: line });
+      map.addLayer({ id: "routes-recommended", type: "line", source: "routes", filter: ["==", ["get", "kind"], "recommended"], paint: { "line-color": "#7C55C6", "line-width": 6 }, layout: line });
+      mapReady = true;
+      drawArea(true); drawRoutes(); drawMarkers();
+    });
+    map.on("click", (ev) => onPick([ev.lngLat.lat, ev.lngLat.lng]));
+  } catch (e) {
+    $("map").innerHTML = '<p style="padding:16px;color:#6E6790">The map could not start in this browser (no WebGL). The route list still works with ?from=lat,lon&amp;to=lat,lon in the address.</p>';
+  }
+
+  function emptyFC() { return { type: "FeatureCollection", features: [] }; }
+
+  function drawArea(fit) {
+    if (!mapReady || !area) return;
+    const [s, w, n, e] = area.bbox;
+    map.getSource("bbox").setData({ type: "FeatureCollection", features: [{ type: "Feature", properties: {},
+      geometry: { type: "LineString", coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] } }] });
+    map.getSource("cells").setData({ type: "FeatureCollection", features: area.published_cells.map(c => ({
+      type: "Feature", properties: { count: c.count }, geometry: { type: "Point", coordinates: [c.lon, c.lat] } })) });
+    if (fit && !start) map.fitBounds([[w, s], [e, n]], { padding: 30 });
+  }
+
+  function drawRoutes() {
+    if (!mapReady) return;
+    map.getSource("routes").setData({ type: "FeatureCollection", features: shown.map(r => ({
+      type: "Feature", properties: { kind: r.kind }, geometry: { type: "LineString", coordinates: r.points.map(p => [p[1], p[0]]) } })) });
+  }
+
+  function drawMarkers() {
+    if (!mapReady) return;
+    markers.forEach(m => m.remove()); markers = [];
+    for (const [p, text] of [[start, "A"], [end, "B"]]) {
+      if (!p) continue;
+      const el = document.createElement("div");
+      el.textContent = text;
+      el.style.cssText = "background:#2E2658;color:#fff;border-radius:50%;width:26px;height:26px;display:grid;place-items:center;font-weight:600;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.3)";
+      markers.push(new maplibregl.Marker({ element: el }).setLngLat([p[1], p[0]]).addTo(map));
+    }
+    if (start && end) map.fitBounds([[Math.min(start[1], end[1]), Math.min(start[0], end[0])], [Math.max(start[1], end[1]), Math.max(start[0], end[0])]], { padding: 80, maxZoom: 16 });
+  }
+
+  async function loadArea(fit) {
+    const resp = await fetch(api + "/routes/area");
+    area = await resp.json();
+    const c = area.counts;
+    $("areaLabel").textContent = `${area.label}: ${c.lamp} streetlights, ${c.shop + c.food + c.pharmacy + c.atm + c.fuel} places, ${c.bus_stop} bus stops, ${c.station} stations, ${c.police} police, ${c.hospital} hospitals.`;
+    $("thresholds").textContent = `Published report spots: ${area.published_cells.length}. A spot is published after ${area.publish_min_reports} reports from ${area.publish_min_devices} different reporters; below that it is not shown to anyone.`;
+    $("simulateWrap").hidden = !area.demo;
+    drawArea(fit);
+  }
+
+  function setMode(m) {
+    mode = m;
+    $("modeRoute").classList.toggle("on", m === "route");
+    $("modeReport").classList.toggle("on", m === "report");
+    $("reportRow").hidden = m !== "report";
+    $("status").textContent = m === "report" ? "Click the place you want to report." : "Click the map for a start point, then a destination.";
+  }
+  $("modeRoute").onclick = () => setMode("route");
+  $("modeReport").onclick = () => setMode("report");
+  $("band").onchange = () => { if (start && end) plan(); };
+  $("clear").onclick = () => { start = end = null; shown = []; drawMarkers(); drawRoutes(); $("routes").innerHTML = ""; setMode("route"); };
+
+  function onPick(p) {
+    if (mode === "report") return report(p);
+    if (!start || (start && end)) {
+      $("clear").onclick(); start = p; drawMarkers();
+      $("status").textContent = "Now click the destination.";
+    } else {
+      end = p; drawMarkers(); plan();
+    }
+  }
+
+  async function plan() {
+    $("status").textContent = "Asking the routing engine…";
+    const at = $("band").value ? `&at=${$("band").value}` : "";
+    const resp = await fetch(`${api}/routes?from=${start[0]},${start[1]}&to=${end[0]},${end[1]}${at}`);
+    if (!resp.ok) {
+      const detail = (await resp.json().catch(() => ({}))).detail;
+      $("status").textContent = { outside_area: "That point is outside the area we have data for.", no_route: "No walking route found.", routing_unavailable: "The routing engine is not reachable right now." }[detail] || `Error ${resp.status}`;
+      return;
+    }
+    const data = await resp.json();
+    // Recommended, shortest, then the best two other ways; more lines than that only clutter.
+    const order = ["recommended", "shortest", "alternative"];
+    const others = data.routes.filter(r => r.kind === "alternative").sort((a, b) => b.score - a.score).slice(0, 2);
+    shown = data.routes.filter(r => r.kind !== "alternative").concat(others)
+      .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+    drawRoutes();
+    $("routes").innerHTML = shown.map((r) => {
+      const mins = Math.round(r.duration_s / 60);
+      const title = r.kind === "recommended" ? "Recommended" : r.kind === "shortest" ? "Shortest" : "Another way";
+      const chip = r.evidence.startsWith("Strong") ? "strong" : r.evidence.startsWith("Some") ? "some" : "";
+      return `<div class="route ${r.kind}">
+        <h3><span>${title}</span><span>${mins} min · ${(r.distance_m / 1000).toFixed(1)} km</span></h3>
+        ${r.why.length ? `<div class="why">${r.why.join(" · ")}</div>` : ""}
+        <div class="facts">${r.facts.join(" · ")}</div>
+        <span class="chip ${chip}">${r.evidence}</span>
+      </div>`;
+    }).join("");
+    $("status").textContent = `${data.time_band[0].toUpperCase()}${data.time_band.slice(1)} ranking: ${data.routes.length} ways compared, ${shown.length} shown.`;
+  }
+
+  async function report(p) {
+    const category = $("category").value;
+    const simulate = area && area.demo && $("simulate").checked;
+    const tokens = simulate ? Array.from({ length: Math.max(area.publish_min_reports, area.publish_min_devices) },
+      (_, i) => `${reporter}-sim-${i % area.publish_min_devices}`) : [reporter];
+    let ok = 0;
+    for (const token of tokens) {
+      const resp = await fetch(api + "/routes/reports", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: p[0], lon: p[1], category, reporter: token }) });
+      if (resp.status === 202) ok++;
+      else if (resp.status === 429) { $("status").textContent = "Too many reports from this device this hour."; break; }
+      else if (resp.status === 422) { $("status").textContent = "Outside the area we cover."; return; }
+    }
+    $("status").textContent = simulate ? `${ok} simulated reports sent (dev only; a real spot needs ${area.publish_min_devices} people).` : "Report accepted. It is published only once enough people report the same spot.";
+    await loadArea(false);
+    if (start && end) plan();
+  }
+
+  async function init() {
+    try { await loadArea(true); } catch (e) { $("areaLabel").textContent = "The Insight service is not reachable."; return; }
+    // Deep link for demos and screenshots: /routes/demo?from=lat,lon&to=lat,lon&at=night
+    const q = new URLSearchParams(location.search);
+    if (q.get("at")) $("band").value = q.get("at");
+    if (q.get("from") && q.get("to")) {
+      start = q.get("from").split(",").map(Number);
+      end = q.get("to").split(",").map(Number);
+      drawMarkers();
+      await plan();
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>

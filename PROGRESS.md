@@ -42,7 +42,7 @@
 - Checks: backend 198 tests, app 21 tests, analyze clean; live smoke test: responder asked 4 s after SOS.
 - Next: multi-emulator test (me as traveller + responders, shruj as contact + responder), then PRs to main.
 
-## Status at a glance (updated 2026-11-11)
+## Status at a glance (updated 2026-11-14)
 
 **Phase:** **2-day demo** from branch `demo` (12-week plan paused; see `PLANNER.md` §0)
 **Platform:** Android first; iOS later.
@@ -53,11 +53,21 @@
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
 | P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`); **encrypted location relay** (`P2-W5`); **signed alerts** (`P2-W6`); **demo: real Telegram alerts proven** (`P2-W1-demo-telegram-live`) | Help Tanisha wire the app (`P1-W1-demo-api-wiring`); merge `p2/demo-telegram-live` into `demo` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
-| P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
+| P4 Insight | Insight service skeleton, dashboard shell; **ranked walking routes for Indiranagar** (`P4-W1-demo-safe-routes`, shruj, hackathon) | Valhalla on the demo laptop; `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
+
+## 2026-11-14 — shruj: Ranked walking routes for Indiranagar (hackathon demo, `P4-W1-demo-safe-routes`)
+- shruj: New `insight/app/routing/`. `GET /routes?from=lat,lon&to=lat,lon&at=day|evening|night` returns several distinct walking routes ranked by what is around them at that hour; `POST /routes/reports` takes anonymous place reports; `GET /routes/area` describes the data area; `/routes/demo` is a map page for demos (MapLibre, OSM tiles). It lives in Insight so a route request carries no identity (rule 4) and reports never meet account data (rule 6). Start and destination are never stored or logged.
+- shruj: **How it works:** routes come from an existing router (the free public OSRM server in dev; a local Valhalla for the demo laptop). We add our own alternatives by routing through side points ~250 m off the shortest way, drop near-duplicates, then score each route: streetlights, places open (only late-open ones at night), bus stops, stations, police and hospitals, counted once each along the way, per km, with day/evening/night weights and diminishing returns. Published report cells pull a score down. The recommendation is at most 25% / 600 m longer than the shortest, and only when the gain is noticeable. Every route states plain facts ("38 streetlights vs 11", "+1 min"). Labels are only *Strong evidence of concern / Some reports of concern / Insufficient data*; no route is called safe and the demo map has no green.
+- shruj: **Data:** `insight/data/areas/indiranagar.json`: 2,544 OpenStreetMap features for a 4×4 km box (602 street lamps, 1,195 shops, 415 cafés/restaurants, 118 bus stops, 36 hospitals, 5 stations, 4 police). Built by `insight/scripts/build_area_features.py`; BBMP streetlights, BMTC stops and police KML from data.opencity.in can replace the OSM layers (download them in a browser; the site blocks scripts).
+- shruj: **Reports:** a ~55 m cell, a category, a time and an HMAC of an opaque reporter token, nothing else. Published, and used by routing, only after `PUBLISH_MIN_REPORTS` reports from `PUBLISH_MIN_DEVICES` reporters; evidence halves every 30 days and is gone after 90; 20 reports/hour per token. Migration `insight/migrations/versions/0002_place_reports.py`.
+- shruj: **Checks:** ruff clean; 35 Insight tests pass (23 new; a fake router and a synthetic lit/dark street, no network). Live smoke with the real data and the public OSRM: 100 Feet Rd → Domlur gets the shortest route by day and at night a +245 m route with 8 streetlights vs 1 and 49 open places vs 30; 5 reports from 3 reporters flipped a recommendation with *Strong evidence of concern*; 7 router calls in 1.4 s.
+- shruj: **Known limits:** OSM lamp coverage is patchy (BBMP data would fix it; only 4 zones are published, Indiranagar is in Bangalore East); daytime scores in a dense area sit close together; the public OSRM server is shared, so run Valhalla for the real demo. Branch `p4/safe-routes-bengaluru` from `main`, not pushed yet.
+- shruj: **Ran it for real** (Docker up, Insight migrated 0001+0002, uvicorn :8001): day → shortest; night → +245 m route with 8 lamps vs 1; 5 reports from 3 tokens published a spot (hidden at 4) and moved the recommendation with *Strong evidence of concern*; 21st report from one token → 429; DB rows hold only cell centres and hashes. **Fixed on the way:** uvicorn's access log printed `/routes?from=lat,lon` in clear (its handlers bypass the root PII filter); the filter now also sits on `uvicorn.access` and scrubs log arguments in place, test added. Demo page no longer depends on the map starting (list + deep link `?from=&to=&at=` work without WebGL).
+- **Next:** demo A/B pairs; Valhalla on the demo laptop; optional BBMP East-zone streetlights.
 
 ## 2026-11-12 — sumeet: 2-phone run passed; live location + new home
 - 2-phone run passed on emulators over ZeroTier: sign-up, invite, Telegram link, SOS alert with matching code, resolve, missed check-in.

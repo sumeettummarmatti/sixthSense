@@ -1067,6 +1067,61 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Stopped"}
         "401": {$ref: "#/components/responses/NotAuthenticated"}
+  /routes:
+    get:
+      tags: [routing]
+      summary: Walking routes between two points, ranked for this hour (Insight, no sign-in)
+      description: >
+        Several distinct walking routes from a routing engine, each scored by what is around it
+        (streetlights, places open, bus stops, stations, police, hospitals) and pulled down by
+        published report cells. The recommended route is at most 25% / 600 m longer than the
+        shortest. A route request carries no identity (rule 4); start and destination are never
+        stored or logged (rule 2). No route is labelled safe (rule 5).
+      parameters:
+        - {name: from, in: query, required: true, description: "lat,lon",
+           schema: {type: string, example: "12.9719,77.6412"}}
+        - {name: to, in: query, required: true, description: "lat,lon",
+           schema: {type: string, example: "12.9610,77.6390"}}
+        - {name: at, in: query, required: false,
+           description: "day | evening | night | ISO datetime; default is now (Asia/Kolkata)",
+           schema: {type: string, example: night}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RankedRoutes"}
+        "404": {description: no_route}
+        "422": {description: "outside_area, or a bad parameter"}
+        "503": {description: routing_unavailable}
+  /routes/reports:
+    post:
+      tags: [reports]
+      summary: Anonymous report about a place; feeds route ranking (Insight, no sign-in)
+      description: >
+        Kept as a ~55 m cell, a category, a time and an HMAC of the opaque reporter token, nothing
+        else (rule 6). A cell is shown to anyone, and used by routing, only once it has
+        PUBLISH_MIN_REPORTS reports from PUBLISH_MIN_DEVICES different reporters. Evidence halves
+        every 30 days and expires after 90.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PlaceReport"}
+      responses:
+        "202": {description: accepted}
+        "422": {description: "outside_area, or a bad body"}
+        "429": {description: "too_many_reports (per reporter token, per hour)"}
+  /routes/area:
+    get:
+      tags: [routing]
+      summary: The area we have data for, with feature counts and published report cells
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RouteArea"}
 components:
   securitySchemes:
     bearer:
@@ -1079,6 +1134,76 @@ components:
     NotAuthenticated:
       description: "Missing, expired or unknown access token (detail: not_authenticated)"
   schemas:
+    RankedRoute:
+      type: object
+      required: [kind, points, distance_m, duration_s, extra_m, extra_s, score, support, concern,
+                 coverage, evidence, counts, facts, why]
+      properties:
+        kind: {type: string, enum: [recommended, shortest, alternative]}
+        points: {type: array, description: "[lat, lon] pairs",
+                 items: {type: array, items: {type: number}, minItems: 2, maxItems: 2}}
+        distance_m: {type: integer}
+        duration_s: {type: integer}
+        extra_m: {type: integer, description: Against the shortest route}
+        extra_s: {type: integer}
+        score: {type: number, description: "0..1: support reduced by concern"}
+        support: {type: number, description: "0..1 from what is around the route at this hour"}
+        concern: {type: number, description: "0..1 from published report cells only"}
+        coverage: {type: number, description: Share of the route inside the data area}
+        evidence: {$ref: "#/components/schemas/RiskLabel"}
+        counts:
+          type: object
+          additionalProperties: {type: integer}
+          example: {lamp: 38, open: 12, bus_stop: 3, station: 1, police: 0, hospital: 1}
+        facts: {type: array, items: {type: string}, example: ["38 streetlights", "12 places open late"]}
+        why: {type: array, items: {type: string}, example: ["+1 min", "38 streetlights vs 11"],
+              description: Only on the recommended route, against the shortest}
+    RankedRoutes:
+      type: object
+      required: [area, time_band, shortest, recommended, routes, note]
+      properties:
+        area: {type: string, example: indiranagar}
+        time_band: {type: string, enum: [day, evening, night]}
+        shortest: {type: integer, description: Index into routes}
+        recommended: {type: integer, description: Index into routes; may equal shortest}
+        routes: {type: array, items: {$ref: "#/components/schemas/RankedRoute"}}
+        note: {type: string}
+    RiskLabel:
+      type: string
+      enum: ["Strong evidence of concern", "Some reports of concern", "Insufficient data"]
+      description: Rule 5. There is no "safe" label; no reports means unknown.
+    PlaceReport:
+      type: object
+      required: [lat, lon, category, reporter]
+      properties:
+        lat: {type: number}
+        lon: {type: number}
+        category: {type: string, enum: [dark, no_footpath, harassment, unsafe_crossing, other]}
+        reporter: {type: string, minLength: 8, maxLength: 128,
+                   description: Opaque per-install token; only its HMAC is stored}
+    ReportCell:
+      type: object
+      required: [lat, lon, count, weight]
+      properties:
+        lat: {type: number, description: Cell centre (~55 m cells)}
+        lon: {type: number}
+        count: {type: integer}
+        weight: {type: number, description: Decayed evidence}
+    RouteArea:
+      type: object
+      required: [name, label, bbox, sources, counts, published_cells, publish_min_reports,
+                 publish_min_devices, demo]
+      properties:
+        name: {type: string}
+        label: {type: string}
+        bbox: {type: array, items: {type: number}, minItems: 4, maxItems: 4,
+               description: "south, west, north, east"}
+        sources: {type: array, items: {type: string}}
+        counts: {type: object, additionalProperties: {type: integer}}
+        published_cells: {type: array, items: {$ref: "#/components/schemas/ReportCell"}}
+        publish_min_reports: {type: integer}
+        publish_min_devices: {type: integer}
+        demo: {type: boolean, description: Dev server; the demo page may simulate reporters}
     EscortStart:
       type: object
       required: [journey_id, minutes, contact_link_ids]

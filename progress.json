@@ -538,6 +538,13 @@
           "status": "todo",
           "week": 9,
           "notes": ""
+        },
+        {
+          "id": "P4-W1-demo-safe-routes",
+          "title": "Hackathon demo: ranked walking routes for one Bengaluru area (Indiranagar) from open data + anonymous place reports",
+          "status": "done",
+          "week": 1,
+          "notes": "shruj: insight/app/routing: GET /routes (several distinct walking routes from an existing router, re-ranked by streetlights, places open, bus stops, stations, police, hospitals per km with day/evening/night weights; published report cells pull a route down; recommendation at most 25%/600 m longer than the shortest), POST /routes/reports (55 m cell + category + time + HMAC of an opaque reporter token, published only at the k/m threshold, fades over 30 days, gone at 90), GET /routes/area, /routes/demo (MapLibre map). Data: data/areas/indiranagar.json, 2,544 OSM features for a 4x4 km box (602 lamps, 1,195 shops, 415 food, 118 bus stops, 36 hospitals, 5 stations, 4 police) via scripts/build_area_features.py; BBMP/BMTC/police KML from data.opencity.in can replace OSM layers (download by hand). Router: public OSRM in dev, local Valhalla for the demo laptop. Labels only Strong/Some/Insufficient; no green on the map. ruff clean, 35 insight tests (23 new, no network). Live smoke with real data: night recommends a +245 m route with 8 lamps vs 1 and 49 open places vs 30 where day picks the shortest; 5 reports from 3 reporters flipped a recommendation. Branch p4/safe-routes-bengaluru (from main), not pushed yet."
         }
       ]
     }
@@ -848,6 +855,12 @@
       "by": "sumeet",
       "decision": "Audio (SOS recording, escort) goes E2E through the relay; server keeps only ciphertext for offline listeners (Redis, last 30 min, max 24 h); evidence stays encrypted on the owner's phone until they delete it",
       "why": "Rule 2: server never holds readable audio or location; FIR evidence stays under the owner's control"
+    },
+    {
+      "date": "2026-11-14",
+      "decision": "Routes live in the Insight service and re-rank an existing router's alternatives (public OSRM in dev, local Valhalla for demos) instead of custom cost routing; scores come from open infrastructure data plus published report cells only, with hand-set weights until real reports exist",
+      "why": "Route requests must carry no identity and reports must never meet account data (rules 4, 6); re-ranking is small, explainable and needs no training data; the hackathon demo needs something that works in a day and says why",
+      "by": "shruj"
     }
   ],
   "blockers": [
@@ -902,7 +915,10 @@
     "sumeet: legal review line in privacy notice for audio recording; decide evidence retention policy text",
     "sumeet + shruj: resume the scene list from Scene 3 (Shruj walks to Sumeet), then Scenes 4-12; responders: cd backend && uv run python scripts/sim_responders.py --scenario <normal|slow|far|busy> --center 12.8870,77.5785",
     "sumeet: decide who can end a full alert without contacts (suggested: traveller's real PIN after a helper says arrived)",
-    "sumeet: resume live sharing + journey after an app restart (today a crash stops sharing until a new journey)"
+    "sumeet: resume live sharing + journey after an app restart (today a crash stops sharing until a new journey)",
+    "shruj: hackathon demo: use A/B pairs in Indiranagar where the night ranking visibly differs (100 Feet Rd -> Domlur does); open http://localhost:8001/routes/demo",
+    "shruj/sumeet: demo laptop: run Valhalla (routing-engine/README.md, southern-zone extract) and set ROUTING_PROVIDER=valhalla so the demo does not depend on the public OSRM server",
+    "shruj: optional: download BBMP Bangalore East streetlight KML from data.opencity.in in a browser and rebuild the area with --streetlights-kml (OSM lamp coverage is patchy)"
   ],
   "budget": "zero: free tools/services only (PLANNER §3b)"
 }

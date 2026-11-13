@@ -11,12 +11,12 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "alembic>=1.13",
     "geoalchemy2>=0.15",
+    "httpx>=0.28",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.27",
     "ruff>=0.6",
 ]
 # ML deps (hdbscan, sentence-transformers) are added in P4-W5-clustering-threshold.
