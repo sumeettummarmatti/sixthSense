@@ -3,6 +3,15 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-13 — sumeet: test session with shruj, simulated responders, stability fixes
+
+- Tested with shruj: map picker and SOS with responders passed; Shruj walking to me partly done.
+- `backend/scripts/sim_responders.py`: 5 simulated responders (3 within 500 m, 2 farther) with real accounts and E2E location, walking real streets; scenarios normal / slow / far / busy, `--center` to move them. Verified live: radius 500 m → 1 km → 2 km when nobody answers; stops asking once 2 are coming.
+- Fixed: app freeze (map updates piling up), journey screen overflow during alerts, black maps after switching tabs/apps, stray search suggestions. Emulator needed 4 CPU cores (was 1).
+- Maps are flat 2D everywhere (ride-app style); card maps don't take touches so the page scrolls.
+- Open: who ends a full alert without contacts; resuming sharing after an app restart.
+- Next: resume scenes 3-12, then PRs into main.
+
 ## 2026-11-13 — sumeet: Uber-style live maps
 
 - One live map everywhere: tilted 3D buildings, markers glide between GPS fixes, pulsing red ring on the person in danger, shaded search radius (500 m → 1 km → 2 km), labels with ETA, dashed lines from helpers to the traveller.
