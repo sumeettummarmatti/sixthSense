@@ -1,6 +1,6 @@
 {
   "project": "sixthsense",
-  "updated_at": "2026-11-13T17:15:00+05:30",
+  "updated_at": "2026-11-13T17:45:00+05:30",
   "updated_by": "sumeet",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
@@ -385,7 +385,7 @@
           "title": "Demo: who is coming + verified responders nearby (F6 campus version)",
           "status": "in_progress",
           "week": 1,
-          "notes": "sumeet: 2026-11-13 branch p3/nearby-responders. Backend: escalation_helpers, responder_profiles, responder_offers (migration 0006); on-duty rough area (~110 m) in Redis 5 min; traveller's rough area during full alert 10 min; worker asks nearest approved on-duty responders 500 m -> 1 km -> 2 km (1 step/min), max 5 asked, first 2 'I'm going' get E2E precise location; helpers share location back to traveller only. Approve: backend/scripts/responders.py. 198 backend + 21 app tests pass; live smoke test: offer 4 s after SOS. Not yet tested on multiple emulators."
+          "notes": "sumeet: 2026-11-13 branch p3/nearby-responders. Backend: escalation_helpers, responder_profiles, responder_offers (migration 0006); on-duty rough area (~110 m) in Redis 5 min; traveller's rough area during full alert 10 min; worker asks nearest approved on-duty responders 500 m -> 1 km -> 2 km (1 step/min), max 5 asked, first 2 'I'm going' get E2E precise location; helpers share location back to traveller only. Approve: backend/scripts/responders.py. 198 backend + 21 app tests pass; live smoke test: offer 4 s after SOS. Not yet tested on multiple emulators. 2026-11-13 map upgrade: one LiveMap everywhere (tilted 3D buildings, markers glide between fixes, pulsing SOS ring, search-radius circle, labels with ETA, dashed helper lines), full-screen maps for traveller and helpers, counts \"searching 500 m · N on duty nearby · asked · coming\". Walking route from routing.openstreetmap.de on the helper phone only (sends two points; replace with own Valhalla before pilot). Open question: who can end a full alert when there are no contacts (only a contact can today)."
         },
         {
           "id": "P3-W1-vendor-selection",
@@ -828,6 +828,11 @@
         "P2-W1-demo-telegram-live"
       ],
       "by": "sumeet"
+    },
+    {
+      "by": "sumeet",
+      "date": "2026-11-13",
+      "blocker": "A full alert can only be ended by a trusted contact; with responders only (no contacts) it can't be closed. Needs a decision (e.g. traveller's real PIN after a responder has arrived)."
     }
   ],
   "next_steps": [

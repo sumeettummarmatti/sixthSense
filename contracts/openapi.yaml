@@ -1179,6 +1179,16 @@ components:
         full_alert: {type: boolean}
         any_alert: {type: boolean}
         helpers: {type: array, items: {$ref: "#/components/schemas/Helper"}}
+        search:
+          nullable: true
+          description: "Nearby responder search during a full alert: counts only, never who or where"
+          type: object
+          required: [radius_m, on_duty_nearby, asked, going]
+          properties:
+            radius_m: {type: integer, description: "500, then 1000, then 2000"}
+            on_duty_nearby: {type: integer}
+            asked: {type: integer}
+            going: {type: integer}
     LatLng:
       type: object
       required: [latitude, longitude]

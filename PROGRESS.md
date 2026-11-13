@@ -3,6 +3,14 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-13 — sumeet: Uber-style live maps
+
+- One live map everywhere: tilted 3D buildings, markers glide between GPS fixes, pulsing red ring on the person in danger, shaded search radius (500 m → 1 km → 2 km), labels with ETA, dashed lines from helpers to the traveller.
+- Full-screen live map for the traveller (counts on top, who is coming in a bottom sheet) and for helpers (walking route + minutes, Google Maps walking directions, call 112).
+- Counts during an SOS: "Searching 500 m · 3 responders on duty nearby · 2 asked · 1 coming" (counts only, never who or where).
+- Walking routes come from the free FOSSGIS OSRM server, asked only by the helper's phone (two points, nothing else); to be replaced by our own Valhalla before the pilot.
+- Found: a full alert can only be ended by a trusted contact, so a responder-only SOS can't be closed. Decision needed.
+
 ## 2026-11-13 — sumeet: live location tested; who-is-coming, nearby responders, map picker, background location
 
 - **Tested** live location with shruj over ZeroTier (no hosting needed): SOS → map on her "I support", dot follows my emulator GPS, directions open. Emulator freezes fixed (hardware GPU + 4 GB RAM).
