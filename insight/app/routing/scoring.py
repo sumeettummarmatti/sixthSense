@@ -189,15 +189,20 @@ def rank(
     return shortest, best
 
 
+def _n(count: int, word: str) -> str:
+    """'1 streetlight', '6 streetlights'."""
+    return f"{count} {word}" if count == 1 else f"{count} {word}s"
+
+
 def describe(a: Assessment) -> list[str]:
     """Plain facts about one route. Never a safety claim."""
     out = []
     if a.band is not TimeBand.DAY:
-        out.append(f"{a.counts['lamp']} streetlights")
-    open_word = "places open late" if a.band is TimeBand.NIGHT else "places open"
-    out.append(f"{a.counts['open']} {open_word}")
+        out.append(_n(a.counts["lamp"], "streetlight"))
+    late = " late" if a.band is TimeBand.NIGHT else ""
+    out.append(f"{_n(a.counts['open'], 'place')} open{late}")
     if a.counts["bus_stop"]:
-        out.append(f"{a.counts['bus_stop']} bus stops")
+        out.append(_n(a.counts["bus_stop"], "bus stop"))
     if a.counts["station"]:
         out.append("metro or rail station on the way")
     if a.counts["police"]:
@@ -220,7 +225,7 @@ def compare(recommended: Assessment, shortest: Assessment) -> list[str]:
     extra_min = round((recommended.duration_s - shortest.duration_s) / 60)
     out.append(f"+{extra_min} min" if extra_min > 0 else "about the same time")
     if recommended.band is not TimeBand.DAY:
-        out.append(f"{recommended.counts['lamp']} streetlights vs {shortest.counts['lamp']}")
+        out.append(f"{_n(recommended.counts['lamp'], 'streetlight')} vs {shortest.counts['lamp']}")
     out.append(f"{recommended.counts['open']} open places vs {shortest.counts['open']}")
     if recommended.report_cells < shortest.report_cells:
         out.append("avoids spots with published reports of concern")

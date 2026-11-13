@@ -44,7 +44,7 @@ def _client() -> httpx.Client:
 
 
 class OsrmProvider:
-    """Any OSRM-compatible HTTP API (router.project-osrm.org or a local osrm-backend)."""
+    """Any OSRM-compatible HTTP API: the FOSSGIS foot router, or a local foot osrm-backend."""
 
     def __init__(self, base_url: str, client: httpx.Client | None = None, profile: str = "foot"):
         self.base_url = base_url.rstrip("/")

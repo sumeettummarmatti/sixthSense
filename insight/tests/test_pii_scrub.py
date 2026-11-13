@@ -53,3 +53,9 @@ def test_uvicorn_access_log_is_scrubbed() -> None:
     text = stream.getvalue()
     assert "12.9719" not in text and "77.6390" not in text
     assert "REDACTED_COORDS" in text and "GET" in text
+
+
+def test_url_encoded_coordinates_are_scrubbed() -> None:
+    """Real clients send the comma as %2C: /routes?from=12.9719%2C77.6412."""
+    line = "/routes?from=12.9719%2C77.6412&to=12.9610%2c77.6390&at=night"
+    assert scrub(line) == "/routes?from=[REDACTED_COORDS]&to=[REDACTED_COORDS]&at=night"

@@ -299,6 +299,13 @@
           "status": "in_progress",
           "week": 3,
           "notes": "sumeet: 2026-11-14 backend + UI done; verified on emulator: start (contact + 30 min), clips reach the listener queue, wrong PIN refused, real PIN stops. Listener side (Listen live button, escort card, Ask to keep someone company) covered by code + server tests; needs a two-phone test with shruj."
+        },
+        {
+          "id": "P1-W2-safe-routes-in-app",
+          "title": "Ranked walking routes in the journey planner + chosen route on the journey map + off-route check-in nudge",
+          "status": "done",
+          "week": 2,
+          "notes": "sumeet: 2026-11-14 merged shruj's p4/safe-routes-bengaluru with sudden SOS on integration/safe-routes-sos. App asks Insight /routes with no token (rule 4), shows routes with facts, keeps the chosen one on the phone, shows it during the journey, nudges a check-in after 60 s >150 m off (never an alarm). Verified on emulator in Indiranagar; off-route nudge covered by unit tests only (emulator ran out of memory)."
         }
       ]
     },
@@ -544,7 +551,7 @@
           "title": "Hackathon demo: ranked walking routes for one Bengaluru area (Indiranagar) from open data + anonymous place reports",
           "status": "done",
           "week": 1,
-          "notes": "shruj: insight/app/routing: GET /routes (several distinct walking routes from an existing router, re-ranked by streetlights, places open, bus stops, stations, police, hospitals per km with day/evening/night weights; published report cells pull a route down; recommendation at most 25%/600 m longer than the shortest), POST /routes/reports (55 m cell + category + time + HMAC of an opaque reporter token, published only at the k/m threshold, fades over 30 days, gone at 90), GET /routes/area, /routes/demo (MapLibre map). Data: data/areas/indiranagar.json, 2,544 OSM features for a 4x4 km box (602 lamps, 1,195 shops, 415 food, 118 bus stops, 36 hospitals, 5 stations, 4 police) via scripts/build_area_features.py; BBMP/BMTC/police KML from data.opencity.in can replace OSM layers (download by hand). Router: public OSRM in dev, local Valhalla for the demo laptop. Labels only Strong/Some/Insufficient; no green on the map. ruff clean, 35 insight tests (23 new, no network). Live smoke with real data: night recommends a +245 m route with 8 lamps vs 1 and 49 open places vs 30 where day picks the shortest; 5 reports from 3 reporters flipped a recommendation. Branch p4/safe-routes-bengaluru (from main), not pushed yet."
+          "notes": "shruj: insight/app/routing: GET /routes (several distinct walking routes from an existing router, re-ranked by streetlights, places open, bus stops, stations, police, hospitals per km with day/evening/night weights; published report cells pull a route down; recommendation at most 25%/600 m longer than the shortest), POST /routes/reports (55 m cell + category + time + HMAC of an opaque reporter token, published only at the k/m threshold, fades over 30 days, gone at 90), GET /routes/area, /routes/demo (MapLibre map). Data: data/areas/indiranagar.json, 2,544 OSM features for a 4x4 km box (602 lamps, 1,195 shops, 415 food, 118 bus stops, 36 hospitals, 5 stations, 4 police) via scripts/build_area_features.py; BBMP/BMTC/police KML from data.opencity.in can replace OSM layers (download by hand). Router: public OSRM in dev, local Valhalla for the demo laptop. Labels only Strong/Some/Insufficient; no green on the map. ruff clean, 35 insight tests (23 new, no network). Live smoke with real data: night recommends a +245 m route with 8 lamps vs 1 and 49 open places vs 30 where day picks the shortest; 5 reports from 3 reporters flipped a recommendation. Branch p4/safe-routes-bengaluru (from main), not pushed yet. | sumeet 2026-11-14: tested live (14/14 smoke checks). Fixed: routes were car routes (router.project-osrm.org ignores the foot profile) -> default now FOSSGIS foot router; access log still printed coordinates when the comma was URL-encoded (%2C) -> filter fixed in Insight and Core, tests added; '1 streetlights' plural."
         }
       ]
     }
@@ -861,6 +868,12 @@
       "decision": "Routes live in the Insight service and re-rank an existing router's alternatives (public OSRM in dev, local Valhalla for demos) instead of custom cost routing; scores come from open infrastructure data plus published report cells only, with hand-set weights until real reports exist",
       "why": "Route requests must carry no identity and reports must never meet account data (rules 4, 6); re-ranking is small, explainable and needs no training data; the hackathon demo needs something that works in a day and says why",
       "by": "shruj"
+    },
+    {
+      "date": "2026-11-14",
+      "by": "sumeet",
+      "decision": "Safe-routes requests go from the phone straight to Insight with no account token; the chosen route stays on the phone and is never sent to Core",
+      "why": "Rules 2, 4 and 6: routes and reports never meet identity"
     }
   ],
   "blockers": [
@@ -909,6 +922,7 @@
     }
   ],
   "next_steps": [
+    "shruj: review integration/safe-routes-sos (her routes now use the FOSSGIS foot router; %2C log fix); demo: run Insight on :8001 next to the API so phones get routes",
     "shruj: install ~/Desktop/sixthsense-demo/sixthsense-sudden-sos.apk (or flutter run on p1/sudden-sos); screen off, phone in pocket, press Volume Down 5x -> SOS must arrive",
     "shruj + sumeet: download voice pack, Practice mode with our own voices (help help / bachao / madad / bacha lo), and 10 min of TV/street noise for false alarms",
     "shruj + sumeet: Audio Escort two-phone test (shruj listens; Ask to keep someone company; duress stop)",

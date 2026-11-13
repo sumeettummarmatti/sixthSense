@@ -10,7 +10,8 @@ import re
 
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # lat,lng pairs like 12.9716, 77.5946 (checked before phone numbers)
-    (re.compile(r"-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}"), "[REDACTED_COORDS]"),
+    # The separator may be URL-encoded (%2C) in request lines, e.g. /routes?from=12.97%2C77.64.
+    (re.compile(r"-?\d{1,3}\.\d{3,}\s*(?:,|%2[cC])\s*-?\d{1,3}\.\d{3,}"), "[REDACTED_COORDS]"),
     (re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "[REDACTED_EMAIL]"),
     # Aadhaar-like: 12 digits, optionally grouped 4-4-4
     (re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"), "[REDACTED_ID]"),

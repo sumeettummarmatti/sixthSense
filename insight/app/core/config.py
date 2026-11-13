@@ -27,7 +27,9 @@ class Settings(BaseSettings):
     # "valhalla" (local, routing-engine/). The area file is public infrastructure data built by
     # scripts/build_area_features.py; the path is relative to insight/.
     routing_provider: str = "osrm"
-    osrm_base_url: str = "https://router.project-osrm.org"
+    # FOSSGIS walking router (free, real foot profile). router.project-osrm.org only does car
+    # routing whatever profile is asked, which gave car routes and driving times.
+    osrm_base_url: str = "https://routing.openstreetmap.de/routed-foot"
     valhalla_base_url: str = "http://localhost:8002"
     routes_area_file: str = "data/areas/indiranagar.json"
     routes_max_detour_ratio: float = 1.25  # a recommended route is at most 25% longer...

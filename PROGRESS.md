@@ -3,6 +3,14 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-14 — sumeet: merged shruj's safe routes with sudden SOS; routes in the app
+
+- Merged `p4/safe-routes-bengaluru` (shruj) with `p1/sudden-sos` (which already has nearby responders and live location) on `integration/safe-routes-sos`.
+- Tested shruj's Insight service live: area info, day/night ranking, bad input, outside area, reports publish only at 5 reports / 3 reporters and move the recommendation, 21st report from one reporter is refused, demo page works. Never says "safe".
+- Fixed in her service: routes were really **car** routes (the public OSRM server ignores "foot"), now the free FOSSGIS foot router (1589 m / 21 min instead of 1908 m / 3 min); the access log still printed start/destination when the comma was URL-encoded (`%2C`), filter fixed in Insight and Core with tests; "1 streetlights".
+- App: after picking a destination the planner shows "Which way?" with the ranked routes and plain facts; the request carries no account token. The chosen route stays on the phone, shows on the journey map, and if you are >150 m off it for a minute the phone asks you to check in (never sends an alert by itself).
+- Checks: backend 217, Insight 37, Flutter 42, Kotlin 12 pass. Off-route nudge seen in unit tests only (emulator ran out of memory).
+
 ## 2026-11-14 — sumeet: Sudden SOS (volume buttons, voice), SOS recording, Audio Escort
 
 - **Volume Down ×5 (or hold)** during a journey → 5 s silent countdown → SOS sent from native code (works with the app closed), plus SMS when offline. Only the PIN cancels; the duress PIN looks like a cancel and sends a silent alarm. Quick Settings tile and widget use the same countdown. Power button can't be used by apps (Android reserves it).

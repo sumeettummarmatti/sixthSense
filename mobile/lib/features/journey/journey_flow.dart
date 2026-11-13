@@ -10,7 +10,9 @@ import '../../core/api/device_identity.dart';
 import '../../core/contacts/contact_book.dart';
 import '../../core/crypto/live_location_cipher.dart';
 import '../../core/journey/journey_runtime.dart';
+import '../../core/location/geo.dart';
 import '../../core/location/live_location.dart';
+import '../../core/routes/safe_routes.dart';
 import '../../core/sos/sudden_sos.dart';
 import '../../core/theme/app_theme.dart';
 import '../contacts/contact_alerts.dart';
@@ -19,6 +21,8 @@ import '../help/helpers_panel.dart';
 import '../sos/sos_widgets.dart';
 import '../sos/sudden_sos_screen.dart';
 import 'destination_picker.dart';
+import 'journey_route_screen.dart';
+import 'safe_routes_panel.dart';
 import '../walk/walk_flow.dart';
 import '../map/map_route_screen.dart';
 
@@ -80,6 +84,9 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   var _wasAlert = false;
   var _countdownWrongPins = 0;
 
+  // Gentle check-in nudge when far off the chosen route (never an alarm by itself).
+  OffRouteWatch? _offRoute;
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +94,29 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _sos.attach();
     _sosEvents = _sos.events.listen(_onSosEvent);
+    widget.relay?.myPosition.addListener(_checkOffRoute);
+  }
+
+  void _checkOffRoute() {
+    final watch = _offRoute;
+    final me = widget.relay?.myPosition.value;
+    if (watch == null || me == null || !mounted || _plan == null) return;
+    if (_help.value.anyAlert || _sos.countdown.value != null) return;
+    if (!watch.update(me.latitude, me.longitude, DateTime.now())) return;
+    unawaited(HapticFeedback.mediumImpact());
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const ValueKey('off-route'),
+          duration: const Duration(seconds: 20),
+          content: const Text('You are off your planned route. Everything OK?'),
+          action: SnackBarAction(
+            label: 'Check in',
+            onPressed: _enterCheckInPin,
+          ),
+        ),
+      );
   }
 
   @override
@@ -98,6 +128,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     _audioPump?.cancel();
     _escortPoll?.cancel();
     _sosEvents?.cancel();
+    widget.relay?.myPosition.removeListener(_checkOffRoute);
     _help.dispose();
     super.dispose();
   }
@@ -347,6 +378,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   }
 
   void _stopHelpPolling() {
+    _offRoute = null;
     _audioPump?.cancel();
     _escortPoll?.cancel();
     if (_escort != null) unawaited(_sos.stopEscortRecording());
@@ -499,6 +531,8 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
 
     if (!mounted) return;
     _ticker?.cancel();
+    final route = plan.route;
+    _offRoute = route == null ? null : OffRouteWatch(route.points);
     setState(() {
       _plan = plan;
       _checkInDue = false;
@@ -906,7 +940,11 @@ class JourneyPlan {
     this.destinationLongitude,
     this.listenForWords = false,
     this.recordAudio = true,
+    this.route,
   });
+
+  /// The walking route chosen from the ranked list, if any. On this phone only.
+  final RankedRoute? route;
 
   final String destination;
 
@@ -951,6 +989,7 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
   var _recordAudio = true;
   var _voicePackReady = false;
   Destination? _destination;
+  RankedRoute? _route;
 
   @override
   void initState() {
@@ -968,6 +1007,10 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
   int? _suggestedFor;
 
   void _onDestination(Destination destination, int? walkMinutes) {
+    if (destination.latitude != _destination?.latitude ||
+        destination.longitude != _destination?.longitude) {
+      setState(() => _destination = destination);
+    }
     _destination = destination;
     if (walkMinutes == null) {
       if (_suggestedFor != null) setState(() => _suggestedFor = null);
@@ -1041,6 +1084,7 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
         smsFallbackEnabled: _smsFallbackEnabled,
         listenForWords: _listenForWords && _voicePackReady,
         recordAudio: _recordAudio,
+        route: _destination?.hasPoint == true ? _route : null,
       ),
     );
   }
@@ -1119,6 +1163,11 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
                   controller: _destinationController,
                   onChanged: _onDestination,
                 ),
+                if (mapsEnabled)
+                  SafeRoutesPanel(
+                    destination: _destination,
+                    onSelected: (route) => _route = route,
+                  ),
                 const SizedBox(height: 28),
                 Text('Check in every', style: text.titleSmall),
                 if (_suggestedFor != null) ...[
@@ -1350,7 +1399,12 @@ class ActiveJourneyScreen extends StatelessWidget {
             tooltip: 'Map and route preview',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => MapRouteScreen(destination: plan.destination),
+                builder: (_) => plan.route != null
+                    ? JourneyRouteScreen(
+                        route: plan.route!,
+                        destination: plan.destination,
+                      )
+                    : MapRouteScreen(destination: plan.destination),
               ),
             ),
             icon: const Icon(Icons.map_outlined),
