@@ -276,6 +276,65 @@ class DemoApi {
   Future<void> raiseAlarm(String id) =>
       _request('POST', '/escalations/$id/raise');
 
+  /// For a contact who said "I'm on it": the traveller's keys, to share my
+  /// location back so they see me coming.
+  Future<OwnerKeys> alertOwnerKeys(String escalationId) async =>
+      OwnerKeys.fromJson(
+        await _request('GET', '/escalations/$escalationId/owner-keys'),
+      );
+
+  /// The traveller's view during a journey: is an alert open, who is coming.
+  Future<HelpView> help(String journeyId) async =>
+      HelpView.fromJson(await _request('GET', '/escalations/help/$journeyId'));
+
+  /// Rough area during a full alert, so nearby responders can be asked.
+  Future<void> sendAlertArea(String journeyId, double lat, double lng) =>
+      _request(
+        'PUT',
+        '/escalations/area/$journeyId',
+        body: {'latitude': lat, 'longitude': lng},
+      );
+
+  // ---- Responders (F6) ----
+
+  Future<ResponderMe> responderMe() async =>
+      ResponderMe.fromJson(await _request('GET', '/responders/me'));
+
+  Future<ResponderMe> applyAsResponder(String displayName) async =>
+      ResponderMe.fromJson(
+        await _request(
+          'POST',
+          '/responders/apply',
+          body: {'display_name': displayName},
+        ),
+      );
+
+  Future<void> sendPresence(double lat, double lng) => _request(
+    'PUT',
+    '/responders/presence',
+    body: {'latitude': lat, 'longitude': lng},
+  );
+
+  Future<void> goOffDuty() => _request('DELETE', '/responders/presence');
+
+  Future<List<ResponderOffer>> responderOffers() async {
+    final result = await _request('GET', '/responders/offers');
+    return (result['offers'] as List<dynamic>? ?? const [])
+        .map((item) => ResponderOffer.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// "I'm going": returns the traveller's keys for sharing my location back.
+  Future<OwnerKeys> goingToHelp(String offerId) async => OwnerKeys.fromJson(
+    await _request('POST', '/responders/offers/$offerId/going'),
+  );
+
+  Future<void> declineOffer(String offerId) =>
+      _request('POST', '/responders/offers/$offerId/decline');
+
+  Future<void> arrivedAtOffer(String offerId) =>
+      _request('POST', '/responders/offers/$offerId/arrived');
+
   Future<String> createTelegramLink() async {
     final result = await _request('POST', '/notifications/telegram/link');
     return result['url'] as String;
@@ -466,7 +525,13 @@ class ContactAlert {
     required this.acknowledged,
     required this.verificationCode,
     this.journeyId,
+    this.iAmHelping = false,
+    this.helpersGoing = 0,
   });
+
+  /// I said "I'm on it", so I share my location back to them.
+  final bool iAmHelping;
+  final int helpersGoing;
 
   final String id;
   final String ownerLabel;
@@ -494,5 +559,170 @@ class ContactAlert {
     openedAt: DateTime.parse(json['opened_at'] as String).toLocal(),
     acknowledged: json['acknowledged'] as bool? ?? false,
     verificationCode: json['verification_code'] as String,
+    iAmHelping: json['i_am_helping'] as bool? ?? false,
+    helpersGoing: json['helpers_going'] as int? ?? 0,
   );
+}
+
+/// A device public key of another person (for E2E live location).
+class PeerKey {
+  const PeerKey({
+    required this.keyId,
+    required this.x25519PublicKey,
+    required this.ed25519PublicKey,
+  });
+
+  final String keyId;
+  final String x25519PublicKey;
+  final String ed25519PublicKey;
+
+  factory PeerKey.fromJson(Map<String, dynamic> json) => PeerKey(
+    keyId: json['key_id'] as String,
+    x25519PublicKey: json['x25519_public_key'] as String,
+    ed25519PublicKey: json['ed25519_public_key'] as String,
+  );
+
+  static List<PeerKey> listFrom(Object? raw) => (raw as List<dynamic>? ?? [])
+      .map((item) => PeerKey.fromJson(item as Map<String, dynamic>))
+      .toList();
+}
+
+class OwnerKeys {
+  const OwnerKeys({required this.journeyId, required this.keys});
+
+  final String journeyId;
+  final List<PeerKey> keys;
+
+  factory OwnerKeys.fromJson(Map<String, dynamic> json) => OwnerKeys(
+    journeyId: json['journey_id'] as String,
+    keys: PeerKey.listFrom(json['keys']),
+  );
+}
+
+/// Someone coming to help me (a contact or a verified responder).
+class Helper {
+  const Helper({
+    required this.id,
+    required this.isResponder,
+    required this.label,
+    required this.contactLinkId,
+    required this.arrived,
+    required this.acceptedAt,
+    required this.keys,
+  });
+
+  final String id;
+  final bool isResponder;
+
+  /// Responder's display name; contacts are named from the phone's contact book.
+  final String? label;
+  final String? contactLinkId;
+  final bool arrived;
+  final DateTime acceptedAt;
+  final List<PeerKey> keys;
+
+  factory Helper.fromJson(Map<String, dynamic> json) => Helper(
+    id: json['id'] as String,
+    isResponder: json['kind'] == 'responder',
+    label: json['label'] as String?,
+    contactLinkId: json['contact_link_id'] as String?,
+    arrived: json['status'] == 'arrived',
+    acceptedAt: DateTime.parse(json['accepted_at'] as String).toLocal(),
+    keys: PeerKey.listFrom(json['keys']),
+  );
+}
+
+class HelpView {
+  const HelpView({
+    required this.fullAlert,
+    required this.anyAlert,
+    required this.helpers,
+  });
+
+  static const none = HelpView(fullAlert: false, anyAlert: false, helpers: []);
+
+  final bool fullAlert;
+  final bool anyAlert;
+  final List<Helper> helpers;
+
+  factory HelpView.fromJson(Map<String, dynamic> json) => HelpView(
+    fullAlert: json['full_alert'] as bool? ?? false,
+    anyAlert: json['any_alert'] as bool? ?? false,
+    helpers: (json['helpers'] as List<dynamic>? ?? const [])
+        .map((item) => Helper.fromJson(item as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+class ResponderMe {
+  const ResponderMe({
+    required this.status,
+    this.displayName,
+    this.onDuty = false,
+  });
+
+  /// none | pending | approved | revoked
+  final String status;
+  final String? displayName;
+  final bool onDuty;
+
+  bool get approved => status == 'approved';
+
+  factory ResponderMe.fromJson(Map<String, dynamic> json) => ResponderMe(
+    status: json['status'] as String? ?? 'none',
+    displayName: json['display_name'] as String?,
+    onDuty: json['on_duty'] as bool? ?? false,
+  );
+}
+
+/// Someone nearby asked for help and I am an on-duty responder.
+class ResponderOffer {
+  const ResponderOffer({
+    required this.id,
+    required this.status,
+    required this.distanceMeters,
+    required this.walkMinutes,
+    required this.covert,
+    required this.openedAt,
+    required this.helpersGoing,
+    required this.arrived,
+    this.journeyId,
+    this.roughLatitude,
+    this.roughLongitude,
+  });
+
+  final String id;
+
+  /// offered | going
+  final String status;
+  final int distanceMeters;
+  final int walkMinutes;
+  final bool covert;
+  final DateTime openedAt;
+  final int helpersGoing;
+  final bool arrived;
+
+  /// Set once I said "I'm going"; matches the live location session id.
+  final String? journeyId;
+  final double? roughLatitude;
+  final double? roughLongitude;
+
+  bool get going => status == 'going';
+
+  factory ResponderOffer.fromJson(Map<String, dynamic> json) {
+    final area = json['rough_area'] as Map<String, dynamic>?;
+    return ResponderOffer(
+      id: json['id'] as String,
+      status: json['status'] as String,
+      distanceMeters: json['distance_m'] as int,
+      walkMinutes: json['walk_minutes'] as int,
+      covert: json['covert'] as bool? ?? false,
+      openedAt: DateTime.parse(json['opened_at'] as String).toLocal(),
+      helpersGoing: json['helpers_going'] as int? ?? 0,
+      arrived: json['arrived'] as bool? ?? false,
+      journeyId: json['journey_id'] as String?,
+      roughLatitude: (area?['latitude'] as num?)?.toDouble(),
+      roughLongitude: (area?['longitude'] as num?)?.toDouble(),
+    );
+  }
 }

@@ -2,7 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:geolocator/geolocator.dart';
+
 import '../../core/api/device_identity.dart';
+import '../../core/location/geo.dart';
+import '../../core/location/live_location.dart';
 import 'contact_alerts.dart';
 import 'live_location_panel.dart';
 
@@ -13,10 +17,14 @@ class ContactAlertsScreen extends StatefulWidget {
     super.key,
     this.api = const DemoApi(),
     this.pollInterval = const Duration(seconds: 5),
+    this.relay,
   });
 
   final DemoApi api;
   final Duration pollInterval;
+
+  /// Shares my location back to the person while I'm on my way (null in tests).
+  final LiveLocationRelay? relay;
 
   @override
   State<ContactAlertsScreen> createState() => _ContactAlertsScreenState();
@@ -41,6 +49,9 @@ class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
     super.dispose();
   }
 
+  /// Journeys I'm sharing my location with because I said "I'm on it".
+  final _sharingBack = <String>{};
+
   Future<void> _refresh() async {
     try {
       final alerts = await widget.api.activeAlerts();
@@ -50,8 +61,39 @@ class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
           _error = null;
         });
       }
+      await _syncSharingBack(alerts);
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not reach the server.');
+    }
+  }
+
+  /// Keep sharing back for alerts I'm helping with; stop for closed ones.
+  Future<void> _syncSharingBack(List<ContactAlert> alerts) async {
+    final relay = widget.relay;
+    if (relay == null) return;
+    final helping = {
+      for (final alert in alerts)
+        if (alert.iAmHelping && alert.journeyId != null)
+          alert.journeyId!: alert,
+    };
+    for (final ended
+        in _sharingBack.difference(helping.keys.toSet()).toList()) {
+      _sharingBack.remove(ended);
+      await relay.stopHelping(ended);
+    }
+    for (final entry in helping.entries) {
+      if (relay.isHelping(entry.key)) {
+        _sharingBack.add(entry.key);
+        continue;
+      }
+      try {
+        final owner = await widget.api.alertOwnerKeys(entry.value.id);
+        if (await relay.startHelping(widget.api, owner)) {
+          _sharingBack.add(entry.key);
+        }
+      } catch (_) {
+        // Try again on the next refresh.
+      }
     }
   }
 
@@ -139,10 +181,13 @@ class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
                   _AlertCard(
                     alert: alert,
                     busy: _busy.contains(alert.id),
+                    relay: widget.relay,
                     onAck: () => _act(
                       alert,
                       widget.api.acknowledgeAlert,
-                      'Others know you are on it.',
+                      widget.relay == null
+                          ? 'Others know you are on it.'
+                          : '${alert.ownerLabel} can now see you coming.',
                     ),
                     onResolve: () => _act(
                       alert,
@@ -202,8 +247,10 @@ class _AlertCard extends StatelessWidget {
     required this.onAck,
     required this.onResolve,
     required this.onRaise,
+    this.relay,
   });
 
+  final LiveLocationRelay? relay;
   final ContactAlert alert;
   final bool busy;
   final VoidCallback onAck;
@@ -282,22 +329,41 @@ class _AlertCard extends StatelessWidget {
               style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
-            if (alert.acknowledged)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Someone is on it.',
-                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            if (alert.iAmHelping)
+              _OnMyWay(alert: alert, relay: relay)
+            else ...[
+              if (alert.acknowledged)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    alert.helpersGoing <= 1
+                        ? 'Someone is on it.'
+                        : '${alert.helpersGoing} people are on the way.',
+                    style: text.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              )
-            else
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: busy ? null : onAck,
-                  child: const Text("I'm on it"),
+                  child: Text(
+                    alert.acknowledged ? "I'm going too" : "I'm on it",
+                  ),
                 ),
               ),
+              if (relay != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${alert.ownerLabel} will see your live location while you go to them.',
+                    style: text.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -320,6 +386,73 @@ class _AlertCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "You're on your way · 280 m · ~4 min walk" for a contact who is helping.
+class _OnMyWay extends StatelessWidget {
+  const _OnMyWay({required this.alert, required this.relay});
+
+  final ContactAlert alert;
+  final LiveLocationRelay? relay;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final relay = this.relay;
+    Widget line(String label) => Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.directions_walk_rounded, color: colors.onPrimaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colors.onPrimaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (relay == null || alert.journeyId == null) {
+      return line("You're on it. Others have been told.");
+    }
+    return ValueListenableBuilder<Position?>(
+      valueListenable: relay.myPosition,
+      builder: (context, me, _) =>
+          ValueListenableBuilder<Map<String, ReceivedLocation>>(
+            valueListenable: relay.received,
+            builder: (context, locations, _) {
+              final them = locations[alert.journeyId];
+              if (me == null || them == null) {
+                return line(
+                  "You're on your way. ${alert.ownerLabel} can see you coming.",
+                );
+              }
+              final meters = distanceMeters(
+                me.latitude,
+                me.longitude,
+                them.latitude,
+                them.longitude,
+              );
+              return line(
+                meters < 40
+                    ? "You're right next to ${alert.ownerLabel}."
+                    : "You're on your way · ${walkLabel(meters)}",
+              );
+            },
+          ),
     );
   }
 }

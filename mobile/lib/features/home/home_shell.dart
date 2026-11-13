@@ -7,8 +7,10 @@ import '../../core/location/live_location.dart';
 import '../contacts/contact_alerts_screen.dart';
 import '../contacts/my_people_screen.dart';
 import '../journey/journey_flow.dart';
+import '../respond/respond_screen.dart';
 
-/// Signed-in home: my journey, my people, and the people I support.
+/// Signed-in home: my journey, my people, the people I support, and nearby
+/// requests if I'm a verified responder.
 class HomeShell extends StatefulWidget {
   const HomeShell({
     super.key,
@@ -30,6 +32,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   var _tab = 0;
   var _openAlerts = 0;
+  var _openOffers = 0;
   Timer? _poll;
 
   LiveLocationRelay get _relay => widget.relay ?? LiveLocationRelay.instance;
@@ -49,7 +52,37 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
+  Future<void> _checkOffers() async {
+    try {
+      final offers = await widget.api.responderOffers();
+      if (!mounted) return;
+      final waiting = offers.where((offer) => !offer.going).toList();
+      final grew = waiting.length > _openOffers;
+      setState(() => _openOffers = waiting.length);
+      if (grew && _tab != 3) {
+        final offer = waiting.last;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 12),
+              content: Text(
+                'Someone ~${offer.distanceMeters} m away needs help (~${offer.walkMinutes} min walk)',
+              ),
+              action: SnackBarAction(
+                label: 'Open',
+                onPressed: () => setState(() => _tab = 3),
+              ),
+            ),
+          );
+      }
+    } catch (_) {
+      // Not a responder, or offline.
+    }
+  }
+
   Future<void> _checkAlerts() async {
+    unawaited(_checkOffers());
     try {
       final alerts = await widget.api.activeAlerts();
       if (!mounted) return;
@@ -84,7 +117,8 @@ class _HomeShellState extends State<HomeShell> {
         children: [
           JourneyFlow(api: widget.api, relay: _relay),
           MyPeopleScreen(api: widget.api),
-          ContactAlertsScreen(api: widget.api),
+          ContactAlertsScreen(api: widget.api, relay: _relay),
+          RespondScreen(api: widget.api, relay: _relay),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -115,6 +149,21 @@ class _HomeShellState extends State<HomeShell> {
               child: const Icon(Icons.volunteer_activism_rounded),
             ),
             label: 'I support',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: _openOffers > 0,
+              backgroundColor: colors.error,
+              label: Text('$_openOffers'),
+              child: const Icon(Icons.health_and_safety_outlined),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: _openOffers > 0,
+              backgroundColor: colors.error,
+              label: Text('$_openOffers'),
+              child: const Icon(Icons.health_and_safety_rounded),
+            ),
+            label: 'Respond',
           ),
         ],
       ),

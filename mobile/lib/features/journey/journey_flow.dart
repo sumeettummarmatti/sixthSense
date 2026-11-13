@@ -4,12 +4,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:geolocator/geolocator.dart';
+
 import '../../core/api/device_identity.dart';
+import '../../core/contacts/contact_book.dart';
 import '../../core/journey/journey_runtime.dart';
 import '../../core/location/live_location.dart';
 import '../../core/theme/app_theme.dart';
 import '../contacts/contact_alerts.dart';
 import '../contacts/contact_alerts_screen.dart';
+import '../help/helpers_panel.dart';
+import 'destination_picker.dart';
 import '../walk/walk_flow.dart';
 import '../map/map_route_screen.dart';
 
@@ -48,6 +53,14 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   var _wrongPinAttempts = 0;
   late final DateTime Function() _now;
 
+  // Who is coming to help (polled while a journey is open).
+  final _help = ValueNotifier<HelpView>(HelpView.none);
+  Timer? _helpPoll;
+  final _knownHelpers = <String>{};
+  Map<String, LocalContact> _names = const {};
+  DateTime _lastAreaSent = DateTime.fromMillisecondsSinceEpoch(0);
+  var _covertSos = false;
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +73,91 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     _heartbeatTicker?.cancel();
+    _helpPoll?.cancel();
+    _help.dispose();
     super.dispose();
+  }
+
+  void _startHelpPolling(String journeyId) {
+    _helpPoll?.cancel();
+    _knownHelpers.clear();
+    _help.value = HelpView.none;
+    _lastAreaSent = DateTime.fromMillisecondsSinceEpoch(0);
+    ContactBook(widget.api.identity)
+        .load()
+        .then((names) => _names = names, onError: (_) {});
+    _helpPoll = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _pollHelp(journeyId),
+    );
+  }
+
+  void _stopHelpPolling() {
+    _helpPoll?.cancel();
+    _helpPoll = null;
+    _knownHelpers.clear();
+    _help.value = HelpView.none;
+    _covertSos = false;
+  }
+
+  Future<void> _pollHelp(String journeyId) async {
+    HelpView view;
+    try {
+      view = await widget.api.help(journeyId);
+    } catch (_) {
+      return; // offline: the phone-side timers still protect the user
+    }
+    if (!mounted || _serverJourneyId != journeyId) return;
+    _help.value = view;
+    widget.relay?.setJourneyHelpers([
+      for (final helper in view.helpers) ...helper.keys,
+    ]);
+    final fresh = view.helpers.where((h) => _knownHelpers.add(h.id)).toList();
+    if (fresh.isNotEmpty && !_covertSos) {
+      final first = fresh.first;
+      final name = first.isResponder
+          ? '${first.label ?? 'A verified responder'} (verified responder)'
+          : _names[first.contactLinkId]?.name ?? 'Your contact';
+      unawaited(HapticFeedback.heavyImpact());
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              fresh.length == 1
+                  ? '$name is coming to you'
+                  : '${fresh.length} people are coming to you',
+            ),
+          ),
+        );
+    }
+    if (view.fullAlert) await _sendArea(journeyId);
+  }
+
+  /// Rough area for finding responders nearby, every 30 s during a full alert.
+  Future<void> _sendArea(String journeyId, {bool now = false}) async {
+    if (!now &&
+        DateTime.now().difference(_lastAreaSent) <
+            const Duration(seconds: 30)) {
+      return;
+    }
+    var position = widget.relay?.myPosition.value;
+    try {
+      position ??= await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      await widget.api.sendAlertArea(
+        journeyId,
+        position.latitude,
+        position.longitude,
+      );
+      _lastAreaSent = DateTime.now();
+    } catch (_) {
+      // No GPS or offline: contacts are still alerted; retry on the next poll.
+    }
   }
 
   @override
@@ -146,6 +243,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     _heartbeatTicker?.cancel();
     if (serverJourneyId != null) {
       unawaited(widget.relay?.startSharing(widget.api, serverJourneyId));
+      if (widget.relay != null) _startHelpPolling(serverJourneyId);
       final heartbeatMinutes = (heartbeatTimeoutMinutes ~/ 2).clamp(1, 60);
       _heartbeatTicker = Timer.periodic(
         Duration(minutes: heartbeatMinutes),
@@ -278,6 +376,12 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     } else {
       try {
         await widget.api.requestSos(journeyId, covert: covert);
+        _covertSos = covert;
+        if (widget.relay != null) {
+          unawaited(
+            _sendArea(journeyId, now: true).then((_) => _pollHelp(journeyId)),
+          );
+        }
       } on ApiException catch (error) {
         serverError = error.detail;
       } catch (_) {
@@ -366,6 +470,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       if (!mounted) return;
       _ticker?.cancel();
       _heartbeatTicker?.cancel();
+      _stopHelpPolling();
       unawaited(widget.relay?.stopSharing());
       setState(() {
         _plan = null;
@@ -397,6 +502,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (!mounted) return;
     _ticker?.cancel();
     _heartbeatTicker?.cancel();
+    _stopHelpPolling();
     unawaited(widget.relay?.stopSharing());
     setState(() {
       _plan = null;
@@ -445,6 +551,14 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     if (plan == null) {
       return JourneySetupScreen(onStart: _startJourney, api: widget.api);
     }
+    // Rebuild when helpers change so the timer can shrink to make room.
+    return ValueListenableBuilder<HelpView>(
+      valueListenable: _help,
+      builder: (context, _, _) => _activeScreen(plan),
+    );
+  }
+
+  Widget _activeScreen(JourneyPlan plan) {
     return ActiveJourneyScreen(
       plan: plan,
       remaining: _remaining,
@@ -454,6 +568,19 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       onSos: _requestSos,
       onRequestBatteryExemption: _requestBatteryExemption,
       sharing: widget.relay?.sharing,
+      helpersPanel: widget.relay == null || _serverJourneyId == null
+          ? null
+          : ValueListenableBuilder<HelpView>(
+              valueListenable: _help,
+              builder: (context, view, _) => _covertSos
+                  ? const SizedBox.shrink() // a silent alarm shows nothing new
+                  : HelpersPanel(
+                      help: _help,
+                      relay: widget.relay!,
+                      names: _names,
+                    ),
+            ),
+      compact: _help,
     );
   }
 
@@ -480,9 +607,15 @@ class JourneyPlan {
     required this.duressPin,
     this.smsNumbers = const [],
     this.smsFallbackEnabled = false,
+    this.destinationLatitude,
+    this.destinationLongitude,
   });
 
   final String destination;
+
+  /// Picked on the map; kept on this phone only (never sent to the server).
+  final double? destinationLatitude;
+  final double? destinationLongitude;
   final Duration checkInInterval;
   final String realPin;
   final String duressPin;
@@ -511,6 +644,26 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
   final _smsNumberController = TextEditingController();
   var _selectedMinutes = 5;
   var _smsFallbackEnabled = false;
+  Destination? _destination;
+  int? _suggestedFor;
+
+  void _onDestination(Destination destination, int? walkMinutes) {
+    _destination = destination;
+    if (walkMinutes == null) {
+      if (_suggestedFor != null) setState(() => _suggestedFor = null);
+      return;
+    }
+    // Short walks: check in often. Long ones: less nagging.
+    final suggested = walkMinutes <= 15
+        ? 5
+        : walkMinutes <= 40
+        ? 10
+        : 15;
+    setState(() {
+      _suggestedFor = walkMinutes;
+      _selectedMinutes = suggested;
+    });
+  }
 
   static const _intervals = [1, 5, 10, 15];
 
@@ -559,6 +712,8 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
     widget.onStart(
       JourneyPlan(
         destination: destination,
+        destinationLatitude: _destination?.latitude,
+        destinationLongitude: _destination?.longitude,
         checkInInterval: Duration(minutes: _selectedMinutes),
         realPin: realPin,
         duressPin: duressPin,
@@ -620,20 +775,21 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
                 const SizedBox(height: 28),
                 Text('Where are you going?', style: text.titleSmall),
                 const SizedBox(height: 8),
-                TextField(
-                  key: const ValueKey('journey-destination'),
+                DestinationPicker(
                   controller: _destinationController,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.done,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.place_outlined),
-                    hintText: 'Destination',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _start(),
+                  onChanged: _onDestination,
                 ),
                 const SizedBox(height: 28),
                 Text('Check in every', style: text.titleSmall),
+                if (_suggestedFor != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Suggested for a ~$_suggestedFor min walk',
+                    style: text.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -758,7 +914,15 @@ class ActiveJourneyScreen extends StatelessWidget {
     required this.onSos,
     required this.onRequestBatteryExemption,
     this.sharing,
+    this.helpersPanel,
+    this.compact,
   });
+
+  /// Who is coming to help, while an alert is open.
+  final Widget? helpersPanel;
+
+  /// When an alert is open the timer shrinks to make room for helpers.
+  final ValueListenable<HelpView>? compact;
 
   /// Live location sharing status, if sharing is on.
   final ValueListenable<SharingStatus>? sharing;
@@ -777,7 +941,14 @@ class ActiveJourneyScreen extends StatelessWidget {
     final text = theme.textTheme;
     final intervalSeconds = plan.checkInInterval.inSeconds;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final timerDiameter = screenHeight < 700 ? 184.0 : 224.0;
+    final alertOpen =
+        compact != null &&
+        (compact!.value.anyAlert || compact!.value.helpers.isNotEmpty);
+    final timerDiameter = alertOpen
+        ? 120.0
+        : screenHeight < 700
+        ? 184.0
+        : 224.0;
     final progress = intervalSeconds == 0
         ? 0.0
         : (remaining.inSeconds / intervalSeconds).clamp(0.0, 1.0);
@@ -854,6 +1025,10 @@ class ActiveJourneyScreen extends StatelessWidget {
                       builder: (context, status, _) =>
                           _SharingChip(status: status),
                     ),
+                  ],
+                  if (helpersPanel != null) ...[
+                    const SizedBox(height: 12),
+                    helpersPanel!,
                   ],
                   const Spacer(),
                   SizedBox(

@@ -210,14 +210,19 @@ class LiveLocationRelay {
         (frame['envelope'] as Map).cast<String, dynamic>(),
       );
       final sender = (frame['sender'] as Map).cast<String, dynamic>();
-      final previous = received.value[envelope.sessionId];
+      final senderKeyId = sender['key_id'] as String;
+      // On my own journey's session, the sender is someone coming to help me.
+      final fromHelper = envelope.sessionId == _journeyId;
+      final store = fromHelper ? helperLocations : received;
+      final storeKey = fromHelper ? senderKeyId : envelope.sessionId;
+      final previous = store.value[storeKey];
       final point = await _cipher.decrypt(
         envelope: envelope,
         expectedSessionId: envelope.sessionId,
         expectedRecipientKeyId: keyring.keyId,
         recipientKeyPair: keyring.agreement,
         sender: LocationSenderVerificationKey(
-          keyId: sender['key_id'] as String,
+          keyId: senderKeyId,
           signingPublicKey: SimplePublicKey(
             base64Decode(sender['ed25519_public_key'] as String),
             type: KeyPairType.ed25519,
@@ -225,9 +230,9 @@ class LiveLocationRelay {
         ),
         lastAcceptedSequence: previous?.sequence,
       );
-      received.value = {
-        ...received.value,
-        envelope.sessionId: ReceivedLocation(
+      store.value = {
+        ...store.value,
+        storeKey: ReceivedLocation(
           sessionId: envelope.sessionId,
           latitude: point.latitude,
           longitude: point.longitude,
@@ -241,13 +246,28 @@ class LiveLocationRelay {
     }
   }
 
-  // ---- My own sharing ----
+  // ---- Sharing my location ----
+  //
+  // Two kinds of session, both end-to-end encrypted:
+  // - my journey: to my accepted contacts, plus responders who said "I'm going";
+  // - helping someone: to that traveller only, while I'm on my way to them.
+
+  /// My latest GPS fix while anything is shared (for distances on screen).
+  final myPosition = ValueNotifier<Position?>(null);
+
+  /// People coming to help me, keyed by their device key id.
+  final helperLocations = ValueNotifier<Map<String, ReceivedLocation>>({});
 
   StreamSubscription<Position>? _positions;
   Timer? _refreshRecipients;
-  List<LocationRecipientKeys> _recipients = const [];
+  List<LocationRecipientKeys> _contactRecipients = const [];
+  List<LocationRecipientKeys> _helperRecipients = const [];
+  final _helping = <String, List<LocationRecipientKeys>>{};
   String? _journeyId;
   DateTime _lastSent = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// The journey I'm sharing, if any.
+  String? get journeyId => _journeyId;
 
   /// Share precise location with my accepted contacts until [stopSharing].
   Future<void> startSharing(DemoApi api, String journeyId) async {
@@ -259,19 +279,87 @@ class LiveLocationRelay {
       return;
     }
     await _connect();
-    await _loadRecipients();
+    await _loadContactRecipients();
     _refreshRecipients?.cancel();
     _refreshRecipients = Timer.periodic(
       const Duration(minutes: 1),
-      (_) => _loadRecipients(),
+      (_) => _loadContactRecipients(),
     );
-    await _positions?.cancel();
+    await _ensurePositions();
+  }
+
+  /// Helpers on their way to me (from the journey's help view). Responders
+  /// among them start receiving my precise location; contacts already do.
+  void setJourneyHelpers(List<PeerKey> keys) {
+    _helperRecipients = [for (final key in keys) _recipientKey(key)];
+    _updateRecipientCount();
+  }
+
+  Future<void> stopSharing() async {
+    _journeyId = null;
+    _refreshRecipients?.cancel();
+    _contactRecipients = const [];
+    _helperRecipients = const [];
+    helperLocations.value = {};
+    sharing.value = SharingStatus.off;
+    await _maybeStopPositions();
+  }
+
+  /// I'm going to help: share my location with that traveller only.
+  Future<bool> startHelping(DemoApi api, OwnerKeys owner) async {
+    _api = api;
+    if (!await _locationAllowed()) return false;
+    _helping[owner.journeyId] = [
+      for (final key in owner.keys) _recipientKey(key),
+    ];
+    await _connect();
+    await _ensurePositions();
+    return true;
+  }
+
+  bool isHelping(String journeyId) => _helping.containsKey(journeyId);
+
+  Future<void> stopHelping(String journeyId) async {
+    if (_helping.remove(journeyId) == null) return;
+    await _maybeStopPositions();
+  }
+
+  /// Stop helping everyone not in [stillOpen] (their alert closed).
+  Future<void> keepHelpingOnly(Set<String> stillOpen) async {
+    final ended = _helping.keys.where((id) => !stillOpen.contains(id)).toList();
+    for (final id in ended) {
+      _helping.remove(id);
+    }
+    if (ended.isNotEmpty) await _maybeStopPositions();
+  }
+
+  static LocationRecipientKeys _recipientKey(PeerKey key) =>
+      LocationRecipientKeys(
+        keyId: key.keyId,
+        keyAgreementPublicKey: SimplePublicKey(
+          base64Decode(key.x25519PublicKey),
+          type: KeyPairType.x25519,
+        ),
+      );
+
+  Future<void> _ensurePositions() async {
+    if (_positions != null) return;
     _positions =
         Geolocator.getPositionStream(
           locationSettings: AndroidSettings(
             accuracy: LocationAccuracy.bestForNavigation,
             distanceFilter: 0,
             intervalDuration: const Duration(seconds: 3),
+            // Keeps GPS and sharing alive with the screen off or the phone in
+            // a pocket (Android foreground service with a visible notice).
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'SixthSense is sharing your live location',
+              notificationText:
+                  'Only with your people or the person you are helping, '
+                  'and only until the journey or alert ends.',
+              enableWakeLock: true,
+              setOngoing: true,
+            ),
           ),
         ).listen(
           _onPosition,
@@ -281,13 +369,11 @@ class LiveLocationRelay {
         );
   }
 
-  Future<void> stopSharing() async {
-    _journeyId = null;
+  Future<void> _maybeStopPositions() async {
+    if (_journeyId != null || _helping.isNotEmpty) return;
     await _positions?.cancel();
     _positions = null;
-    _refreshRecipients?.cancel();
-    _recipients = const [];
-    sharing.value = SharingStatus.off;
+    myPosition.value = null;
   }
 
   Future<bool> _locationAllowed() async {
@@ -300,7 +386,7 @@ class LiveLocationRelay {
         permission == LocationPermission.whileInUse;
   }
 
-  Future<void> _loadRecipients() async {
+  Future<void> _loadContactRecipients() async {
     final api = _api;
     if (api == null) return;
     try {
@@ -309,51 +395,77 @@ class LiveLocationRelay {
       for (final contact in contacts) {
         if (contact['status'] != 'accepted') continue;
         for (final key in await api.contactKeys(contact['id'] as String)) {
-          keys.add(
-            LocationRecipientKeys(
-              keyId: key['key_id'] as String,
-              keyAgreementPublicKey: SimplePublicKey(
-                base64Decode(key['x25519_public_key'] as String),
-                type: KeyPairType.x25519,
-              ),
-            ),
-          );
+          keys.add(_recipientKey(PeerKey.fromJson(key)));
         }
       }
-      _recipients = keys;
-      sharing.value = sharing.value.copyWith(recipients: keys.length);
+      _contactRecipients = keys;
+      _updateRecipientCount();
     } catch (error) {
       debugPrint('LiveLocationRelay could not load contact keys: $error');
     }
   }
 
+  List<LocationRecipientKeys> get _journeyRecipients {
+    final seen = <String>{};
+    return [
+      for (final key in [..._contactRecipients, ..._helperRecipients])
+        if (seen.add(key.keyId)) key,
+    ];
+  }
+
+  void _updateRecipientCount() {
+    if (sharing.value.active) {
+      sharing.value = sharing.value.copyWith(
+        recipients: _journeyRecipients.length,
+      );
+    }
+  }
+
   Future<void> _onPosition(Position position) async {
+    myPosition.value = position;
     final api = _api;
-    final journeyId = _journeyId;
-    if (api == null || journeyId == null) return;
+    if (api == null) return;
     final now = DateTime.now();
     if (now.difference(_lastSent) < const Duration(seconds: 2)) return;
     _lastSent = now;
-    sharing.value = sharing.value.copyWith(
+    if (_journeyId != null) {
+      sharing.value = sharing.value.copyWith(
+        accuracyMeters: position.accuracy,
+        lastFix: now,
+        error: null,
+      );
+    }
+    if (_socket == null) return;
+    final point = LiveLocationPoint(
+      latitude: position.latitude,
+      longitude: position.longitude,
       accuracyMeters: position.accuracy,
-      lastFix: now,
-      error: null,
+      timestamp: position.timestamp,
+      // Time-based so a restarted app never looks like a replay.
+      sequence: now.millisecondsSinceEpoch,
     );
-    if (_recipients.isEmpty || _socket == null) return;
+    final journeyId = _journeyId;
+    if (journeyId != null) {
+      await _sendTo(api, journeyId, _journeyRecipients, point);
+    }
+    for (final entry in _helping.entries.toList()) {
+      await _sendTo(api, entry.key, entry.value, point);
+    }
+  }
+
+  Future<void> _sendTo(
+    DemoApi api,
+    String sessionId,
+    List<LocationRecipientKeys> recipients,
+    LiveLocationPoint point,
+  ) async {
+    if (recipients.isEmpty) return;
     try {
       final keyring = await E2EKeyring.load(api);
-      final point = LiveLocationPoint(
-        latitude: position.latitude,
-        longitude: position.longitude,
-        accuracyMeters: position.accuracy,
-        timestamp: position.timestamp,
-        // Time-based so a restarted app never looks like a replay.
-        sequence: now.millisecondsSinceEpoch,
-      );
       final envelopes = <Map<String, Object>>[];
-      for (final recipient in _recipients.take(10)) {
+      for (final recipient in recipients.take(10)) {
         final envelope = await _cipher.encrypt(
-          sessionId: journeyId,
+          sessionId: sessionId,
           senderKeyId: keyring.keyId,
           senderSigningKeyPair: keyring.signing,
           recipient: recipient,
@@ -382,7 +494,7 @@ class SharingStatus {
 
   final bool active;
 
-  /// Contact devices I encrypt for.
+  /// Devices I encrypt for (contacts plus helpers on their way).
   final int recipients;
 
   /// Contact devices that were online for the last fix.
