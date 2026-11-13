@@ -38,3 +38,4 @@ build/
 
 # Routing engine data (large)
 routing-engine/data/
+backend/.sim/
