@@ -185,7 +185,17 @@ def test_only_nearby_responders_are_asked_then_radius_grows(
     far = responder(client, db, make_user, "Dev", FAR_3KM)
     sos_with_area(client, people["owner"])
 
+    owner = people["owner"]
+    journey = client.get("/journeys/current", headers=owner["headers"]).json()["id"]
+    assert help_view(client, owner, journey)["search"] is None  # opens on the next tick
+
     assert tick(db, redis, senders, clock) == 1
+    assert help_view(client, owner, journey)["search"] == {
+        "radius_m": 500,
+        "on_duty_nearby": 1,
+        "asked": 1,
+        "going": 0,
+    }
     [offer] = offers(client, near)
     assert offer["status"] == "offered" and offer["journey_id"] is None
     assert 250 <= offer["distance_m"] <= 350 and offer["walk_minutes"] in (4, 5)

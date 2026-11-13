@@ -67,12 +67,24 @@ class Helper(BaseModel):
     keys: list[HelperKey] = Field(description="Encrypt live location to these; verify theirs")
 
 
+class ResponderSearch(BaseModel):
+    """Counts only: the traveller never learns who is on duty or where (rule 4)."""
+
+    radius_m: int = Field(description="Current search radius: 500, then 1000, then 2000")
+    on_duty_nearby: int = Field(description="Approved responders on duty within the radius")
+    asked: int
+    going: int
+
+
 class HelpView(BaseModel):
     """What the traveller's phone polls during a journey."""
 
     full_alert: bool = Field(description="A full alert is open: send the rough area for responders")
     any_alert: bool
     helpers: list[Helper]
+    search: ResponderSearch | None = Field(
+        default=None, description="Nearby responder search, during a full alert"
+    )
 
 
 class AlertArea(BaseModel):

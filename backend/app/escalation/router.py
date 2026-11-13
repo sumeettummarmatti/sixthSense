@@ -124,13 +124,37 @@ def _owned_open_journey(db: DbDep, account_id: uuid.UUID, journey_id: uuid.UUID)
 
 
 @router.get("/help/{journey_id}", response_model=schemas.HelpView)
-def help_view(journey_id: uuid.UUID, session: CurrentSessionDep, db: DbDep) -> schemas.HelpView:
+def help_view(
+    journey_id: uuid.UUID,
+    session: CurrentSessionDep,
+    db: DbDep,
+    redis: RedisDep,
+    settings: SettingsDep,
+    now: NowDep,
+) -> schemas.HelpView:
     """The traveller's view: is an alert open, and who said they are coming."""
     journey = _owned_open_journey(db, session.account_id, journey_id)
+    search = None
+    full = db.scalars(
+        select(Escalation).where(
+            Escalation.journey_id == journey.id,
+            Escalation.closed_at.is_(None),
+            Escalation.level == State.FULL_ESCALATION.value,
+        )
+    ).first()
+    if full is not None:
+        found = nearby.search_summary(db, redis, settings, full, now)
+        search = schemas.ResponderSearch(
+            radius_m=found.radius_m,
+            on_duty_nearby=found.on_duty_nearby,
+            asked=found.asked,
+            going=found.going,
+        )
     return schemas.HelpView(
         full_alert=journey.state == State.FULL_ESCALATION,
         any_alert=journey.state in {s.value for s in ESCALATED_STATES},
         helpers=helpers.for_owner(db, session.account_id, journey.id),
+        search=search,
     )
 
 

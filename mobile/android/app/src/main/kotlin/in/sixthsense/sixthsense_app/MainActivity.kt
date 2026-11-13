@@ -148,7 +148,11 @@ class MainActivity : FlutterActivity() {
                         }
                         "openUrl" -> {
                             val url = call.argument<String>("url")
-                            if (url.isNullOrBlank() || !url.startsWith("https://")) {
+                            if (url == "tel:112") {
+                                // Opens the dialer with 112 filled in; the user presses call.
+                                startActivity(Intent(Intent.ACTION_DIAL, Uri.parse(url)))
+                                result.success(null)
+                            } else if (url.isNullOrBlank() || !url.startsWith("https://")) {
                                 result.error("invalid_url", "Only HTTPS links can be opened.", null)
                             } else {
                                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))

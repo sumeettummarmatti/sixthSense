@@ -6,13 +6,78 @@ import '../../core/api/device_identity.dart';
 import '../../core/contacts/contact_book.dart';
 import '../../core/location/geo.dart';
 import '../../core/location/live_location.dart';
-import 'people_map.dart';
+import '../map/live_help_map.dart';
+import '../map/live_map.dart';
 
-const _meColor = '#5B3FA8';
-const _helperColor = '#1F7A8C';
+/// Name shown for a helper: responder's display name, or my contact's name.
+String helperName(Helper helper, Map<String, LocalContact> names) {
+  if (helper.isResponder) return helper.label ?? 'A verified responder';
+  return names[helper.contactLinkId]?.name ?? 'Your contact';
+}
+
+/// Latest decrypted location of a helper (any of their devices).
+ReceivedLocation? helperLocation(
+  Helper helper,
+  Map<String, ReceivedLocation> locations,
+) {
+  ReceivedLocation? latest;
+  for (final key in helper.keys) {
+    final location = locations[key.keyId];
+    if (location != null &&
+        (latest == null || location.takenAt.isAfter(latest.takenAt))) {
+      latest = location;
+    }
+  }
+  return latest;
+}
+
+/// Me (pulsing red during a full alert) plus everyone coming, labelled.
+List<MapActor> travellerActors(
+  HelpView view,
+  Position? me,
+  Map<String, ReceivedLocation> locations,
+  Map<String, LocalContact> names,
+) => [
+  if (me != null)
+    MapActor(
+      id: 'me',
+      kind: ActorKind.me,
+      latitude: me.latitude,
+      longitude: me.longitude,
+      label: 'You',
+      inDanger: view.fullAlert,
+    ),
+  for (final helper in view.helpers)
+    if (helperLocation(helper, locations) case final at?)
+      MapActor(
+        id: helper.id,
+        kind: helper.isResponder ? ActorKind.responder : ActorKind.contact,
+        latitude: at.latitude,
+        longitude: at.longitude,
+        label: [
+          helperName(helper, names),
+          if (me != null && !helper.arrived)
+            '${walkMinutes(distanceMeters(me.latitude, me.longitude, at.latitude, at.longitude))} min',
+        ].join(' · '),
+      ),
+];
+
+/// "Searching 500 m · 3 responders on duty nearby · 2 asked · 1 coming"
+String? searchLine(HelpView view) {
+  final search = view.search;
+  if (search == null) return null;
+  final parts = <String>[
+    if (search.going < 2)
+      'Searching ${distanceLabel(search.radiusMeters.toDouble())}',
+    '${search.onDutyNearby} responder${search.onDutyNearby == 1 ? '' : 's'} on duty nearby',
+    '${search.asked} asked',
+    '${search.going} coming',
+  ];
+  return parts.join(' · ');
+}
 
 /// On my journey screen while an alert is open: who is coming, how far they
-/// are, and a small map with them and me. Like a ride app, but for help.
+/// are, and a live map with them gliding towards me. Like a ride app.
 class HelpersPanel extends StatelessWidget {
   const HelpersPanel({
     super.key,
@@ -44,26 +109,6 @@ class HelpersPanel extends StatelessWidget {
     );
   }
 
-  String _name(Helper helper) {
-    if (helper.isResponder) return helper.label ?? 'A verified responder';
-    return names[helper.contactLinkId]?.name ?? 'Your contact';
-  }
-
-  ReceivedLocation? _locationOf(
-    Helper helper,
-    Map<String, ReceivedLocation> locations,
-  ) {
-    ReceivedLocation? latest;
-    for (final key in helper.keys) {
-      final location = locations[key.keyId];
-      if (location != null &&
-          (latest == null || location.takenAt.isAfter(latest.takenAt))) {
-        latest = location;
-      }
-    }
-    return latest;
-  }
-
   Widget _panel(
     BuildContext context,
     HelpView view,
@@ -73,23 +118,9 @@ class HelpersPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final text = theme.textTheme;
-    final people = <MapPerson>[
-      if (me != null)
-        MapPerson(
-          latitude: me.latitude,
-          longitude: me.longitude,
-          color: _meColor,
-          isMe: true,
-        ),
-      for (final helper in view.helpers)
-        if (_locationOf(helper, locations) case final location?)
-          MapPerson(
-            latitude: location.latitude,
-            longitude: location.longitude,
-            color: _helperColor,
-          ),
-    ];
+    final actors = travellerActors(view, me, locations, names);
     final waiting = view.helpers.isEmpty;
+    final search = searchLine(view);
     return Container(
       key: const ValueKey('helpers-panel'),
       width: double.infinity,
@@ -116,34 +147,68 @@ class HelpersPanel extends StatelessWidget {
                             ? 'Alert sent. Asking your contacts and responders nearby…'
                             : 'Your contacts have been alerted…')
                       : view.helpers.length == 1
-                      ? '${_name(view.helpers.first)} is coming'
+                      ? '${helperName(view.helpers.first, names)} is coming'
                       : '${view.helpers.length} people are coming',
                   style: text.titleMedium,
                 ),
               ),
             ],
           ),
-          if (people.length > 1) ...[
+          if (search != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              search,
+              key: const ValueKey('search-line'),
+              style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
+          if (actors.isNotEmpty && mapsEnabled) ...[
             const SizedBox(height: 10),
-            PeopleMap(people: people, height: 170),
+            LiveMap(
+              actors: actors,
+              height: 170,
+              searchRadiusMeters: (view.search?.going ?? 2) < 2
+                  ? view.search!.radiusMeters.toDouble()
+                  : null,
+              linkHelpersToTraveller: true,
+            ),
           ],
           for (final helper in view.helpers) ...[
             const SizedBox(height: 10),
-            _HelperRow(
-              name: _name(helper),
+            HelperTile(
+              name: helperName(helper, names),
               helper: helper,
-              location: _locationOf(helper, locations),
+              location: helperLocation(helper, locations),
               me: me,
             ),
           ],
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const ValueKey('open-live-map'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => TravellerLiveMapPage(
+                    help: help,
+                    relay: relay,
+                    names: names,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.open_in_full_rounded, size: 18),
+              label: const Text('Full-screen live map'),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _HelperRow extends StatelessWidget {
-  const _HelperRow({
+class HelperTile extends StatelessWidget {
+  const HelperTile({
+    super.key,
     required this.name,
     required this.helper,
     required this.location,
@@ -181,16 +246,16 @@ class _HelperRow extends StatelessWidget {
         CircleAvatar(
           radius: 18,
           backgroundColor: helper.isResponder
-              ? colors.tertiaryContainer
-              : colors.primaryContainer,
+              ? const Color(0xFFD3EFE4)
+              : const Color(0xFFD5EEF2),
           child: Icon(
             helper.isResponder
                 ? Icons.verified_user_rounded
                 : Icons.favorite_rounded,
             size: 18,
             color: helper.isResponder
-                ? colors.onTertiaryContainer
-                : colors.onPrimaryContainer,
+                ? const Color(0xFF0B6E4F)
+                : const Color(0xFF1F7A8C),
           ),
         ),
         const SizedBox(width: 10),

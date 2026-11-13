@@ -632,12 +632,38 @@ class Helper {
   );
 }
 
+/// Nearby responder search during a full alert: counts only, never who/where.
+class ResponderSearch {
+  const ResponderSearch({
+    required this.radiusMeters,
+    required this.onDutyNearby,
+    required this.asked,
+    required this.going,
+  });
+
+  final int radiusMeters;
+  final int onDutyNearby;
+  final int asked;
+  final int going;
+
+  factory ResponderSearch.fromJson(Map<String, dynamic> json) =>
+      ResponderSearch(
+        radiusMeters: json['radius_m'] as int,
+        onDutyNearby: json['on_duty_nearby'] as int,
+        asked: json['asked'] as int,
+        going: json['going'] as int,
+      );
+}
+
 class HelpView {
   const HelpView({
     required this.fullAlert,
     required this.anyAlert,
     required this.helpers,
+    this.search,
   });
+
+  final ResponderSearch? search;
 
   static const none = HelpView(fullAlert: false, anyAlert: false, helpers: []);
 
@@ -651,6 +677,9 @@ class HelpView {
     helpers: (json['helpers'] as List<dynamic>? ?? const [])
         .map((item) => Helper.fromJson(item as Map<String, dynamic>))
         .toList(),
+    search: json['search'] == null
+        ? null
+        : ResponderSearch.fromJson(json['search'] as Map<String, dynamic>),
   );
 }
 

@@ -7,7 +7,7 @@ import '../../core/api/device_identity.dart';
 import '../../core/location/geo.dart';
 import '../../core/location/live_location.dart';
 import '../contacts/live_location_panel.dart';
-import '../help/people_map.dart';
+import '../map/live_map.dart';
 
 /// Verified responders (F6): go on duty, get asked when someone nearby
 /// presses SOS, and say "I'm going". Until then only a rough area (~110 m)
@@ -431,6 +431,29 @@ class _OfferCard extends StatelessWidget {
   final VoidCallback onDecline;
   final VoidCallback onArrived;
 
+  Widget _roughMap() => LiveMap(
+    height: 180,
+    threeD: true,
+    roughRadiusMeters: 150,
+    actors: [
+      MapActor(
+        id: 'area',
+        kind: ActorKind.roughArea,
+        latitude: offer.roughLatitude!,
+        longitude: offer.roughLongitude!,
+        label: 'Around here',
+      ),
+      if (myPosition != null)
+        MapActor(
+          id: 'me',
+          kind: ActorKind.me,
+          latitude: myPosition!.latitude,
+          longitude: myPosition!.longitude,
+          label: 'You',
+        ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -482,25 +505,7 @@ class _OfferCard extends StatelessWidget {
             ],
             const SizedBox(height: 12),
             if (!offer.going) ...[
-              if (offer.roughLatitude != null)
-                PeopleMap(
-                  height: 160,
-                  people: [
-                    MapPerson(
-                      latitude: offer.roughLatitude!,
-                      longitude: offer.roughLongitude!,
-                      color: '#B3261E',
-                      roughRadiusPixels: 36,
-                    ),
-                    if (myPosition != null)
-                      MapPerson(
-                        latitude: myPosition!.latitude,
-                        longitude: myPosition!.longitude,
-                        color: '#5B3FA8',
-                        isMe: true,
-                      ),
-                  ],
-                ),
+              if (offer.roughLatitude != null) _roughMap(),
               const SizedBox(height: 6),
               Text(
                 'Rough area only. You see exactly where they are after you say you are going. '
@@ -529,11 +534,13 @@ class _OfferCard extends StatelessWidget {
               if (offer.journeyId != null)
                 LiveLocationPanel(
                   journeyId: offer.journeyId!,
-                  ownerLabel: 'the person',
+                  ownerLabel: 'Person in need',
                   relay: relay,
+                  helping: true,
+                  whileWaiting: offer.roughLatitude == null
+                      ? null
+                      : _roughMap(),
                 ),
-              if (relay != null && offer.journeyId != null)
-                _DistanceToThem(relay: relay!, journeyId: offer.journeyId!),
               const SizedBox(height: 10),
               if (offer.arrived)
                 Text(
@@ -557,43 +564,6 @@ class _OfferCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DistanceToThem extends StatelessWidget {
-  const _DistanceToThem({required this.relay, required this.journeyId});
-
-  final LiveLocationRelay relay;
-  final String journeyId;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<Position?>(
-      valueListenable: relay.myPosition,
-      builder: (context, me, _) =>
-          ValueListenableBuilder<Map<String, ReceivedLocation>>(
-            valueListenable: relay.received,
-            builder: (context, locations, _) {
-              final them = locations[journeyId];
-              if (me == null || them == null) return const SizedBox.shrink();
-              final meters = distanceMeters(
-                me.latitude,
-                me.longitude,
-                them.latitude,
-                them.longitude,
-              );
-              return Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  meters < 40
-                      ? 'You are right there.'
-                      : 'You: ${walkLabel(meters)}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              );
-            },
-          ),
     );
   }
 }

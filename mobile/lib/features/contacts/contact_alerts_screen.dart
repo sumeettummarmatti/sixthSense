@@ -311,6 +311,8 @@ class _AlertCard extends StatelessWidget {
               LiveLocationPanel(
                 journeyId: alert.journeyId!,
                 ownerLabel: alert.ownerLabel,
+                relay: relay,
+                helping: alert.iAmHelping,
               ),
             ],
             const SizedBox(height: 14),

@@ -56,6 +56,25 @@ void main() {
     ),
   );
 
+  test('search line shows radius and counts until two are coming', () {
+    const searching = HelpView(
+      fullAlert: true,
+      anyAlert: true,
+      helpers: [],
+      search: ResponderSearch(
+        radiusMeters: 500,
+        onDutyNearby: 3,
+        asked: 2,
+        going: 1,
+      ),
+    );
+    expect(
+      searchLine(searching),
+      'Searching 500 m · 3 responders on duty nearby · 2 asked · 1 coming',
+    );
+    expect(searchLine(HelpView.none), isNull);
+  });
+
   testWidgets('nothing shows before an alert', (tester) async {
     await pump(tester, HelpView.none);
     expect(find.byKey(const ValueKey('helpers-panel')), findsNothing);
@@ -107,7 +126,10 @@ void main() {
     );
     expect(find.text('2 people are coming'), findsOneWidget);
     expect(find.text('Shruj'), findsOneWidget);
-    expect(find.textContaining(RegExp(r'^300 m · ~[56] min walk$')), findsOneWidget);
+    expect(
+      find.textContaining(RegExp(r'^300 m · ~[56] min walk$')),
+      findsOneWidget,
+    );
     expect(find.text('Riya · verified responder'), findsOneWidget);
     expect(find.text('Says they have reached you'), findsOneWidget);
   });

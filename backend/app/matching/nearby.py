@@ -252,3 +252,52 @@ def going_count(db: Session, escalation_id: uuid.UUID) -> int:
         )
         or 0
     )
+
+
+@dataclass(frozen=True)
+class Search:
+    """What the traveller sees during a full alert: counts only, never who or where."""
+
+    radius_m: int
+    on_duty_nearby: int
+    asked: int
+    going: int
+
+
+def search_summary(
+    db: Session, redis: Redis, settings: Settings, escalation: Escalation, now: datetime
+) -> Search:
+    radius = radius_for(escalation, settings, now)
+    offers = list(
+        db.scalars(select(ResponderOffer).where(ResponderOffer.escalation_id == escalation.id))
+    )
+    area = alert_area(redis, escalation.journey_id)
+    nearby_count = 0
+    if area is not None:
+        duty = on_duty(redis, settings, now)
+        contacts = set(
+            db.scalars(
+                select(EscalationRecipient.contact_account_id).where(
+                    EscalationRecipient.escalation_id == escalation.id
+                )
+            )
+        )
+        approved = set(
+            db.scalars(
+                select(ResponderProfile.account_id).where(
+                    ResponderProfile.status == "approved",
+                    ResponderProfile.account_id.in_(list(duty)),
+                )
+            )
+        )
+        nearby_count = sum(
+            1
+            for account in approved - contacts - {escalation.owner_id}
+            if distance_m(area, duty[account]) <= radius
+        )
+    return Search(
+        radius_m=radius,
+        on_duty_nearby=nearby_count,
+        asked=sum(1 for offer in offers if offer.status != "declined"),
+        going=sum(1 for offer in offers if offer.status == "going"),
+    )
