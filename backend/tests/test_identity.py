@@ -302,8 +302,18 @@ def test_dev_secrets_refused_outside_dev() -> None:
     with pytest.raises(ValueError, match="OTP_PEPPER"):
         Settings(_env_file=None, env="prod")
     with pytest.raises(ValueError, match="DATA_KEY"):
-        Settings(_env_file=None, env="prod", otp_pepper="real-pepper", token_secret="real-secret")
-    real = {"otp_pepper": "p", "token_secret": "t", "data_key": "d"}
+        Settings(
+            _env_file=None,
+            env="prod",
+            otp_pepper="real-pepper",
+            token_secret="real-secret",
+        )
+    real = {
+        "otp_pepper": "p",
+        "token_secret": "t",
+        "data_key": "d",
+        "identity_hmac_secret": "identity-secret",
+    }
     with pytest.raises(ValueError, match="ALERT_SIGNING_KEY"):
         Settings(_env_file=None, env="prod", **real)
     Settings(_env_file=None, env="prod", **real, alert_signing_key="cmVhbC1rZXk=")

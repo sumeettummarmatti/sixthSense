@@ -4,6 +4,7 @@
 import base64
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import cast
 
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from app.identity.models import Device, DeviceE2EKeys
 from app.identity.router import CurrentSession
 from app.journey.models import Journey
 from app.journey.state import State
+from app.verification.eligibility import eligible
 
 ENVELOPE_FIELDS = frozenset(
     {
@@ -73,7 +75,25 @@ def _traveller_recipients(db: Session, journey: Journey) -> set[uuid.UUID]:
     )
     if journey.alert_contact_ids is not None:
         contacts = contacts.where(TrustedContact.id.in_(journey.alert_contact_ids))
-    return set(db.scalars(contacts)) | helpers.helper_accounts(db, journey.id, kind="responder")
+    now = datetime.now(UTC)
+    responders = {
+        account
+        for account in helpers.helper_accounts(db, journey.id, kind="responder")
+        if eligible(db, account, "responder", now)
+    }
+    return set(db.scalars(contacts)) | responders
+
+
+def _active_helpers(db: Session, journey_id: uuid.UUID) -> set[uuid.UUID]:
+    """Contacts may help as trusted contacts; responders must remain eligible."""
+    now = datetime.now(UTC)
+    contacts = helpers.helper_accounts(db, journey_id, kind="contact")
+    responders = {
+        account
+        for account in helpers.helper_accounts(db, journey_id, kind="responder")
+        if eligible(db, account, "responder", now)
+    }
+    return contacts | responders
 
 
 def route(db: Session, sender: CurrentSession, envelopes: object) -> Routed:
@@ -85,7 +105,7 @@ def route(db: Session, sender: CurrentSession, envelopes: object) -> Routed:
         raise RelayError("no_open_journey")
     if journey.account_id == sender.account_id:
         allowed_accounts = _traveller_recipients(db, journey)
-    elif sender.account_id in helpers.helper_accounts(db, journey.id):
+    elif sender.account_id in _active_helpers(db, journey.id):
         # A helper on their way shares their own location with the traveller only.
         allowed_accounts = {journey.account_id}
     else:

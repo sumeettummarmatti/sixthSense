@@ -27,6 +27,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 import httpx
@@ -253,9 +254,35 @@ class Bot:
             },
         ).json()
         self.state["key_id"] = keys["key_id"]
+        self.ensure_verified(http)
         http.post(
             f"{self.api}/responders/apply", headers=self.headers(), json={"display_name": self.name}
         )
+
+    def ensure_verified(self, http: httpx.Client) -> None:
+        status = http.get(f"{self.api}/verification/me", headers=self.headers()).json()
+        if status["status"] == "verified":
+            return
+        session = http.post(
+            f"{self.api}/verification/sessions",
+            headers=self.headers(),
+            json={"purpose": "responder", "consent": True},
+        )
+        session.raise_for_status()
+        verification_id = session.json()["id"]
+        result = http.post(
+            f"{self.api}/verification/sessions/{verification_id}/document",
+            headers=self.headers(),
+            json={
+                "id_type": "drivers_license",
+                "id_number": f"SIM-{self.name.upper()}-DEMO-001",
+                "date_of_birth": date(2000, 1, 1).isoformat(),
+                "scenario": "approve",
+            },
+        )
+        result.raise_for_status()
+        if result.json()["status"] != "verified":
+            raise RuntimeError(f"Mock verification did not approve simulated responder {self.name}")
 
     def sign_in(self, http: httpx.Client) -> None:
         device = self.state["device_id"]
@@ -535,6 +562,7 @@ def main() -> None:
             if bot.state:
                 try:
                     bot.sign_in(http)
+                    bot.ensure_verified(http)
                 except httpx.HTTPError:
                     bot.state = {}
             if not bot.state:

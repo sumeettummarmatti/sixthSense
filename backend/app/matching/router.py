@@ -19,6 +19,7 @@ from app.escalation.models import Escalation
 from app.identity.router import CurrentSessionDep, DbDep, SettingsDep
 from app.matching import nearby, schemas
 from app.matching.models import ResponderOffer, ResponderProfile
+from app.verification.eligibility import eligible
 
 router = APIRouter(prefix="/responders", tags=["matching"])
 
@@ -37,9 +38,9 @@ NowDep = Annotated[datetime, Depends(_now)]
 def apply(
     body: schemas.Apply, session: CurrentSessionDep, db: DbDep, settings: SettingsDep, now: NowDep
 ) -> schemas.Me:
-    profile = db.get(ResponderProfile, session.account_id)
+    profile = db.get(ResponderProfile, (session.account_id, "responder"))
     if profile is None:
-        profile = ResponderProfile(account_id=session.account_id, applied_at=now)
+        profile = ResponderProfile(account_id=session.account_id, role="responder", applied_at=now)
         db.add(profile)
     if profile.status == "revoked":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "responder_revoked")
@@ -57,7 +58,7 @@ def apply(
 def me(
     session: CurrentSessionDep, db: DbDep, redis: RedisDep, settings: SettingsDep, now: NowDep
 ) -> schemas.Me:
-    profile = db.get(ResponderProfile, session.account_id)
+    profile = db.get(ResponderProfile, (session.account_id, "responder"))
     if profile is None:
         return schemas.Me(status="none")
     duty = nearby.presence_of(redis, session.account_id, settings, now) is not None
@@ -65,7 +66,7 @@ def me(
 
 
 def _approved(db: DbDep, account_id: uuid.UUID) -> ResponderProfile:
-    profile = db.get(ResponderProfile, account_id)
+    profile = db.get(ResponderProfile, (account_id, "responder"))
     if profile is None or profile.status != "approved":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "not_an_approved_responder")
     return profile
@@ -82,6 +83,8 @@ def put_presence(
 ) -> schemas.OnDuty:
     """On duty: refresh about once a minute. Stops counting 5 minutes after the last refresh."""
     _approved(db, session.account_id)
+    if not eligible(db, session.account_id, "responder", now):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not_eligible")
     nearby.set_presence(redis, session.account_id, nearby.rough(body.latitude, body.longitude), now)
     return schemas.OnDuty(on_duty=True, expires_in_seconds=settings.responder_presence_ttl_seconds)
 
@@ -110,6 +113,8 @@ def offers(
     session: CurrentSessionDep, db: DbDep, redis: RedisDep, settings: SettingsDep, now: NowDep
 ) -> schemas.Offers:
     """Open requests I was asked to help with. Empty for people who are not responders."""
+    if not eligible(db, session.account_id, "responder", now):
+        return schemas.Offers(offers=[])
     mine = nearby.presence_of(redis, session.account_id, settings, now)
     result = []
     for offer, escalation in _open_offers(db, session.account_id):
@@ -156,6 +161,8 @@ def going(
 ) -> schemas.OwnerKeys:
     """'I'm going.' The first few get the traveller's precise live location (E2E)."""
     _approved(db, session.account_id)
+    if not eligible(db, session.account_id, "responder", now):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not_eligible")
     offer, escalation = _my_open_offer(db, session.account_id, offer_id)
     if offer.status != "going":
         if nearby.going_count(db, escalation.id) >= settings.responder_precise_limit:
@@ -183,6 +190,8 @@ def decline(offer_id: uuid.UUID, session: CurrentSessionDep, db: DbDep, now: Now
 
 @router.post("/offers/{offer_id}/arrived", status_code=status.HTTP_204_NO_CONTENT)
 def arrived(offer_id: uuid.UUID, session: CurrentSessionDep, db: DbDep, now: NowDep) -> Response:
+    if not eligible(db, session.account_id, "responder", now):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not_eligible")
     offer, escalation = _my_open_offer(db, session.account_id, offer_id)
     if offer.status != "going" or not helpers.mark_arrived(
         db, escalation.id, session.account_id, now

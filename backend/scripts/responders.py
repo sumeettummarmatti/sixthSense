@@ -4,7 +4,7 @@ person in real life (campus ID card, in person), then approve them here. No ID i
     cd backend && uv run python scripts/responders.py list
     cd backend && uv run python scripts/responders.py approve Riya
     cd backend && uv run python scripts/responders.py approve-all      # demo only
-    cd backend && uv run python scripts/responders.py revoke Riya
+    cd backend && uv run python scripts/responders.py revoke Riya safety_concern
 """
 
 import argparse
@@ -18,7 +18,9 @@ from sqlalchemy import select  # noqa: E402
 
 from app.core import audit  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
 from app.matching.models import ResponderProfile  # noqa: E402
+from app.verification.revocation import revoke_responder  # noqa: E402
 
 
 def main() -> None:
@@ -27,7 +29,10 @@ def main() -> None:
     )
     parser.add_argument("action", choices=["list", "approve", "approve-all", "revoke"])
     parser.add_argument("name", nargs="?", help="display name (case-insensitive)")
+    parser.add_argument("reason", nargs="?", help="short lowercase reason code for revocation")
     args = parser.parse_args()
+    if args.action == "revoke" and not args.reason:
+        parser.error("give a reason code, e.g. safety_concern")
     now = datetime.now(UTC)
     with SessionLocal() as db:
         profiles = list(db.scalars(select(ResponderProfile).order_by(ResponderProfile.applied_at)))
@@ -47,10 +52,12 @@ def main() -> None:
                 sys.exit(f"No responder called {args.name!r}. Try: list")
         for p in chosen:
             if args.action == "revoke":
-                p.status = "revoked"
+                revoke_responder(db, get_redis(), p.account_id, now, args.reason)
             else:
                 p.status, p.approved_at = "approved", now
-            audit.record(db, f"responder.{p.status}", actor=None, target=f"account:{p.account_id}")
+                audit.record(
+                    db, f"responder.{p.status}", actor=None, target=f"account:{p.account_id}"
+                )
             print(f"{p.status}: {p.display_name}")
         db.commit()
 

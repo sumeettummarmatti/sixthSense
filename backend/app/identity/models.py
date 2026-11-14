@@ -42,6 +42,7 @@ class Device(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    key_rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # FCM registration token, encrypted with DATA_KEY (P2-W4); NULL until the app sends it
     fcm_token_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
 

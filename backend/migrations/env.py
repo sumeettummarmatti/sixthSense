@@ -12,6 +12,7 @@ from app.identity import models  # noqa: F401
 from app.journey import models as journey_models  # noqa: F401
 from app.matching import models as matching_models  # noqa: F401
 from app.notification import models as notification_models  # noqa: F401
+from app.verification import models as verification_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

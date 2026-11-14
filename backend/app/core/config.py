@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEV_SECRET_PREFIX = "dev-only-"  # noqa: S105  (marker, not a secret)
@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     otp_rate_window_seconds: int = 600
     access_token_ttl_seconds: int = 900
     device_challenge_ttl_seconds: int = 120
+
+    # Verification (P3-W2): only responders/companions need identity verification.
+    identity_hmac_secret: str = "dev-only-identity-hmac-secret-change-me"  # noqa: S105
+    identity_hmac_key_version: int = 1
+    verification_mock_scenarios: bool = False
+    verification_valid_days: int = 365
+    key_rotation_cooldown_hours: int = 24
+    verification_max_attempts_per_day: int = 3
+    compreface_api_url: str = "http://localhost:8003"
+    compreface_api_key: str = ""
+    compreface_match_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
     # Trusted contacts (P2-W2)
     max_trusted_contacts: int = 5  # accepted + pending invites
@@ -74,7 +85,13 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _no_dev_secrets_outside_dev(self) -> "Settings":
         if self.env not in ("dev", "test"):
-            for name in ("otp_pepper", "token_secret", "data_key", "alert_signing_key"):
+            for name in (
+                "otp_pepper",
+                "token_secret",
+                "data_key",
+                "alert_signing_key",
+                "identity_hmac_secret",
+            ):
                 if getattr(self, name).startswith(_DEV_SECRET_PREFIX):
                     raise ValueError(f"{name.upper()} must be a real secret when ENV={self.env}")
         return self

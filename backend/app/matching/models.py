@@ -17,6 +17,7 @@ class ResponderProfile(Base):
     account_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
     )
+    role: Mapped[str] = mapped_column(Text, primary_key=True, default="responder")
     display_name: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, server_default="pending")  # pending|approved|revoked
     applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
