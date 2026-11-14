@@ -1,6 +1,6 @@
 {
   "project": "sixthsense",
-  "updated_at": "2026-11-14T15:24:00+05:30",
+  "updated_at": "2026-11-14T15:38:00+05:30",
   "updated_by": "Tan",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
@@ -105,6 +105,19 @@
           "status": "todo",
           "week": 1,
           "notes": ""
+        },
+        {
+          "id": "ALL-W1-integration-pipeline",
+          "title": "Document merge sequence and end-to-end integration pipeline across current feature branches",
+          "status": "done",
+          "week": 1,
+          "notes": "Tan: Added Docs/INTEGRATION_PIPELINE.md after reviewing the pulled branch graph, current verification/face-template work, Shruj's Walk With Me changes, and the inherited demo/sudden-SOS/safe-route/nearby-responder work. The document records branch ancestry, duplicate 0008 migration IDs, the mock-verification conflict, canonical eligibility requirements, walk-scoped face-match acceptance, merge order, data/privacy invariants, test sequence, and suggested owners. This marks the integration-plan document complete only; the actual merge and pipeline verification remain team work.",
+          "updated_at": "2026-11-14T15:38:00+05:30",
+          "updated_by": "Tan",
+          "next_steps": [
+            "Use Docs/INTEGRATION_PIPELINE.md to create the shared integration branch and reconcile migrations before running the combined stack.",
+            "Track actual implementation and acceptance-run results in the existing P1-P4 task entries."
+          ]
         },
         {
           "id": "ALL-W11-red-team",

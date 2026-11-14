@@ -3,6 +3,12 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-14 — Tan: document the cross-branch integration pipeline
+
+- Tan: Reviewed the pulled branch graph and the current `p1/responder-verification`, `origin/p3/walk-with-me`, `origin/integration/safe-routes-sos`, `origin/p3/nearby-responders`, and `origin/demo` histories and progress notes.
+- Tan: Added `Docs/INTEGRATION_PIPELINE.md` with the recommended integration base, feature inventory, duplicate migration-ID conflict, mock-versus-real companion verification conflict, canonical eligibility and data model guidance, walk-scoped selfie acceptance gate, end-to-end user flow, merge sequence, acceptance matrix, and suggested team owners.
+- Tan: Added `ALL-W1-integration-pipeline` to `PLANNER.md` and `progress.json`. The document is complete; the code merge and full integrated pipeline run remain team work.
+
 ## 2026-11-14 — Tan: retain an encrypted face reference for Walk With Me
 
 - Tan: Added migration `0009` for opt-in consent tracking and an account-scoped face-template table. The reusable CompreFace embedding is encrypted with a dedicated `FACE_TEMPLATE_KEY`; ID and selfie image bytes remain transient and are never saved by SixthSense.
