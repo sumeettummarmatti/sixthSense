@@ -1,7 +1,18 @@
 # SixthSense — Progress Log
 
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
-> **Every entry heading names its author:** `## 2026-11-14 — sumeet: first test deployment on Vultr + release APK
+> **Every entry heading names its author:** `## 2026-11-15 — sumeet: test round 1 fixes (logout, journey restore, ML Kit, face reference, Walk With Me tab, helper ban)
+
+- sumeet: **Journey restore** (`P1-W4-journey-restore`): Back closed the app and the Journey screen came back empty while the journey was still open on the server; starting again failed with `journey_already_open`, which is what left SOS with `no_server_journey`. Now the plan is saved Keystore-encrypted and resumed from `GET /journeys/current`, Back sends the app to the background, and a start refused because an alert is open explains it instead of starting a phone-only journey.
+- sumeet: **ML Kit in release builds** (`P1-W4-mlkit-release-fix`): the "Confirm it's you" scan and ID OCR failed with `getClass() on a null object reference`. Reproduced with a release probe on the emulator: R8 stripped the ML Kit registrar constructors. Keep rules added; probe then detected faces and read the ID text.
+- sumeet: **Face reference** (`P2-W4-compreface-template-fix`): CompreFace 1.2 only returns `plugins_versions` with `status=true`, so every template save failed (`face_template_unavailable`). Fixed and verified on the live server. **Face scan** (`P3-W4-face-scan-auto`): `FACE_CHECK_PROVIDER=auto` matches the saved template when there is one.
+- sumeet: **Logout** on Profile (`P1-W4-logout`): `POST /auth/logout` ends the token and retires the device key; the phone clears its saved values.
+- sumeet: **Bottom bar** (`P1-W4-nav-walk-people`): Journey · Walk With Me · People (My people + I support) · Respond · Profile.
+- sumeet: **Helper ban** (`P2-W4-helper-ban`, `P1-W4-responder-rating`): travellers rate each responder who came; a 1★ companion or responder rating suspends them; the admin page has a "Waiting for a decision" queue with Ban/Restore and a Ban button on every helper rating. Ban blocks the whole app (rule 1 amended in CLAUDE.md) and keeps the ID hashes + encrypted face embedding in `banned_identities`; verification refuses a matching ID or live selfie (`not_eligible`). Migration 0012. Admins still never see who a helper is.
+- sumeet: Checks: backend ruff clean + 288 passed, Insight 37, Flutter analyze clean + 85 passed. Live server: migration applied, template capture/check 1.0 for the same face, a different face 0.567 vs ban list (< 0.80), admin page + CSRF OK, new APK signs in against the server.
+- **Next:** team installs the new APK and retests; commit + PR `p1/test-round-1-fixes` when sumeet says.
+
+## 2026-11-14 — sumeet: first test deployment on Vultr + release APK
 
 - sumeet: Vultr server `sixthsense-test` (Bangalore, voc-c-8c-16gb-150s, Ubuntu 24.04, $0.24/hr), Vultr firewall + ufw allow only 22/80/443, SSH key-only. Branch `integration/verify-walk` cloned with a read-only GitHub deploy key.
 - sumeet: Docker runs core-db, insight-db, redis, nats, mailpit, CompreFace, all bound to 127.0.0.1 (server-only override `infra/docker-compose.server.yml`, not in git). systemd runs `sixthsense-core`, `sixthsense-worker`, `sixthsense-insight`; Caddy serves HTTPS at `api.` / `insight.139-84-220-87.sslip.io`.

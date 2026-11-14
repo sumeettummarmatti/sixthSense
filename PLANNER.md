@@ -35,6 +35,14 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | sumeet | `P1-W3-journey-feedback` | After a journey or walk: route and companion rating, chips, note; stored raw |
 | sumeet | `P2-W3-feedback-store-admin` | Feedback table + API; `scripts/feedback.py export` CSV for admins |
 | sumeet | `P2-W3-feedback-admin-page` | Admin page `/admin/feedback`: all ratings, summary, CSV download, Basic login |
+| sumeet | `P1-W4-logout` | Log out button on Profile: POST /auth/logout ends the token and retires the device key; phone clears saved values and makes a new key |
+| sumeet | `P1-W4-journey-restore` | Running journey survives the app closing: plan saved Keystore-encrypted, resumed from GET /journeys/current; Back no longer closes the app; no phone-only journey while an alert is open |
+| sumeet | `P1-W4-mlkit-release-fix` | R8 keep rules for ML Kit: face scan ('Confirm it's you') and ID-photo OCR crashed in release builds |
+| sumeet | `P1-W4-nav-walk-people` | Bottom bar: Journey, Walk With Me (own tab), People (My people + I support merged), Respond, Profile |
+| sumeet | `P2-W4-compreface-template-fix` | Face reference saving failed (face_template_unavailable): CompreFace 1.2 only returns plugins_versions with status=true |
+| sumeet | `P3-W4-face-scan-auto` | FACE_CHECK_PROVIDER=auto: 'I'm going' / accept scans are matched against the saved face template when there is one, phone check otherwise |
+| sumeet | `P2-W4-helper-ban` | 1-star companion/responder rating suspends them; admin page Ban (whole app, keeps ID hashes + face embedding in banned_identities) or Restore; banned faces/IDs refused at verification |
+| sumeet | `P1-W4-responder-rating` | After an alert, the traveller rates each responder who said I'm going (GET /feedback/responders/{journey}, POST /feedback/responder); 1-star warning in the sheet |
 | shruj | `P4-W1-demo-safe-routes` | Hackathon: ranked walking routes for one Bengaluru area (Indiranagar) from open data + anonymous place reports; demo map at `/routes/demo` |
 | tanisha | `P1-W1-demo-api-wiring` | Connect sign-up, contacts (+ "Get alerts on Telegram"), journey and SOS to the server; test on a real phone |
 | jival | `ALL-W1-demo-script-slides` | Demo script + slides; rehearse |

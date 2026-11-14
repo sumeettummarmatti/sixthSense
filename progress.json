@@ -1,6 +1,6 @@
 {
   "project": "sixthsense",
-  "updated_at": "2026-11-14",
+  "updated_at": "2026-11-15",
   "updated_by": "sumeet",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
@@ -473,6 +473,86 @@
           "owner": "sumeet",
           "notes": "sumeet: done 2026-11-14 on branch p2/admin-feedback-page (not committed yet). app/feedback/admin.py + shared app/feedback/export.py (scripts/feedback.py now reuses it). Off (404) without ADMIN_PASSWORD; 16+ chars outside dev. Ids only, never joins accounts (rule 4). Audits feedback.admin_view / admin_export / admin_login_failed without usernames (rule 7). no-store + noindex. Tests: 5 new, backend 273 passed, ruff clean. Live on the test server at https://api.139-84-220-87.sslip.io/admin/feedback.",
           "updated_at": "2026-11-14",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P1-W4-logout",
+          "title": "Log out button on Profile: POST /auth/logout ends the token and retires the device key; phone clears saved values and makes a new key",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15. Blocked while a journey runs. Backend test_logout.py; relay gets stop().",
+          "updated_at": "2026-11-15",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P1-W4-journey-restore",
+          "title": "Running journey survives the app closing: plan saved Keystore-encrypted, resumed from GET /journeys/current; Back no longer closes the app; no phone-only journey while an alert is open",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15. Root cause of 'starts fresh' and of the no_server_journey SOS error. Route is not saved (rule 2).",
+          "updated_at": "2026-11-15",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P1-W4-mlkit-release-fix",
+          "title": "R8 keep rules for ML Kit: face scan ('Confirm it's you') and ID-photo OCR crashed in release builds",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15. Reproduced on the emulator with a release probe (getClass() on null, R8 stripped ML Kit registrar constructors); fixed and re-verified (face ok, OCR read the text).",
+          "updated_at": "2026-11-15",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P1-W4-nav-walk-people",
+          "title": "Bottom bar: Journey, Walk With Me (own tab), People (My people + I support merged), Respond, Profile",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15. Walk With Me tab is built only while open (screenshot protection). Alerts switch People to 'I support'.",
+          "updated_at": "2026-11-15",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P2-W4-compreface-template-fix",
+          "title": "Face reference saving failed (face_template_unavailable): CompreFace 1.2 only returns plugins_versions with status=true",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15. Verified on the live server: 512-value embedding saved, template check scores 1.0 for the same face.",
+          "updated_at": "2026-11-15",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P3-W4-face-scan-auto",
+          "title": "FACE_CHECK_PROVIDER=auto: 'I'm going' / accept scans are matched against the saved face template when there is one, phone check otherwise",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15. Live server set to auto.",
+          "updated_at": "2026-11-15",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P2-W4-helper-ban",
+          "title": "1-star companion/responder rating suspends them; admin page Ban (whole app, keeps ID hashes + face embedding in banned_identities) or Restore; banned faces/IDs refused at verification",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15. Migration 0012. Ban list check on the live selfie; different person scored 0.567 (< 0.80) on the live server. CSRF on admin forms. Rule 1 amended (decision below).",
+          "updated_at": "2026-11-15",
+          "updated_by": "sumeet"
+        },
+        {
+          "id": "P1-W4-responder-rating",
+          "title": "After an alert, the traveller rates each responder who said I'm going (GET /feedback/responders/{journey}, POST /feedback/responder); 1-star warning in the sheet",
+          "status": "done",
+          "week": 4,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-15.",
+          "updated_at": "2026-11-15",
           "updated_by": "sumeet"
         }
       ]
@@ -1061,6 +1141,18 @@
       "by": "sumeet",
       "decision": "First test deployment on Vultr (Bangalore, voc-c-8c-16gb, Ubuntu 24.04) for a 3-day phone test: Docker for DBs/Redis/NATS/Mailpit/CompreFace (all bound to 127.0.0.1), uv + systemd for Core API, worker and Insight, Caddy HTTPS on sslip.io hostnames. ENV=staging, FACE_MATCHER=compreface, PUBLISH_MIN_REPORTS/DEVICES=1 for testing.",
       "why": "Release APKs need HTTPS; real phones need a public server; paid from Vultr credit, server to be destroyed after the test."
+    },
+    {
+      "date": "2026-11-15",
+      "by": "sumeet",
+      "decision": "Rule 1 amended: an account banned by an admin after a bad review (companion or responder) is blocked from the whole app, including its own journeys and SOS. A 1-star rating only suspends helping until an admin bans or restores.",
+      "why": "Team choice after testing: a helper who harmed someone must not keep using the app. Re-joining is caught at helper verification (face + ID hash); plain traveller sign-up needs no ID, so it cannot be matched."
+    },
+    {
+      "date": "2026-11-15",
+      "by": "sumeet",
+      "decision": "FACE_CHECK_PROVIDER=auto on the test server: real CompreFace match for helpers with a saved face template, phone check for the rest.",
+      "why": "Face templates now save correctly; auto avoids locking out helpers who verified before the fix."
     }
   ],
   "blockers": [
@@ -1109,6 +1201,7 @@
     }
   ],
   "next_steps": [
+    "sumeet: round-1 fixes live on the test server (branch p1/test-round-1-fixes, not committed yet); team must install the NEW APK; test logout, journey restore after Back, face scan, OCR, face reference save, Walk With Me tab, responder rating + admin Ban/Restore",
     "sumeet: test deployment live at https://api.139-84-220-87.sslip.io (branch integration/verify-walk); still needs Gmail SMTP + Telegram bot token in the server .env; install app-arm64-v8a-release.apk on team phones; DESTROY the Vultr server after the 3-day test; admin feedback page live at /admin/feedback (login in the server .env: ADMIN_USERNAME/ADMIN_PASSWORD)",
     "jival: run integration/verify-walk on the emulator (traveller + scripted companion; SOS + sim_responders.py) and check: verify -> join -> available -> accept with scan -> handshake + live location; 'I'm going' with scan",
     "team: review integration/verify-walk before merging anywhere; decide when to switch FACE_CHECK_PROVIDER to compreface (needs CompreFace + template consent for every companion)",
