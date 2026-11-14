@@ -1,7 +1,7 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-14",
-  "updated_by": "jival",
+  "updated_by": "sumeet",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
@@ -464,6 +464,16 @@
           "status": "done",
           "week": 3,
           "notes": "sumeet: planned 2026-11-14. No PII in export beyond ids; audit-log reads. shruj: done 2026-11-14. feedback table (id, journey_id, walk_id, route_stars, companion_stars, chips, note, created_at; no location, no names); POST /feedback for the journey owner only, once per journey and once per (ended) walk, companion_stars only with a walk; audit feedback.created. backend/scripts/feedback.py list | export <file.csv>; every run audited (feedback.admin_list / feedback.admin_export). Dashboard page later. Tests: 5 backend."
+        },
+        {
+          "id": "P2-W3-feedback-admin-page",
+          "title": "Admin web page /admin/feedback on the Core API: every rating (route + companion stars, chips, note), summary, CSV download; HTTP Basic login",
+          "status": "done",
+          "week": 3,
+          "owner": "sumeet",
+          "notes": "sumeet: done 2026-11-14 on branch p2/admin-feedback-page (not committed yet). app/feedback/admin.py + shared app/feedback/export.py (scripts/feedback.py now reuses it). Off (404) without ADMIN_PASSWORD; 16+ chars outside dev. Ids only, never joins accounts (rule 4). Audits feedback.admin_view / admin_export / admin_login_failed without usernames (rule 7). no-store + noindex. Tests: 5 new, backend 273 passed, ruff clean. Live on the test server at https://api.139-84-220-87.sslip.io/admin/feedback.",
+          "updated_at": "2026-11-14",
+          "updated_by": "sumeet"
         }
       ]
     },
@@ -1045,6 +1055,12 @@
       "by": "jival",
       "decision": "Companions (every accept) and responders (every 'I'm going') take a fresh face scan in the same request before any location is shared; mock provider for now, CompreFace template match switchable.",
       "why": "Confirms the verified account holder is the one holding the phone at the moment location would be shared (rule 1 spirit, rule 4). Mock is a demo only: it does not match faces and is not liveness."
+    },
+    {
+      "date": "2026-11-14",
+      "by": "sumeet",
+      "decision": "First test deployment on Vultr (Bangalore, voc-c-8c-16gb, Ubuntu 24.04) for a 3-day phone test: Docker for DBs/Redis/NATS/Mailpit/CompreFace (all bound to 127.0.0.1), uv + systemd for Core API, worker and Insight, Caddy HTTPS on sslip.io hostnames. ENV=staging, FACE_MATCHER=compreface, PUBLISH_MIN_REPORTS/DEVICES=1 for testing.",
+      "why": "Release APKs need HTTPS; real phones need a public server; paid from Vultr credit, server to be destroyed after the test."
     }
   ],
   "blockers": [
@@ -1093,6 +1109,7 @@
     }
   ],
   "next_steps": [
+    "sumeet: test deployment live at https://api.139-84-220-87.sslip.io (branch integration/verify-walk); still needs Gmail SMTP + Telegram bot token in the server .env; install app-arm64-v8a-release.apk on team phones; DESTROY the Vultr server after the 3-day test; admin feedback page live at /admin/feedback (login in the server .env: ADMIN_USERNAME/ADMIN_PASSWORD)",
     "jival: run integration/verify-walk on the emulator (traveller + scripted companion; SOS + sim_responders.py) and check: verify -> join -> available -> accept with scan -> handshake + live location; 'I'm going' with scan",
     "team: review integration/verify-walk before merging anywhere; decide when to switch FACE_CHECK_PROVIDER to compreface (needs CompreFace + template consent for every companion)",
     "shruj: Walk With Me built and tested on p3/walk-with-me (5 tasks done; backend 247, Insight 37, Flutter 52, APK builds; live API run 32/32; real app on the emulator, both roles); pushed to origin/p3/walk-with-me at shruj's request, NOT merged",

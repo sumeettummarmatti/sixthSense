@@ -1,6 +1,6 @@
-"""Admin access to raw journey/walk feedback (P2-W3). No dashboard yet: list it, or export it
-as CSV for analysis. The export holds ids, stars, chips and notes only: no location, no names.
-Every run is recorded in the append-only audit log.
+"""Admin access to raw journey/walk feedback (P2-W3). Also on the admin page /admin/feedback
+(needs ADMIN_PASSWORD). List it, or export it as CSV for analysis. The export holds ids,
+stars, chips and notes only: no location, no names. Every run is in the append-only audit log.
 
     cd backend && uv run python scripts/feedback.py list
     cd backend && uv run python scripts/feedback.py export feedback.csv
@@ -13,39 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # run from backend/ or anywhere
 
-from sqlalchemy import select  # noqa: E402
-
 from app.core import audit  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
-from app.feedback.models import Feedback  # noqa: E402
-
-COLUMNS = (
-    "id",
-    "journey_id",
-    "walk_id",
-    "route_stars",
-    "companion_stars",
-    "chips",
-    "note",
-    "created_at",
-)
-
-
-def rows(db) -> list[dict]:
-    items = db.scalars(select(Feedback).order_by(Feedback.created_at)).all()
-    return [
-        {
-            "id": str(f.id),
-            "journey_id": str(f.journey_id),
-            "walk_id": str(f.walk_id) if f.walk_id else "",
-            "route_stars": f.route_stars,
-            "companion_stars": f.companion_stars if f.companion_stars is not None else "",
-            "chips": ";".join(f.chips),
-            "note": f.note,
-            "created_at": f.created_at.isoformat(),
-        }
-        for f in items
-    ]
+from app.feedback.export import COLUMNS, rows  # noqa: E402, F401  (COLUMNS used by tests)
 
 
 def main(argv: list[str] | None = None) -> None:

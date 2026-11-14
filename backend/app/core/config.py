@@ -100,6 +100,10 @@ class Settings(BaseSettings):
     smtp_ssl: bool = False
     smtp_from: str = "SixthSense <no-reply@sixthsense.local>"
 
+    # Admin feedback page (/admin/feedback). Off (404) while ADMIN_PASSWORD is empty.
+    admin_username: str = "admin"
+    admin_password: str = ""
+
     @model_validator(mode="after")
     def _no_dev_secrets_outside_dev(self) -> "Settings":
         if self.env not in ("dev", "test"):
@@ -115,6 +119,8 @@ class Settings(BaseSettings):
                     raise ValueError(f"{name.upper()} must be a real secret when ENV={self.env}")
             if self.face_matcher == "mock":
                 raise ValueError(f"FACE_MATCHER=mock is for dev laptops only, not ENV={self.env}")
+            if self.admin_password and len(self.admin_password) < 16:
+                raise ValueError(f"ADMIN_PASSWORD must be 16+ characters when ENV={self.env}")
         return self
 
 
