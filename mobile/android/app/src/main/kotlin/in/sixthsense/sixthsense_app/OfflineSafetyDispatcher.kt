@@ -97,7 +97,7 @@ internal object OfflineSafetyDispatcher {
         }
     }
 
-    private fun recentLocation(context: Context): Location? {
+    fun recentLocation(context: Context): Location? {
         val hasFineLocation = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION,

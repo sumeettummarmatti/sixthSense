@@ -10,6 +10,7 @@ import android.os.IBinder
 
 class JourneyTimerService : Service() {
     private var batteryReceiver: android.content.BroadcastReceiver? = null
+    private var micGranted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -19,6 +20,7 @@ class JourneyTimerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
         if (intent?.action == ACTION_STOP) {
+            stopGuard()
             preferences.edit().clear().apply()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf(startId)
@@ -59,6 +61,12 @@ class JourneyTimerService : Service() {
                 },
             )
             .apply {
+                // Sudden SOS settings and where to send it from native code.
+                intent?.getStringExtra(EXTRA_API_BASE)?.let { putString(SosApi.KEY_API_BASE, it) }
+                intent?.getStringExtra(EXTRA_JOURNEY_ID)?.let { putString(SosApi.KEY_JOURNEY_ID, it) }
+                if (intent?.hasExtra(EXTRA_LISTEN_FOR_WORDS) == true) {
+                    putBoolean(KEY_LISTEN_FOR_WORDS, intent.getBooleanExtra(EXTRA_LISTEN_FOR_WORDS, false))
+                }
                 if (isNewJourney && intent?.getBooleanExtra(EXTRA_IS_CHECK_IN, false) != true) {
                     putBoolean(KEY_LOW_BATTERY_MODE, false)
                     putBoolean(KEY_LOW_BATTERY_SMS_SENT, false)
@@ -69,17 +77,48 @@ class JourneyTimerService : Service() {
 
         registerBatteryReceiver()
 
+        // The microphone may only be claimed while the app is on screen (Android 14+), which is
+        // when a journey starts or a check-in happens. A resume after reboot runs without it.
+        val fromApp = intent?.action == ACTION_START
+        goForeground(withMic = micGranted || (fromApp && SosGuard.micAllowed(this)))
+        startGuard()
+        return START_STICKY
+    }
+
+    private fun goForeground(withMic: Boolean) {
         val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                JourneyNotifications.SERVICE_NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-            )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                if (withMic) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+            try {
+                startForeground(JourneyNotifications.SERVICE_NOTIFICATION_ID, notification, types)
+                micGranted = withMic
+            } catch (_: SecurityException) {
+                startForeground(
+                    JourneyNotifications.SERVICE_NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+                micGranted = false
+            }
         } else {
             startForeground(JourneyNotifications.SERVICE_NOTIFICATION_ID, notification)
+            micGranted = withMic
         }
-        return START_STICKY
+    }
+
+    private fun startGuard() {
+        val listen = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE).getBoolean(KEY_LISTEN_FOR_WORDS, false)
+        val existing = SosGuard.current
+        if (existing != null && existing.listenForWordsSetting == listen && existing.hasMic == micGranted) return
+        existing?.stop()
+        SosGuard.current = SosGuard(this, practice = false, listenForWords = listen, useMic = micGranted)
+            .also { it.start() }
+    }
+
+    private fun stopGuard() {
+        SosGuard.current?.stop()
+        SosGuard.current = null
     }
 
     private fun buildNotification(): Notification {
@@ -95,8 +134,11 @@ class JourneyTimerService : Service() {
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("SixthSense journey active")
             .setContentText(
-                if (lowBatteryMode) "Low-battery mode is on; safety alerts use SMS."
-                else "Your on-device check-in timer is running.",
+                when {
+                    lowBatteryMode -> "Low-battery mode is on; safety alerts use SMS."
+                    micGranted -> "Check-in timer running. Microphone on for sudden SOS."
+                    else -> "Your on-device check-in timer is running."
+                },
             )
             .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
@@ -108,6 +150,7 @@ class JourneyTimerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        stopGuard()
         batteryReceiver?.let { unregisterReceiver(it) }
         batteryReceiver = null
         super.onDestroy()
@@ -122,16 +165,10 @@ class JourneyTimerService : Service() {
                 val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
                 if (level >= 0 && scale > 0 && level * 100 / scale <= LOW_BATTERY_PERCENT) {
                     if (OfflineSafetyDispatcher.onLowBattery(this@JourneyTimerService)) {
-                        val notification = buildNotification()
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                            startForeground(
-                                JourneyNotifications.SERVICE_NOTIFICATION_ID,
-                                notification,
-                                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                            )
-                        } else {
-                            startForeground(JourneyNotifications.SERVICE_NOTIFICATION_ID, notification)
-                        }
+                        // Just update the text: re-calling startForeground from the background
+                        // could drop the microphone permission the guard needs.
+                        getSystemService(android.app.NotificationManager::class.java)
+                            .notify(JourneyNotifications.SERVICE_NOTIFICATION_ID, buildNotification())
                     }
                 }
             }
@@ -150,6 +187,10 @@ class JourneyTimerService : Service() {
         const val EXTRA_SMS_NUMBERS = "sms_numbers"
         const val EXTRA_SMS_FALLBACK_ENABLED = "sms_fallback_enabled"
         const val EXTRA_IS_CHECK_IN = "is_check_in"
+        const val EXTRA_API_BASE = "api_base_url"
+        const val EXTRA_JOURNEY_ID = "server_journey_id"
+        const val EXTRA_LISTEN_FOR_WORDS = "listen_for_words"
+        const val KEY_LISTEN_FOR_WORDS = "listen_for_words"
         const val PREFERENCES_NAME = "journey_timer"
         const val KEY_ACTIVE = "active"
         const val KEY_DEADLINE = "deadline_millis"

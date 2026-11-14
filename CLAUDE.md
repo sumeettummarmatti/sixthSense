@@ -17,7 +17,7 @@ SixthSense (called **SafeThread** in `Docs/`) is a safety app for women and chil
 - New tasks get an ID `P<lane>-W<week>-<slug>` and go in both `PLANNER.md` and `progress.json`.
 
 ## Non-negotiable rules (reject any change that breaks one)
-1. Protection never needs ID. Only companions/responders are verified.
+1. Protection never needs ID. Only companions/responders are verified. *Exception (sumeet, 2026-11-15):* an account an admin bans after a bad review is blocked from the whole app (`P2-W4-helper-ban`).
 2. Never store what we don't need: no live location, no ID documents/Aadhaar numbers, no route after a walk.
 3. The phone must work alone: escalation timers run on the device; SMS fallback when offline.
 4. Nobody sees anybody outside an active, consented session (contacts, companions, admins).

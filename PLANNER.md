@@ -28,8 +28,45 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | sumeet | `ALL-W1-demo-real-email` | Team Gmail App password in `.env`; `scripts/send_test_email.py` proves real codes arrive |
 | sumeet | `ALL-W1-demo-branch-server` | Create Telegram bot (@BotFather), merge into `demo`, run server on laptop, phone reaches it |
 | shruj | `P2-W1-demo-telegram-live` | Put bot token in `.env`, prove a real Telegram alert arrives end to end, fix bugs |
+| sumeet | `P1-W2-safe-routes-in-app` | Journey planner shows Shruj's ranked walking routes (anonymous request to Insight), the chosen route on the journey map, and a check-in nudge when far off it |
+| sumeet | `P1-W3-profile-tab` | Profile tab: name, bio, strengths, languages, companion opt-in; collected after first sign-in, editable; shown only inside a consented walk |
+| sumeet | `P3-W3-companion-verification-mock` | Mocked companion verification (always passes, stored as verified·mock) until campus office / offline e-KYC |
+| sumeet | `P3-W3-walk-matching` | Traveller picks a nearby verified companion (bio, strengths, rating), accept/decline, handshake code, public meeting point, two-way E2E location |
+| sumeet | `P1-W3-journey-feedback` | After a journey or walk: route and companion rating, chips, note; stored raw |
+| sumeet | `P2-W3-feedback-store-admin` | Feedback table + API; `scripts/feedback.py export` CSV for admins |
+| sumeet | `P2-W3-feedback-admin-page` | Admin page `/admin/feedback`: all ratings, summary, CSV download, Basic login |
+| sumeet | `P1-W4-logout` | Log out button on Profile: POST /auth/logout ends the token and retires the device key; phone clears saved values and makes a new key |
+| sumeet | `P1-W4-journey-restore` | Running journey survives the app closing: plan saved Keystore-encrypted, resumed from GET /journeys/current; Back no longer closes the app; no phone-only journey while an alert is open |
+| sumeet | `P1-W4-mlkit-release-fix` | R8 keep rules for ML Kit: face scan ('Confirm it's you') and ID-photo OCR crashed in release builds |
+| sumeet | `P1-W4-nav-walk-people` | Bottom bar: Journey, Walk With Me (own tab), People (My people + I support merged), Respond, Profile |
+| sumeet | `P2-W4-compreface-template-fix` | Face reference saving failed (face_template_unavailable): CompreFace 1.2 only returns plugins_versions with status=true |
+| sumeet | `P3-W4-face-scan-auto` | FACE_CHECK_PROVIDER=auto: 'I'm going' / accept scans are matched against the saved face template when there is one, phone check otherwise |
+| sumeet | `P2-W4-helper-ban` | 1-star companion/responder rating suspends them; admin page Ban (whole app, keeps ID hashes + face embedding in banned_identities) or Restore; banned faces/IDs refused at verification |
+| sumeet | `P1-W4-responder-rating` | After an alert, the traveller rates each responder who said I'm going (GET /feedback/responders/{journey}, POST /feedback/responder); 1-star warning in the sheet |
+| shruj | `P4-W1-demo-safe-routes` | Hackathon: ranked walking routes for one Bengaluru area (Indiranagar) from open data + anonymous place reports; demo map at `/routes/demo` |
 | tanisha | `P1-W1-demo-api-wiring` | Connect sign-up, contacts (+ "Get alerts on Telegram"), journey and SOS to the server; test on a real phone |
 | jival | `ALL-W1-demo-script-slides` | Demo script + slides; rehearse |
+| sumeet | `P1-W1-demo-live-location` | E2E live location to contacts during a journey (map on "I support") |
+| sumeet | `P1-W1-demo-home-people` | Home tabs (Journey / My people / I support / Respond); add contacts any time |
+| sumeet | `P1-W1-demo-map-picker` | Uber-style destination: search suggestions or long-press pin, distance + walk time, suggested check-in |
+| sumeet | `P1-W1-demo-background-location` | Live location keeps going with the screen off (foreground service notice) |
+| sumeet | `P3-W1-nearby-responders` | Who is coming (contacts + responders, distance, two-way E2E location); verified responders on duty, SOS asks those within 500 m → 1 km → 2 km |
+| sumeet | `P1-W2-background-volume-sos` | Volume Down ×5 (or hold) with the screen off during a journey → silent 5 s countdown → SOS sent from native code (works with the app closed); PIN cancels, duress PIN sends a silent alarm; tile/widget use the same countdown |
+| sumeet | `P2-W2-encrypted-audio-relay` | Relay carries 5 s AAC clips E2E (separate HKDF info); only during an alert or a running escort; offline listeners get ciphertext from Redis (30 min / 24 h max), dropped once they may no longer hear |
+| sumeet | `P1-W2-sos-audio-evidence` | After an SOS the phone records (with the 15 s before, kept in RAM only until then), encrypted with a Keystore key; contacts/responders can listen live; export as one .aac for an FIR; owner deletes |
+| sumeet | `P1-W2-voice-sos-spike` | Vosk small Hindi + Indian-English, full transcription + word spotting: 0/16 false alarms, 12/13 caught clean (10/13 with noise) on synthetic voices; grammar mode rejected (false alarms). Needs real voices from the team |
+| sumeet | `P1-W2-voice-sos` | "help / bachao / madad / bacha lo" heard offline during a journey → 3–9 s adaptive countdown (shout/struggle shorter, still phone longer); voice pack downloaded on request; Practice mode sends nothing |
+| sumeet | `P1-W3-audio-escort` | Owner starts (or accepts a contact's request), picks listeners and ≤ 3 h; listeners hear live and see location; stop needs the PIN, duress PIN looks stopped but raises a covert SOS |
+| P3 (working branch) | `P3-W2-verification-core` | Verification schema, keyed identity outcomes, single eligibility check, and prove unverified travellers keep safety access |
+| P3 (working branch) | `P3-W2-verification-gates` | Gate responder presence, offers, acceptance, and relay; revocation removes active responder access |
+| P3 (working branch) | `P3-W2-verification-app` | Consent-first simulated verification flow for responder/companion roles; ordinary protection stays ungated |
+| P3 (working branch) | `P3-W2-verification-admin` | Pilot CLI for in-person verification, approval, and revocation |
+| P3 (working branch) | `P3-W3-device-recovery` | Revoke old device keys and apply a cooldown after account recovery/key rotation |
+| P3 (working branch) | `P3-W3-companion-grant` | Companion role grant and eligibility gate when Walk With Me matching exists |
+| P3 (working branch) | `P3-W3-walk-face-template` | With separate consent, retain an encrypted CompreFace embedding and require a fresh selfie match for companion walk acceptance; support deletion |
+| team (integration) | `ALL-W1-integration-pipeline` | Reconcile demo, sudden-SOS/safe-route, nearby-responder, Walk With Me, strict verification and face-template branches into one tested end-to-end pipeline |
+| jival | `ALL-W1-verify-walk-integration` | Branch `integration/verify-walk`: `p3/walk-with-me` + `p1/responder-verification` merged with no feature dropped; migrations renumbered (0009/0010) plus 0011; identity verification replaces manual approval for responders and companions (revoke kept) |
+| jival | `P3-W3-face-scan-gate` | Fresh face scan inside "accept walk" and "I'm going", before any location is shared; `FACE_CHECK_PROVIDER` mock (phone checks one face, demo) or compreface (match the saved template) |
 
 ---
 
@@ -248,7 +285,8 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 | 9–10 | `P1-W9-map-routes-report-blur` | `P2-W9-load-test-monitoring` | `P3-W9-complaints-ts-console` | `P4-W9-campus-dashboard-before-after` |
 | 11 | `ALL-W11-red-team` | ← | ← | ← |
 | 12 | `ALL-W12-pilot-pentest` | ← | ← | ← |
-| Demo (now) | `P1-W1-demo-api-wiring` | `P2-W1-demo-telegram-live` | — | — |
+| Demo (now) | `P1-W1-demo-api-wiring` `P1-W1-demo-live-location` `P1-W1-demo-home-people` `P1-W1-demo-map-picker` `P1-W1-demo-background-location` | `P2-W1-demo-telegram-live` | `P3-W1-nearby-responders` | `P4-W1-demo-safe-routes` |
+| Demo (now) | `P1-W2-background-volume-sos` `P1-W2-sos-audio-evidence` `P1-W2-voice-sos-spike` `P1-W2-voice-sos` `P1-W3-audio-escort` `P1-W2-safe-routes-in-app` `P1-W3-profile-tab` `P1-W3-journey-feedback` | `P2-W2-encrypted-audio-relay` `P2-W3-feedback-store-admin` `P2-W3-feedback-admin-page` | `P3-W3-companion-verification-mock` `P3-W3-walk-matching` | — |
 | Demo (now) | `ALL-W1-demo-branch-server` `ALL-W1-demo-script-slides` | ← | ← | ← |
 | Later | `P1-LATER-ios-port` (Swift modules; iOS can't auto-send SMS or read hardware buttons; needs a Mac + Apple account) | `P2-LATER-whatsapp-phone-otp` (Twilio WhatsApp code as 2nd sign-up check) `P2-LATER-fcm-push` | | |
 

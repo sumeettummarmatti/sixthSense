@@ -3,7 +3,8 @@
     cd backend && uv run arq app.worker.WorkerSettings
 
 Every 5 seconds: advance quiet journeys (watchdog), open/close escalations, send due alerts,
-send all-clears, and link Telegram chats. Every night: drop expired journeys and escalations.
+send all-clears, ask nearby responders
+about full alerts, and link Telegram chats. Every night: drop expired journeys and escalations.
 """
 
 import asyncio
@@ -19,6 +20,7 @@ from app.core.logging import configure_logging
 from app.core.redis import get_redis
 from app.escalation import ladder
 from app.journey import service as journeys
+from app.matching import nearby
 from app.notification.channels import get_senders
 from app.notification.router import link_telegram_chats
 
@@ -34,8 +36,15 @@ def tick(now: datetime | None = None) -> dict[str, int]:
         closed = ladder.sync(db, settings, now)
         sent = ladder.send_due(db, senders, settings, now)
         ladder.send_all_clear(db, senders, closed)
+        asked = nearby.dispatch(db, get_redis(), senders, settings, now)
         linked = link_telegram_chats(db, get_redis(), settings, senders)
-    return {"escalated": len(escalated), "closed": len(closed), "sent": sent, "linked": linked}
+    return {
+        "escalated": len(escalated),
+        "closed": len(closed),
+        "sent": sent,
+        "asked": asked,
+        "linked": linked,
+    }
 
 
 def nightly(now: datetime | None = None) -> dict[str, int]:

@@ -25,8 +25,11 @@ void main() {
       runtimeCalls.add(call);
       return null;
     });
+    const sosChannel = MethodChannel('in.sixthsense/sudden_sos');
+    messenger.setMockMethodCallHandler(sosChannel, (call) async => null);
     addTearDown(() {
       messenger.setMockMethodCallHandler(runtimeChannel, null);
+      messenger.setMockMethodCallHandler(sosChannel, null);
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -54,7 +57,11 @@ void main() {
       find.byKey(const ValueKey('journey-duress-pin')),
       '5678',
     );
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.scrollUntilVisible(
+      find.text('Start journey'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Start journey'));
     await tester.pumpAndSettle();

@@ -82,3 +82,27 @@ class EscalationRecipient(Base):
     cycle: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_channel: Mapped[str | None] = mapped_column(Text)
+    # contact = trusted contact; companion = Walk With Me partner during an SOS (may say
+    # "I'm on it", may not close the alarm).
+    kind: Mapped[str] = mapped_column(Text, server_default="contact")
+
+
+class EscalationHelper(Base):
+    """Someone who said they are going to help: a trusted contact ("I'm on it") or a verified
+    responder ("I'm going"). The traveller sees who is coming; helpers share their location
+    back to the traveller only, end to end encrypted, while the alert is open (rule 4)."""
+
+    __tablename__ = "escalation_helpers"
+    __table_args__ = (
+        UniqueConstraint("escalation_id", "account_id", name="uq_escalation_helpers_account"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid())
+    escalation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("escalations.id", ondelete="CASCADE"), index=True
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(Text)  # contact | responder
+    status: Mapped[str] = mapped_column(Text, server_default="going")  # going | arrived
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

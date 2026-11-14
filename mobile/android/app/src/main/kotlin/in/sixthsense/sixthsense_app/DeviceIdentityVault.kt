@@ -74,8 +74,45 @@ internal object DeviceIdentityVault {
         }
     }
 
+    /** Small app values kept only on this phone (E2E key seeds, contact names), AES-GCM with a Keystore key. */
+    fun saveValue(context: Context, name: String, value: String?) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        if (value == null) {
+            prefs.remove("value_$name").apply()
+            return
+        }
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, sessionKey())
+        val encrypted = cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        prefs.putString("value_$name", Base64.encodeToString(encrypted, Base64.NO_WRAP)).apply()
+    }
+
+    fun readValue(context: Context, name: String): String? {
+        val encoded = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("value_$name", null) ?: return null
+        return try {
+            val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                sessionKey(),
+                GCMParameterSpec(GCM_TAG_LENGTH_BITS, bytes.copyOfRange(0, GCM_IV_LENGTH_BYTES)),
+            )
+            String(cipher.doFinal(bytes.copyOfRange(GCM_IV_LENGTH_BYTES, bytes.size)), Charsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun clearSession(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(SESSION).apply()
+    }
+
+    /** Logout: drop the session and every saved value, and delete the device sign-in key. */
+    fun signOut(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(SIGNING_KEY_ALIAS)) store.deleteEntry(SIGNING_KEY_ALIAS)
     }
 
     private fun keyPair(): java.security.KeyPair {

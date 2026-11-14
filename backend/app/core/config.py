@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEV_SECRET_PREFIX = "dev-only-"  # noqa: S105  (marker, not a secret)
@@ -30,6 +31,27 @@ class Settings(BaseSettings):
     access_token_ttl_seconds: int = 900
     device_challenge_ttl_seconds: int = 120
 
+    # Verification (P3-W2): only responders/companions need identity verification.
+    identity_hmac_secret: str = "dev-only-identity-hmac-secret-change-me"  # noqa: S105
+    identity_hmac_key_version: int = 1
+    verification_mock_scenarios: bool = False
+    verification_valid_days: int = 365
+    key_rotation_cooldown_hours: int = 24
+    verification_max_attempts_per_day: int = 3
+    compreface_api_url: str = "http://localhost:8003"
+    compreface_api_key: str = ""
+    compreface_match_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    face_template_key: str = Field(default="dev-only-face-template-key-change-me", min_length=32)
+    # Fresh face scan before a helper receives someone's location (accepting a walk, "I'm
+    # going"). "mock": the phone confirms one face is in front of the camera and the server
+    # accepts any real image (no matching). "compreface": the selfie must match the face
+    # template saved during verification (needs CompreFace and template consent).
+    # "auto": "compreface" for helpers with a saved template, the phone check for the rest.
+    face_check_provider: Literal["mock", "compreface", "auto"] = "mock"
+    # One-time identity verification compares the ID photo with a selfie in CompreFace.
+    # "mock" skips that comparison (always matches) for laptops without CompreFace. Dev only.
+    face_matcher: Literal["compreface", "mock"] = "compreface"
+
     # Trusted contacts (P2-W2)
     max_trusted_contacts: int = 5  # accepted + pending invites
     contact_invite_ttl_seconds: int = 172_800  # 48 h
@@ -48,6 +70,23 @@ class Settings(BaseSettings):
     ladder_cycle_seconds: int = 300  # then repeat the ladder every 5 minutes
     ladder_max_cycles: int = 12  # for about an hour, or until someone acknowledges
 
+    # Nearby responders (P3-W1). Rough areas only (~110 m grid), kept in Redis for minutes.
+    # A verified identity (ID + selfie) is enough to be a responder; there is no approval step.
+    responder_presence_ttl_seconds: int = 300  # on-duty phones refresh every minute
+    responder_radii_m: tuple[int, ...] = (500, 1000, 2000)  # grows if nobody says "I'm going"
+    responder_radius_step_seconds: int = 60
+    responder_max_offers: int = 5  # people alerted per SOS, nearest first
+    responder_precise_limit: int = 2  # how many "I'm going" get precise live location
+
+    # Walk With Me (P3-W3). Companions use the same identity verification as responders; no
+    # approval step. Rough areas only (~110 m), in Redis for minutes.
+    companion_presence_ttl_seconds: int = 300  # available phones refresh every minute
+    walk_request_ttl_seconds: int = 600  # an unanswered request expires after 10 minutes
+    walk_area_ttl_seconds: int = 10_800  # the traveller's rough area, while the walk is open
+    walk_search_radius_m: int = 2000
+    walk_max_results: int = 10
+    alert_area_ttl_seconds: int = 600
+
     # Signed alerts (P2-W6): base64 32-byte Ed25519 seed. The previous key stays published
     # after a rotation so apps holding older alerts can still verify them.
     alert_signing_key: str = "dev-only-alert-signing-key"
@@ -62,12 +101,27 @@ class Settings(BaseSettings):
     smtp_ssl: bool = False
     smtp_from: str = "SixthSense <no-reply@sixthsense.local>"
 
+    # Admin feedback page (/admin/feedback). Off (404) while ADMIN_PASSWORD is empty.
+    admin_username: str = "admin"
+    admin_password: str = ""
+
     @model_validator(mode="after")
     def _no_dev_secrets_outside_dev(self) -> "Settings":
         if self.env not in ("dev", "test"):
-            for name in ("otp_pepper", "token_secret", "data_key", "alert_signing_key"):
+            for name in (
+                "otp_pepper",
+                "token_secret",
+                "data_key",
+                "alert_signing_key",
+                "identity_hmac_secret",
+                "face_template_key",
+            ):
                 if getattr(self, name).startswith(_DEV_SECRET_PREFIX):
                     raise ValueError(f"{name.upper()} must be a real secret when ENV={self.env}")
+            if self.face_matcher == "mock":
+                raise ValueError(f"FACE_MATCHER=mock is for dev laptops only, not ENV={self.env}")
+            if self.admin_password and len(self.admin_password) < 16:
+                raise ValueError(f"ADMIN_PASSWORD must be 16+ characters when ENV={self.env}")
         return self
 
 

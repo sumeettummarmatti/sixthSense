@@ -1,9 +1,234 @@
 # SixthSense — Progress Log
 
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
-> **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
+> **Every entry heading names its author:** `## 2026-11-15 — sumeet: test round 1 fixes (logout, journey restore, ML Kit, face reference, Walk With Me tab, helper ban)
 
-## Status at a glance (updated 2026-11-11)
+- sumeet: **Journey restore** (`P1-W4-journey-restore`): Back closed the app and the Journey screen came back empty while the journey was still open on the server; starting again failed with `journey_already_open`, which is what left SOS with `no_server_journey`. Now the plan is saved Keystore-encrypted and resumed from `GET /journeys/current`, Back sends the app to the background, and a start refused because an alert is open explains it instead of starting a phone-only journey.
+- sumeet: **ML Kit in release builds** (`P1-W4-mlkit-release-fix`): the "Confirm it's you" scan and ID OCR failed with `getClass() on a null object reference`. Reproduced with a release probe on the emulator: R8 stripped the ML Kit registrar constructors. Keep rules added; probe then detected faces and read the ID text.
+- sumeet: **Face reference** (`P2-W4-compreface-template-fix`): CompreFace 1.2 only returns `plugins_versions` with `status=true`, so every template save failed (`face_template_unavailable`). Fixed and verified on the live server. **Face scan** (`P3-W4-face-scan-auto`): `FACE_CHECK_PROVIDER=auto` matches the saved template when there is one.
+- sumeet: **Logout** on Profile (`P1-W4-logout`): `POST /auth/logout` ends the token and retires the device key; the phone clears its saved values.
+- sumeet: **Bottom bar** (`P1-W4-nav-walk-people`): Journey · Walk With Me · People (My people + I support) · Respond · Profile.
+- sumeet: **Helper ban** (`P2-W4-helper-ban`, `P1-W4-responder-rating`): travellers rate each responder who came; a 1★ companion or responder rating suspends them; the admin page has a "Waiting for a decision" queue with Ban/Restore and a Ban button on every helper rating. Ban blocks the whole app (rule 1 amended in CLAUDE.md) and keeps the ID hashes + encrypted face embedding in `banned_identities`; verification refuses a matching ID or live selfie (`not_eligible`). Migration 0012. Admins still never see who a helper is.
+- sumeet: Checks: backend ruff clean + 288 passed, Insight 37, Flutter analyze clean + 85 passed. Live server: migration applied, template capture/check 1.0 for the same face, a different face 0.567 vs ban list (< 0.80), admin page + CSRF OK, new APK signs in against the server.
+- **Next:** team installs the new APK and retests; commit + PR `p1/test-round-1-fixes` when sumeet says.
+
+## 2026-11-14 — sumeet: first test deployment on Vultr + release APK
+
+- sumeet: Vultr server `sixthsense-test` (Bangalore, voc-c-8c-16gb-150s, Ubuntu 24.04, $0.24/hr), Vultr firewall + ufw allow only 22/80/443, SSH key-only. Branch `integration/verify-walk` cloned with a read-only GitHub deploy key.
+- sumeet: Docker runs core-db, insight-db, redis, nats, mailpit, CompreFace, all bound to 127.0.0.1 (server-only override `infra/docker-compose.server.yml`, not in git). systemd runs `sixthsense-core`, `sixthsense-worker`, `sixthsense-insight`; Caddy serves HTTPS at `api.` / `insight.139-84-220-87.sslip.io`.
+- sumeet: `.env` secrets generated on the server (never left it); `ENV=staging`, `FACE_MATCHER=compreface` with a real verification key; `PUBLISH_MIN_REPORTS/DEVICES=1` for testing.
+- sumeet: Release APK built with `--dart-define=API_BASE_URL/INSIGHT_BASE_URL` pointing at the server. Checks: both `/healthz` OK over public HTTPS; an OTP request returned 202 and the email landed in Mailpit.
+- sumeet: Gmail SMTP (alertssixthsense@gmail.com, App password) and the existing @Sixtysensebot token are set on the server; test email sent. Don't run a laptop backend with the same bot token during the test (both poll getUpdates).
+- sumeet: New `P2-W3-feedback-admin-page` (branch `p2/admin-feedback-page`): `/admin/feedback` on the Core API shows every rating (route + companion stars, chips, note) with a summary and a **Download CSV** button, behind HTTP Basic login (`ADMIN_USERNAME`/`ADMIN_PASSWORD`, off without a password). Ids only, never names (rule 4); views, downloads and failed logins audited without usernames (rule 7). `scripts/feedback.py` now shares `app/feedback/export.py`. 5 new tests; backend 273 passed, ruff clean. Copied to the server (not committed yet).
+- **Next:** install the APK on team phones and run the two-phone test; commit + PR `p2/admin-feedback-page` (and the proguard fix) when sumeet says; destroy the server after 3 days.
+
+## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
+
+## 2026-11-14 — jival: Walk With Me + responder verification on one branch; no approval; face scan before location
+
+- jival: New branch `integration/verify-walk` = `origin/p3/walk-with-me` (Shruj: Walk With Me, plus sudden SOS, audio, safe routes, nearby responders) merged with `origin/p1/responder-verification` (Tan: ID + selfie verification, OCR, face template, `eligible()`, revocation). Neither source branch was changed. Nothing dropped: all routers mounted, both API clients merged, `pubspec.yaml` combined.
+- jival: **Migrations** are one chain again: `0008_walk_with_me` → `0009_identity_verification` (was Tan's 0008) → `0010_reusable_face_templates` (was 0009) → `0011_no_manual_approval`.
+- jival: **No approval step.** `eligible()` = verified, adult, unexpired, not revoked identity + joined the role + not revoked. Responders are active as soon as they apply; companions join with `POST /walks/companion/join` (the always-pass `/walks/companion/verify` is gone, they use Tan's real verification). The "Waiting for approval" screens in Respond and Walk With Me are removed, and the verification screen no longer promises campus approval. `responders.py` / `companions.py` are now `list` + `revoke` (revoke clears presence and open offers/requests, ends an accepted walk and its live location).
+- jival: **Face scan before location** (`app/face_scan`, Flutter `FaceScanScreen`): a companion scans on every **Accept**, a responder on every **I'm going**. The selfie travels in the same request (428 `face_scan_required`, 403 `face_mismatch`), so a modified app can't skip it or replay an old one; it is never stored, pass/fail is audited. `FACE_CHECK_PROVIDER=mock` (default for now: the phone checks exactly one face with on-device ML Kit; the server does **not** match faces) or `compreface` (reuses Tan's `check_walk_selfie` against the saved template). Copy says "confirm it's you", never liveness.
+- jival: **Dev switch** `FACE_MATCHER=mock` so identity verification works on laptops without CompreFace (refused outside dev/test). `sim_responders.py` records a dev identity for its bots and sends a placeholder scan (works with the mock provider only).
+- jival: Fixed on the way: the walk live-location relay now also stops when the companion's identity is revoked/expired; Tan's dev-secrets test lacked `FACE_TEMPLATE_KEY`; `sim_responders.py` called a verification endpoint that no longer exists.
+- jival: Checks: backend ruff clean + 268 passed; Flutter analyze no errors/warnings (only Flutter 3.50's `material.dart` deprecation infos) + 82 passed; contract YAML parses. **Not yet:** emulator run of the full flow, two real phones, real CompreFace.
+- **Next:** emulator run on this branch; team review; decide when to move `FACE_CHECK_PROVIDER` to `compreface`.
+## 2026-11-14 — shruj: Walk With Me built (profile, demo verification, matching, feedback, admin export)
+- shruj: All 5 planned tasks done on `p3/walk-with-me`: `P1-W3-profile-tab`, `P3-W3-companion-verification-mock`, `P3-W3-walk-matching`, `P1-W3-journey-feedback`, `P2-W3-feedback-store-admin`. Migration `0008` (profiles, companion_profiles, walks, feedback; `escalation_recipients.kind`).
+- shruj: **Profile:** asked once after the first email sign-in (skippable), editable in a new **Profile** tab. First name, bio (200), strengths, languages, optional gender, "willing to be a companion". Nobody can read anyone's profile; a walk partner sees first name, bio, strengths and languages only, never gender.
+- shruj: **Companions:** "Continue as companion" → **Demo verification** (always passes after ~2 s, nothing uploaded; stored as `verified_method=mock`, a stub) → approved by hand with `backend/scripts/companions.py list | approve <name> | approve-all | revoke <name>` (`COMPANION_AUTO_APPROVE` for dev laptops) → "Available to walk" (rough area ~110 m in Redis, gone after 5 min).
+- shruj: **Matching:** a traveller on an open journey sees available companions within 2 km (first name, bio, strengths, rating from past walks, distance rounded to 100 m), with **Women companions only**; "Ask to walk with me" → the companion sees first name and rough area only → Accept/Decline (expires after 10 min). On accept both see the **same 4-digit code** and "meet near" the rough area, and share live location with each other over the E2E relay (session = walk id, nobody else). Either side ends; the walk ends with the journey. Check-ins, SOS and sudden SOS are untouched.
+- shruj: **SOS during a walk** also alerts the companion (in I support). They can say "I'm on it" (shown as coming) but can't close or raise the alarm, and their "I'm on it" doesn't stop the trusted contacts' alerts.
+- shruj: **How was it?** after the user ends a journey and after a walk: route stars, companion stars (walk only), chips, note (500), Skip. Stored raw (`POST /feedback`, owner only, once per journey/walk; no location, no names); `backend/scripts/feedback.py list | export file.csv`, every run audited.
+- shruj: Changed: the local Walk With Me prototype screen (sample match, local chat) is replaced by the real flow, with its 2 prototype tests; the companion list, profile form and feedback sheet have new widget tests. Polls in the walk screen only rebuild when something changed.
+- shruj: Checks: backend ruff + 247 tests (30 new), Insight 37, Flutter analyze + 52 tests (12 new), debug APK builds, contract parses. Live run against a real local API (Postgres, Redis, WebSocket): 32/32 checks incl. two-way relay, SOS reaching the companion, companion blocked from resolving, rating, CSV export with no names or coordinates; access log has no coordinates. **Not yet tried on two real phones.**
+- shruj: **Tested in the real app on the emulator** (local API + worker, Telegram off), with a script playing the other person (same E2E location code as `sim_responders.py`): profile asked after first sign-in and saved; Profile tab shows it; traveller sees Riya (~300 m, bio, strengths), women-only filter, asks, Riya accepts, **same code on both (9803, 9178)**, live location both ways (app shows "Riya is ~279 m away" and it shrinks as she walks; the script decrypts the phone's GPS); SOS during the walk opened a full alert with Riya as companion recipient and she saw it; walk feedback stored exactly (4/5 route, 5/5 companion, chips, note, walk id); journey-end sheet without companion stars and Skip stores nothing. Companion side in the app: willing toggle, demo verification → "Waiting for approval" → `companions.py approve Priya` → approved, available, request from Meera (~200 m) → accept (code 6017 on both) → end walk (traveller sees it end, companion gets no feedback sheet); decline works.
+- shruj: **Fixed from that test:** the feedback sheet crashed on a real phone (the app theme makes filled buttons full width, and Send sat in a Row) and the companion's Accept/Decline row had the same problem; widget tests now use the real app theme and catch it. Walk With Me is now also on the "Plan a journey" screen, so a companion doesn't need a journey of their own (traveller stays disabled there).
+- **Next:** sumeet two-phone test and merge decision; decide whether leaving the screen should switch "available" off; replace the demo verification before any pilot.
+
+## 2026-11-14 — sumeet: Walk With Me planned (not built yet)
+- Plan recorded as 5 tasks on branch `p3/walk-with-me`: Profile tab, mocked companion verification, companion matching with handshake, post-journey feedback stored raw, admin CSV export. Open decisions listed in `progress.json` next_steps. Nothing is pushed until tested and approved by sumeet.
+
+## 2026-11-14 — sumeet: merged shruj's safe routes with sudden SOS; routes in the app
+
+- Merged `p4/safe-routes-bengaluru` (shruj) with `p1/sudden-sos` (which already has nearby responders and live location) on `integration/safe-routes-sos`.
+- Tested shruj's Insight service live: area info, day/night ranking, bad input, outside area, reports publish only at 5 reports / 3 reporters and move the recommendation, 21st report from one reporter is refused, demo page works. Never says "safe".
+- Fixed in her service: routes were really **car** routes (the public OSRM server ignores "foot"), now the free FOSSGIS foot router (1589 m / 21 min instead of 1908 m / 3 min); the access log still printed start/destination when the comma was URL-encoded (`%2C`), filter fixed in Insight and Core with tests; "1 streetlights".
+- App: after picking a destination the planner shows "Which way?" with the ranked routes and plain facts; the request carries no account token. The chosen route stays on the phone, shows on the journey map, and if you are >150 m off it for a minute the phone asks you to check in (never sends an alert by itself).
+- Checks: backend 217, Insight 37, Flutter 42, Kotlin 12 pass. Off-route nudge seen in unit tests only (emulator ran out of memory).
+
+## 2026-11-14 — sumeet: Sudden SOS (volume buttons, voice), SOS recording, Audio Escort
+
+- **Volume Down ×5 (or hold)** during a journey → 5 s silent countdown → SOS sent from native code (works with the app closed), plus SMS when offline. Only the PIN cancels; the duress PIN looks like a cancel and sends a silent alarm. Quick Settings tile and widget use the same countdown. Power button can't be used by apps (Android reserves it).
+- **Voice SOS**: "help", "bachao", "madad", "bacha lo", heard offline on the phone (Vosk Hindi + Indian English, ~80 MB voice pack downloaded in the app). Countdown 3–9 s: shorter when shouted/struggling, longer when the phone lies still. Practice mode shows what it heard and sends nothing. Tests: 0/16 false alarms, 11/13 caught; Kannada not available.
+- **SOS recording**: keeps the 15 s before the trigger (RAM only), records 5 s AAC clips encrypted on the phone, plays them live (E2E) to contacts and responders on their way; export as one .aac for a police complaint; owner deletes.
+- **Audio Escort**: owner starts it (or accepts a contact's request), picks listeners and up to 3 h; listeners hear live and see location; stop needs the PIN; duress PIN looks stopped and raises a silent alarm.
+- Relay now carries encrypted audio; for offline listeners the server keeps only ciphertext, at most 30 min of clips for 24 h, dropped once they may no longer hear.
+- Fixed: silent alarm no longer shrinks the timer (a visible giveaway).
+- Tests: backend 216, Flutter 33, Kotlin 12 pass. Verified live on the emulator: volume SOS, pre-roll recording, E2E audio decrypted by simulated responders, export, escort start/stop, duress.
+- Not yet verified: screen-off volume presses and English voice on a real phone (emulator limits). Next: shruj tests on her phone.
+
+## 2026-11-14 — Tan: document the cross-branch integration pipeline
+
+- Tan: Reviewed the pulled branch graph and the current `p1/responder-verification`, `origin/p3/walk-with-me`, `origin/integration/safe-routes-sos`, `origin/p3/nearby-responders`, and `origin/demo` histories and progress notes.
+- Tan: Added `Docs/INTEGRATION_PIPELINE.md` with the recommended integration base, feature inventory, duplicate migration-ID conflict, mock-versus-real companion verification conflict, canonical eligibility and data model guidance, walk-scoped selfie acceptance gate, end-to-end user flow, merge sequence, acceptance matrix, and suggested team owners.
+- Tan: Added `ALL-W1-integration-pipeline` to `PLANNER.md` and `progress.json`. The document is complete; the code merge and full integrated pipeline run remain team work.
+
+## 2026-11-14 — Tan: retain an encrypted face reference for Walk With Me
+
+- Tan: Added migration `0009` for opt-in consent tracking and an account-scoped face-template table. The reusable CompreFace embedding is encrypted with a dedicated `FACE_TEMPLATE_KEY`; ID and selfie image bytes remain transient and are never saved by SixthSense.
+- Tan: Successful initial ID/selfie comparison saves the ID portrait embedding only when the user separately opts in. The Walk With Me companion preview captures a fresh selfie and calls an authenticated server endpoint; it checks current companion eligibility, compares with the same CompreFace calculator model, records a PII-free audit event, and returns only pass/fail.
+- Tan: Added own-template status and deletion APIs, plus re-enrollment for verified users who skipped or deleted the template. Re-enrollment requires fresh consent and new ID/selfie photos, and stores a replacement only after a passing match. Added Flutter consent, capture, delete and per-walk controls, API contract and design notes, and an in-progress planner task.
+- Tan: Emulator/phone manual check and migration application remain. Real companion matching cannot pass until the separate companion-grant and walk-lifecycle work exists.
+- Tan: Static checks: backend Ruff and Flutter analyze pass. Automated tests and live CompreFace matching were not run for this change.
+
+## 2026-11-14 — Tan: fix CompreFace multipart image filenames
+
+- Tan: CompreFace logs showed HTTP 400 because multipart filenames `id-image` and `selfie` had no file extensions. The backend now derives `.jpg`, `.png`, or `.webp` filenames from each image MIME type.
+- Tan: Restarted the API on port 8002 to load the fix. Face matcher tests: 4 passed; Ruff clean. The user retried the real-image comparison successfully after the fix.
+
+## 2026-11-14 — Tan: verify OCR flow on emulator
+
+- Tan: Reproduced the premature "Waiting for review" screen. The API on port 8002 had been running stale code; restarting it loaded the existing not-submitted draft behavior. Reopening verification showed "Not submitted" and the ID type step before any photo upload.
+- Tan: Tested the supplied passport image on the Android emulator. On-device OCR filled only the passport number and date of birth as editable suggestions. The request log showed no upload to the face matcher. Removed the temporary gallery copy after the app loaded it; the form remains open for continuing the test.
+
+## 2026-11-14 — Tan: reset expired verification test draft
+
+- Tan: Marked the active emulator account’s expired, unsubmitted verification draft as expired so a fresh attempt can start. Kept the account, device, identity data, and audit history intact.
+
+## 2026-11-14 — Tan: review OCR suggestions before face comparison
+
+- Tan: OCR-filled ID number and date of birth are visibly marked as suggestions with "Read from photo. Tap to edit." Both fields remain editable, and manual edits clear their suggestion markers.
+- Tan: Added a review screen showing the selected ID type, both details, and both photos. Face comparison cannot start until the user checks the confirmation box.
+- Tan: Targeted OCR and verification Flutter tests: 23 passed. `flutter analyze`: clean. Debug APK build succeeded. Real-device verification remains for manual testing.
+
+## 2026-11-14 — Tan: add on-device ID field autofill
+
+- Tan: Added standalone Google ML Kit Text Recognition for the Android ID-photo flow. OCR runs on-device; temporary OCR copies are deleted after processing. No Firebase or OCR service is used.
+- Tan: OCR parsing returns only the ID number matching the separately selected ID type and a date of birth next to a DOB label. It does not retain or display other recognized text. Empty fields are autofilled; existing manual entries are preserved.
+- Tan: Added a local OCR status/fallback message and parser/widget coverage. Targeted OCR and verification Flutter tests: 22 passed. `flutter analyze`: clean. Debug APK build succeeded. Real ID-card recognition on a phone remains for manual verification.
+
+## 2026-11-14 — Tan: guide face-photo corrections and retry mismatches
+
+- Tan: The matcher now distinguishes invalid face input from matcher outages. Missing or ambiguous face results return `face_image_invalid`; the app asks for a clearer photo and returns to selfie capture without losing the ID details. Users can go back and replace the ID portrait.
+- Tan: A below-threshold face mismatch now offers a fresh selfie attempt in a new session while retaining the ID details and portrait; only the selfie must be retaken.
+- Tan: Backend verification/face-matcher tests: 11 passed. Flutter verification widget tests: 17 passed. Flutter analysis and backend Ruff checks: clean.
+
+## 2026-11-14 — Tan: validate verification images before upload
+
+- Tan: Picker MIME types are normalized to JPEG, PNG, or WebP using the declared type and file extension; unsupported formats receive a clear prompt.
+- Tan: ID and selfie images above the backend’s 5 MB upload limit are rejected locally with a size hint, before the request is sent.
+- Tan: Flutter verification widget tests: 15 passed. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: improve selfie capture and temporary image cleanup
+
+- Tan: The selfie picker now requests the front-facing camera. Captured and selected picker files are read into memory and their temporary source files are deleted on a best-effort basis; the verification flow continues if cleanup itself fails.
+- Tan: Flutter verification widget tests: 13 passed, including the selfie camera-source check. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: retry face comparison without losing the draft
+
+- Tan: Retryable matcher and network failures now preserve the current session, ID details, and selected images, with a **Retry face comparison** action. Starting a new attempt remains available separately.
+- Tan: Before retrying, the app fetches the session status. It displays any result already recorded by the server instead of uploading again after a lost response.
+- Tan: Flutter verification widget tests: 12 passed, including same-session retry and lost-response recovery. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: report expired verification attempts clearly
+
+- Tan: Backend status reads now report an elapsed draft as `expired` with `session_expired`, instead of leaving it displayed as “Not submitted.” Both `/verification/me` and the session endpoint use the expiry-aware status.
+- Tan: If an upload races with session expiry, the app shows the dedicated expiry result and **Start a new attempt** action instead of a generic error screen.
+- Tan: Backend verification tests: 6 passed. Flutter verification widget tests: 10 passed. `flutter analyze` and backend Ruff checks: clean.
+
+## 2026-11-14 — Tan: gate verification steps on required inputs
+
+- Tan: The document step now requires a non-empty ID number, a valid non-future `YYYY-MM-DD` birth date, and an uploaded ID photo before continuing to selfie capture.
+- Tan: Face comparison stays disabled until the required ID details and ID photo are present and a selfie has been captured; both steps show the remaining requirements.
+- Tan: Flutter verification widget tests: 8 passed. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: verification stages and submission status
+
+- Tan: Split the verification journey into visible email sign-in, face match, and responder approval stages. The Respond screen now tells applicants whether face matching is still needed or campus approval is pending.
+- Tan: New sessions are shown as “Not submitted” until the ID details and both images are submitted; restoring an unfinished session no longer falsely displays “Waiting for review.”
+- Tan: Backend verification tests: 5 passed. Flutter verification widget tests: 6 passed. `flutter analyze`: clean. The widget tests use a tall viewport to exercise the multi-step flow without clipping the controls.
+
+## 2026-11-14 — Tan: self-hosted face-match verification
+
+- Tan: Replaced the simulated selfie submit with ID-photo upload plus camera selfie capture. The app uploads both images and the entered ID details in one authenticated multipart request; it clearly says document authenticity and liveness are not checked in this demo.
+- Tan: Added the CompreFace adapter and local Docker service. Verification requires exactly one face in each image and a similarity score at or above configurable `COMPREFACE_MATCH_THRESHOLD` (default `0.8`); missing service credentials, provider errors, ambiguous results, and mismatches fail closed. Image bytes are transient and are not stored in SixthSense database rows; raw ID number/DOB remain unpersisted.
+- Tan: Added upload size/type checks, no-PII adapter error handling, a local setup/test walkthrough, and adapter/API regression tests. `pytest tests/test_verification.py tests/test_face_match.py -q`: 8 passed; `ruff check` passed; Flutter verification widget tests passed (4); `flutter analyze` clean; Compose configuration validates.
+- Tan: Started CompreFace locally at `http://localhost:8003` (UI returns HTTP 200), bound only to localhost; this Apple Silicon Mac runs its amd64 image under emulation. Create a **Face Verification** service in the UI and add its API key to `.env`; live image matching through the backend/emulator is pending that key.
+
+## 2026-11-14 — Tan: restarted demo API for face-match testing
+
+- Tan: Restarted the SixthSense API on port 8002 so it reloads the configured CompreFace settings. Left the database and user/device records untouched. `/healthz` returns HTTP 200; CompreFace UI returns HTTP 200; a dummy invalid-image request returned HTTP 400 rather than 401/403, confirming the service key is accepted. No real face comparison has been run yet.
+
+## 2026-11-14 — Tan: launched Android emulator for face-match test
+
+- Tan: Started `Medium_Phone_API_37.0` directly after Flutter's emulator launcher left ADB offline, waited for it to boot, then rebuilt and launched the latest debug app with `API_BASE_URL=http://10.0.2.2:8002`. The app is open and ready for manual face-match testing; no real image comparison has been submitted.
+
+## 2026-11-14 — Tan: reset emulator device key after sign-in conflict
+
+- Tan: The emulator returned HTTP 409 `device_key_in_use` during email sign-in, before verification. Uninstalled only the emulator app to regenerate its Android Keystore key, then rebuilt and relaunched the debug app against `10.0.2.2:8002`. Server accounts, devices, and database were not modified. Sign in again with a fresh OTP before testing face matching.
+
+## 2026-11-14 — Tan: responder verification app flow
+
+- Tan: Built the Respond → Apply flow: consent, ID type, fake ID number/date of birth, and simulated selfie/liveness step. No image is taken or sent; a permanent SIMULATED banner appears throughout.
+- Tan: Added debug-only scenario selection, pending-session restore/status refresh on app resume, and verified/rejected/underage/duplicate/expired/error result states. Underage results explicitly say journey, check-in, and SOS protection remain available.
+- Tan: Existing pending responder applications now show a Verify identity action; newly verified applicants then submit the responder application and wait for campus approval.
+- Tan: `flutter analyze` is clean; the complete Flutter suite passes (27 tests), including consent, underage result, banner/scenario picker, and pending responder continuation tests.
+- Tan: Rebuilt and hot-reloaded the emulator against the current API on `10.0.2.2:8002`; enabled mock scenarios on this local server only. Use **Respond → Become a responder** to test, then choose a scenario in the debug picker. Mailpit remains at `10.0.2.2:8025`.
+
+## 2026-11-14 — Tan: responder gates and simulated verification
+
+- Tan: Applied `eligible()` to responder presence, nearby dispatch, offer listing/going/arrival, and relay routing in both directions. Contacts and traveller SOS/check-ins remain available without verification.
+- Tan: Added responder revocation cleanup: immediately clear Redis presence, decline open offers, remove helper rows from open alerts, and record an audit event alongside the SQL state updates.
+- Tan: Added the consented mock verification API used by `scripts/sim_responders.py`; simulated responders now submit a fake ID via the server-side `approve` scenario before they can be approved/on duty.
+- Tan: Updated regression coverage for mock scenario gating, verification outcome persistence, ineligible responders, relay allowlists, and revocation during an active alert.
+- Tan: `ruff check` passes; 42 targeted verification, responder, and identity tests pass. Existing Starlette/httpx deprecation warning remains.
+- Tan: The mock stores an HMAC of the normalized fake document identifier for both duplicate fields; DOB-only person hashes were avoided because they would wrongly conflate people who share a birthday. Cross-ID person matching requires a stable provider-issued person reference.
+- Tan: Fixed migration `0008` to allow the `underage` session outcome. Applied migrations `0006` and `0008` to the local core DB; its Alembic head is `0008` (this branch still has no `0007`). Restarted the SixthSense API on port 8000; `/healthz` returns `{"status":"ok","service":"core"}`, and `/verification/me` is mounted and correctly returns 401 without a token.
+- Tan: The current server interface is `10.41.90.155`; the previously shared `.64` address is not this Mac. Simulator can be tested with `cd backend && uv run python scripts/sim_responders.py --api http://10.41.90.155:8000` (Mailpit at `http://localhost:8025`).
+- Tan: Diagnosed the simulator's approval failure: local `.env` had `CORE_DATABASE_URL` on port 5432, while Docker maps the core DB to 5434. Corrected only the local port. Reran the simulator successfully: all five accounts verified through the mock, were approved, and reached “on duty · waiting”; stopped cleanly with Ctrl+C so they are now off duty.
+- Tan: Traced the emulator's “check that the server is running on this network” error: `10.0.2.2:8000` reached an unrelated local app and returned 404, while SixthSense was reachable on other interfaces. Left that app untouched; relaunched the current debug build against SixthSense at `10.0.2.2:8001`. Confirmed the app's device challenge returns HTTP 200 and the emulator can load Mailpit at `10.0.2.2:8025`.
+- Tan: Resolved the next 409 (`device_key_in_use`): the emulator's Android Keystore sign-in key was already bound to another account. Uninstalled only the emulator debug app to reset its local key, then reinstalled/relaunched it against port 8001. The app and backend are ready for a fresh email sign-in; server-side accounts/devices were left untouched.
+- Tan: `0008_identity_verification.py` still follows `0006`; reparent after the separate sudden-SOS migration is integrated.
+
+## 2026-11-13 — Tan: P3 identity verification core started
+
+- Tan: Created `p3/identity-verification` from `p3/nearby-responders`; sudden-SOS remains separate for later integration.
+- Tan: Added verification session and identity outcome models, migration `0008`, responder/companion role-scoped profiles, device key rotation timestamp, verification settings in `.env.example`, and the shared `eligible()` check.
+- Tan: Added the first safety regression test: an unverified traveller can check in, send visible and covert SOS, and alert trusted contacts.
+- Tan: `ruff check` passes; 38 verification, responder, and identity tests passed at that point. Provider/service/router remain next.
+- Tan: Migration `0008` currently follows `0006`; its parent must be reconciled after the sudden-SOS branch's `0007` migration is integrated.
+
+## 2026-11-13 — sumeet: test session with shruj, simulated responders, stability fixes
+
+- Tested with shruj: map picker and SOS with responders passed; Shruj walking to me partly done.
+- `backend/scripts/sim_responders.py`: 5 simulated responders (3 within 500 m, 2 farther) with real accounts and E2E location, walking real streets; scenarios normal / slow / far / busy, `--center` to move them. Verified live: radius 500 m → 1 km → 2 km when nobody answers; stops asking once 2 are coming.
+- Fixed: app freeze (map updates piling up), journey screen overflow during alerts, black maps after switching tabs/apps, stray search suggestions. Emulator needed 4 CPU cores (was 1).
+- Maps are flat 2D everywhere (ride-app style); card maps don't take touches so the page scrolls.
+- Open: who ends a full alert without contacts; resuming sharing after an app restart.
+- Next: resume scenes 3-12, then PRs into main.
+
+## 2026-11-13 — sumeet: Uber-style live maps
+
+- One live map everywhere: tilted 3D buildings, markers glide between GPS fixes, pulsing red ring on the person in danger, shaded search radius (500 m → 1 km → 2 km), labels with ETA, dashed lines from helpers to the traveller.
+- Full-screen live map for the traveller (counts on top, who is coming in a bottom sheet) and for helpers (walking route + minutes, Google Maps walking directions, call 112).
+- Counts during an SOS: "Searching 500 m · 3 responders on duty nearby · 2 asked · 1 coming" (counts only, never who or where).
+- Walking routes come from the free FOSSGIS OSRM server, asked only by the helper's phone (two points, nothing else); to be replaced by our own Valhalla before the pilot.
+- Found: a full alert can only be ended by a trusted contact, so a responder-only SOS can't be closed. Decision needed.
+
+## 2026-11-13 — sumeet: live location tested; who-is-coming, nearby responders, map picker, background location
+
+- **Tested** live location with shruj over ZeroTier (no hosting needed): SOS → map on her "I support", dot follows my emulator GPS, directions open. Emulator freezes fixed (hardware GPU + 4 GB RAM).
+- **Who is coming:** "I'm on it" (contact) or "I'm going" (responder) now shows on my journey screen with name, distance and walk time, plus a small map; their phone shares its location back to me only (E2E).
+- **Nearby responders (F6 campus version, `P3-W1-nearby-responders`):** approved responders go on duty (rough ~110 m area, Redis, 5 min). On SOS my phone sends a rough area; the worker asks the nearest within 500 m, then 1 km, then 2 km (one step a minute), max 5; the first 2 who say "I'm going" get my precise live location. Contacts are never asked twice. Approve by hand: `backend/scripts/responders.py`.
+- **Map picker:** search with suggestions (OpenStreetMap/Photon, free) or long-press to drop a pin; distance, walk time, arrival time and a suggested check-in interval. Destination stays on the phone.
+- **Background location:** sharing keeps going with the screen off (foreground service notice).
+- Decision: nearby alerts only to verified on-duty responders, never "any user" (rules 1 and 4).
+- Checks: backend 198 tests, app 21 tests, analyze clean; live smoke test: responder asked 4 s after SOS.
+- Next: multi-emulator test (me as traveller + responders, shruj as contact + responder), then PRs to main.
+
+## Status at a glance (updated 2026-11-14)
 
 **Phase:** **2-day demo** from branch `demo` (12-week plan paused; see `PLANNER.md` §0)
 **Platform:** Android first; iOS later.
@@ -14,11 +239,28 @@
 | P1 Mobile (**tanisha**) | Flutter shell + theme; Android toolchain ready; sign-up + contacts UI; journey UI + local timer; SOS + duress PIN flow; Android SOS shortcuts; offline SMS and low-battery routing; foreground service + exact alarms; W6 crypto client; W7 walk screens; W9 map/report privacy client | W6 integration awaits P2 identity/contact-key APIs and ciphertext relay; physical USB, battery, carrier-SMS, camera, and map checks remain pending |
 | P2 Safety Core (**shruj**) | Repo, backend skeleton, local databases running + migrated; **email-code sign-in + device-bound keys** (`P2-W1`); **trusted contacts** (`P2-W2`); **journey state machine** (`P2-W3`); **watchdog + alert ladder** (`P2-W4`); **encrypted location relay** (`P2-W5`); **signed alerts** (`P2-W6`); **demo: real Telegram alerts proven** (`P2-W1-demo-telegram-live`) | Help Tanisha wire the app (`P1-W1-demo-api-wiring`); merge `p2/demo-telegram-live` into `demo` |
 | P3 Trust | — | `P3-W1-vendor-selection` (KYC + liveness sandboxes) |
-| P4 Insight | Insight service skeleton, dashboard shell | `P4-W1-report-model-separate-db` |
+| P4 Insight | Insight service skeleton, dashboard shell; **ranked walking routes for Indiranagar** (`P4-W1-demo-safe-routes`, shruj, hackathon) | Valhalla on the demo laptop; `P4-W1-report-model-separate-db` |
 
 **Budget:** ₹0, free tools only (`PLANNER.md` §3b).
 **Blockers:** need a Xiaomi/Oppo/Vivo/Samsung test phone · legal review (DPDP, UIDAI) · campus MoU.
 **Lane owners:** P1 = tanisha, P2 = shruj. For the demo: sumeet = server + Telegram bot, jival = script + slides. P3/P4 unassigned.
+
+## 2026-11-14 — shruj: Ranked walking routes for Indiranagar (hackathon demo, `P4-W1-demo-safe-routes`)
+- shruj: New `insight/app/routing/`. `GET /routes?from=lat,lon&to=lat,lon&at=day|evening|night` returns several distinct walking routes ranked by what is around them at that hour; `POST /routes/reports` takes anonymous place reports; `GET /routes/area` describes the data area; `/routes/demo` is a map page for demos (MapLibre, OSM tiles). It lives in Insight so a route request carries no identity (rule 4) and reports never meet account data (rule 6). Start and destination are never stored or logged.
+- shruj: **How it works:** routes come from an existing router (the free public OSRM server in dev; a local Valhalla for the demo laptop). We add our own alternatives by routing through side points ~250 m off the shortest way, drop near-duplicates, then score each route: streetlights, places open (only late-open ones at night), bus stops, stations, police and hospitals, counted once each along the way, per km, with day/evening/night weights and diminishing returns. Published report cells pull a score down. The recommendation is at most 25% / 600 m longer than the shortest, and only when the gain is noticeable. Every route states plain facts ("38 streetlights vs 11", "+1 min"). Labels are only *Strong evidence of concern / Some reports of concern / Insufficient data*; no route is called safe and the demo map has no green.
+- shruj: **Data:** `insight/data/areas/indiranagar.json`: 2,544 OpenStreetMap features for a 4×4 km box (602 street lamps, 1,195 shops, 415 cafés/restaurants, 118 bus stops, 36 hospitals, 5 stations, 4 police). Built by `insight/scripts/build_area_features.py`; BBMP streetlights, BMTC stops and police KML from data.opencity.in can replace the OSM layers (download them in a browser; the site blocks scripts).
+- shruj: **Reports:** a ~55 m cell, a category, a time and an HMAC of an opaque reporter token, nothing else. Published, and used by routing, only after `PUBLISH_MIN_REPORTS` reports from `PUBLISH_MIN_DEVICES` reporters; evidence halves every 30 days and is gone after 90; 20 reports/hour per token. Migration `insight/migrations/versions/0002_place_reports.py`.
+- shruj: **Checks:** ruff clean; 35 Insight tests pass (23 new; a fake router and a synthetic lit/dark street, no network). Live smoke with the real data and the public OSRM: 100 Feet Rd → Domlur gets the shortest route by day and at night a +245 m route with 8 streetlights vs 1 and 49 open places vs 30; 5 reports from 3 reporters flipped a recommendation with *Strong evidence of concern*; 7 router calls in 1.4 s.
+- shruj: **Known limits:** OSM lamp coverage is patchy (BBMP data would fix it; only 4 zones are published, Indiranagar is in Bangalore East); daytime scores in a dense area sit close together; the public OSRM server is shared, so run Valhalla for the real demo. Branch `p4/safe-routes-bengaluru` from `main`, not pushed yet.
+- shruj: **Ran it for real** (Docker up, Insight migrated 0001+0002, uvicorn :8001): day → shortest; night → +245 m route with 8 lamps vs 1; 5 reports from 3 tokens published a spot (hidden at 4) and moved the recommendation with *Strong evidence of concern*; 21st report from one token → 429; DB rows hold only cell centres and hashes. **Fixed on the way:** uvicorn's access log printed `/routes?from=lat,lon` in clear (its handlers bypass the root PII filter); the filter now also sits on `uvicorn.access` and scrubs log arguments in place, test added. Demo page no longer depends on the map starting (list + deep link `?from=&to=&at=` work without WebGL).
+- **Next:** demo A/B pairs; Valhalla on the demo laptop; optional BBMP East-zone streetlights.
+
+## 2026-11-12 — sumeet: 2-phone run passed; live location + new home
+- 2-phone run passed on emulators over ZeroTier: sign-up, invite, Telegram link, SOS alert with matching code, resolve, missed check-in.
+- Fixed on the way: worker crash on slow Wi-Fi (PR #4), signed-in POSTs never sent (PR #5), SOS 'no_server_journey' after a failed start + silent bare /start (PR #6), journey-over after a contact resolves.
+- New: precise live location to contacts during a journey, end-to-end encrypted over the relay (server stores nothing); map with accuracy on the contact's alert card.
+- New: home tabs Journey / My people / I support; add and remove contacts any time (names stay on the phone).
+- Next: test live location with Shruj, UI polish, SIM phone test, slides.
 
 ## 2026-11-12 — sumeet: demo server over ZeroTier
 - Joined Shruj's ZeroTier network (8d1c312afad78cd4); left the other one. Laptop = 10.41.90.84.

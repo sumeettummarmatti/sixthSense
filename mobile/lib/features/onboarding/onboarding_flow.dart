@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/device_identity.dart';
 import '../contacts/contact_alerts.dart';
-import '../journey/journey_flow.dart';
+import '../../core/contacts/contact_book.dart';
+import '../../core/location/live_location.dart';
+import '../home/home_shell.dart';
+import '../profile/profile_form.dart';
 
 /// Demo onboarding connected to email OTP, Android device-key auth, contacts,
 /// and Telegram linking.
@@ -33,7 +36,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     if (!mounted) return;
     if (signedIn) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => JourneyFlow(api: widget.api)),
+        MaterialPageRoute<void>(builder: (_) => HomeShell(api: widget.api)),
       );
     }
   }
@@ -78,6 +81,17 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         email: _emailController.text.trim(),
         code: code,
       );
+      E2EKeyring.reset();
+      final email = _emailController.text.trim();
+      try {
+        // How contacts see me in invites and alerts: the email name for the demo.
+        await ContactBook(widget.api.identity).saveOwnerLabel(
+          email.contains('@') ? email.substring(0, email.indexOf('@')) : email,
+        );
+      } catch (_) {
+        // Not available in widget tests; the label falls back to a default.
+      }
+      await _askForProfileOnce();
       if (mounted) setState(() => _step = OnboardingStep.contacts);
     } on ApiException catch (error) {
       _showApiError(error);
@@ -86,6 +100,21 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// After the first sign-in: first name, bio, strengths, languages (P1-W3).
+  /// Skippable; it can be filled in later from the Profile tab.
+  Future<void> _askForProfileOnce() async {
+    Profile? existing;
+    try {
+      existing = await widget.api.profile();
+    } catch (_) {
+      return; // offline or not reachable: the Profile tab can do it later
+    }
+    if (existing != null || !mounted) return;
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => ProfileSetupScreen(api: widget.api)),
+    );
   }
 
   Future<void> _addContact() async {
@@ -111,6 +140,14 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         phone: contact.phone,
         contactLinkId: invite['contact_link_id'] as String,
       );
+      try {
+        await ContactBook(widget.api.identity).save(
+          linkedContact.contactLinkId,
+          LocalContact(name: contact.name, phone: contact.phone),
+        );
+      } catch (_) {
+        // Names are a convenience; the invite still works without them.
+      }
       await const DeviceIdentity().shareInvite(
         invite['invite_url'] as String,
         contact.name,
@@ -157,6 +194,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       'telegram_not_configured' =>
         'Telegram alerts are not configured on the server yet.',
       'contact_limit_reached' => 'You have reached the trusted-contact limit.',
+      'account_suspended' =>
+        'This account has been blocked after a safety review. If you need help now, call 112.',
       'server_unreachable' || 'server_timeout' =>
         'Could not reach the server. Check that it is running on this network.',
       _ =>
@@ -167,7 +206,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   void _finishOnboarding() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => JourneyFlow(api: widget.api)),
+      MaterialPageRoute<void>(builder: (_) => HomeShell(api: widget.api)),
     );
   }
 

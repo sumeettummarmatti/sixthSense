@@ -20,6 +20,10 @@ for _name in (
     "FCM_SERVICE_ACCOUNT_FILE",
 ):
     os.environ[_name] = ""
+# Tests choose face matching themselves, whatever a developer's .env says (FACE_MATCHER=mock
+# on laptops without CompreFace).
+os.environ["FACE_MATCHER"] = "compreface"
+os.environ["FACE_CHECK_PROVIDER"] = "mock"
 
 
 def _create_and_migrate_test_db() -> None:

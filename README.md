@@ -148,6 +148,39 @@ Open **one Terminal tab per app** (⌘ + T for a new tab). In each tab, `cd ~/De
 
 ---
 
+### Local responder face-match demo
+
+The responder mock compares the uploaded ID portrait and camera selfie with the self-hosted
+CompreFace service. It does not validate the document itself or perform liveness detection.
+Images are sent to the local matcher for comparison and are not written to SixthSense database
+records. The face similarity threshold is configurable (`COMPREFACE_MATCH_THRESHOLD`, default
+`0.8`).
+
+1. Start CompreFace with `docker compose -f infra/docker-compose.yml up -d compreface`.
+2. Open `http://localhost:8003`, create a CompreFace account and app, then create a **Face
+   Verification** service and copy its API key.
+3. Set `COMPREFACE_API_URL=http://localhost:8003` and `COMPREFACE_API_KEY=<service-key>` in the
+   root `.env`, then restart the backend.
+4. In the app, open **Respond → Become a responder**, consent, choose the ID type, enter the ID
+   details, upload its photo, and take a selfie. **Compare faces** approves only when CompreFace
+   returns a similarity at or above the configured threshold. The scenario selector is only for
+   debug rejection/error demos; an `approve` scenario still requires a passing face match.
+
+**No CompreFace on your laptop?** Set `FACE_MATCHER=mock` in `.env` (dev only; the server refuses
+it outside `ENV=dev`/`test`): the ID-vs-selfie comparison then always passes, everything else in
+the verification flow is unchanged.
+
+### Face scan before sharing location
+
+A verified identity is all it takes to be a responder or a companion: there is no approval step.
+Each time a companion **accepts a walk** and each time a responder says **I'm going**, the app
+asks for a quick front-camera face scan, sent in that same request, before any location is shared.
+`FACE_CHECK_PROVIDER=mock` (default) only checks on the phone that exactly one face is in the
+photo; `FACE_CHECK_PROVIDER=compreface` matches it against the face template saved during
+verification (needs CompreFace and the template consent). The photo is never stored. Remove
+someone after a complaint with `scripts/responders.py revoke <name> <reason>` or
+`scripts/companions.py revoke <name>`.
+
 ## Check everything works
 
 Run this from the `sixthSense` folder before opening a pull request (there is no CI yet, so this is our safety net).

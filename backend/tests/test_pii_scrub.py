@@ -29,3 +29,9 @@ def test_filter_redacts_args() -> None:
     record = logging.LogRecord("t", logging.INFO, __file__, 1, "user %s", ("9876543210",), None)
     PIIScrubFilter().filter(record)
     assert "9876543210" not in record.getMessage()
+
+
+def test_url_encoded_coordinates_are_scrubbed() -> None:
+    from app.core.logging import scrub
+
+    assert scrub("/x?at=12.9719%2C77.6412") == "/x?at=[REDACTED_COORDS]"

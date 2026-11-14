@@ -4,13 +4,17 @@ from app import (
     comms,
     contacts,
     escalation,
+    escort,
+    feedback,
     identity,
     journey,
     matching,
     notification,
+    profiles,
     relay,
     routing,
     trust_safety,
+    verification,
     walks,
 )
 from app.core.logging import configure_logging
@@ -20,13 +24,17 @@ MODULES = [
     contacts,
     journey,
     escalation,
+    escort,
     notification,
     matching,
+    profiles,
     walks,
+    feedback,
     relay,
     comms,
     routing,
     trust_safety,
+    verification,
 ]
 
 
@@ -40,6 +48,7 @@ def create_app() -> FastAPI:
 
     for module in MODULES:
         app.include_router(module.router)
+    app.include_router(feedback.admin_router)
     return app
 
 
