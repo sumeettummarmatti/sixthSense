@@ -142,10 +142,15 @@ class DemoApi {
 
   Future<Map<String, dynamic>> createVerificationSession({
     required bool consent,
+    bool faceTemplateConsent = false,
   }) => _request(
     'POST',
     '/verification/sessions',
-    body: {'purpose': 'responder', 'consent': consent},
+    body: {
+      'purpose': 'responder',
+      'consent': consent,
+      'face_template_consent': faceTemplateConsent,
+    },
   );
 
   Future<Map<String, dynamic>> submitVerificationSelfie({
@@ -175,6 +180,25 @@ class DemoApi {
 
   Future<Map<String, dynamic>> verificationMe() =>
       _request('GET', '/verification/me');
+
+  Future<void> deleteFaceTemplate() =>
+      _request('DELETE', '/verification/face-template');
+
+  Future<void> enrollFaceTemplate({
+    required VerificationImage idImage,
+    required VerificationImage selfieImage,
+  }) => _requestMultipart(
+    '/verification/face-template',
+    fields: const {'consent': 'true'},
+    images: {'id_image': idImage, 'selfie_image': selfieImage},
+  );
+
+  Future<Map<String, dynamic>> walkFaceCheck(VerificationImage selfie) =>
+      _requestMultipart(
+        '/walks/face-check',
+        fields: const {},
+        images: {'selfie_image': selfie},
+      );
 
   /// Returns false when this install has never completed email verification.
   Future<bool> trySilentSignIn() async {

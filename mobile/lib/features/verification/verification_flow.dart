@@ -43,6 +43,9 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   final _dateOfBirth = TextEditingController();
   var _stage = _VerificationStage.loading;
   var _consent = false;
+  var _faceTemplateConsent = false;
+  var _faceTemplateEnabled = false;
+  var _faceTemplateBusy = false;
   var _busy = false;
   var _idType = 'drivers_license';
   var _scenario = 'approve';
@@ -259,6 +262,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     try {
       final me = await widget.api.verificationMe();
       if (!mounted) return;
+      _faceTemplateEnabled = me['face_template_enabled'] == true;
       final id = me['session_id'] as String?;
       if (me['status'] == 'verified') {
         setState(() {
@@ -287,6 +291,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     try {
       final response = await widget.api.createVerificationSession(
         consent: _consent,
+        faceTemplateConsent: _faceTemplateConsent,
       );
       _sessionId = response['id'] as String;
       _status = response['status'] as String? ?? 'not_submitted';
@@ -352,6 +357,9 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
         scenario: kDebugMode ? _scenario : null,
       );
       _showStatus(result);
+      if (result['status'] == 'verified') {
+        unawaited(_refreshFaceTemplateStatus());
+      }
     } on ApiException catch (error) {
       if (mounted) {
         setState(() {
@@ -442,6 +450,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     try {
       final response = await widget.api.createVerificationSession(
         consent: true,
+        faceTemplateConsent: _faceTemplateConsent,
       );
       _sessionId = response['id'] as String;
       _status = response['status'] as String? ?? 'not_submitted';
@@ -487,6 +496,131 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
       _ => _VerificationStage.error,
     };
     setState(() {});
+  }
+
+  Future<void> _refreshFaceTemplateStatus() async {
+    try {
+      final me = await widget.api.verificationMe();
+      if (mounted) {
+        setState(
+          () => _faceTemplateEnabled = me['face_template_enabled'] == true,
+        );
+      }
+    } catch (_) {
+      // Status remains informational; the server remains authoritative on each walk check.
+    }
+  }
+
+  Future<void> _deleteFaceTemplate() async {
+    setState(() => _faceTemplateBusy = true);
+    try {
+      await widget.api.deleteFaceTemplate();
+      if (mounted) {
+        setState(() {
+          _faceTemplateEnabled = false;
+          _faceTemplateConsent = false;
+          _idPhoto = null;
+          _selfiePhoto = null;
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        _showMessage(
+          'Could not delete the saved face reference (${error.detail}).',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          'Could not reach the server to delete the saved face reference.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _faceTemplateBusy = false);
+    }
+  }
+
+  Future<void> _pickTemplateIdPhoto() async {
+    try {
+      final photo = await _choosePhoto(ImageSource.gallery);
+      if (mounted && photo != null) setState(() => _idPhoto = photo);
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = _photoErrorMessage(
+            error,
+            'Could not load the ID portrait.',
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _takeTemplateSelfie() async {
+    try {
+      final photo = await _choosePhoto(ImageSource.camera);
+      if (mounted && photo != null) setState(() => _selfiePhoto = photo);
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = _photoErrorMessage(
+            error,
+            'Could not capture the selfie.',
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _enrollFaceTemplate() async {
+    final idImage = _idPhoto;
+    final selfie = _selfiePhoto;
+    if (!_faceTemplateConsent ||
+        idImage == null ||
+        selfie == null ||
+        _faceTemplateBusy) {
+      return;
+    }
+    setState(() {
+      _faceTemplateBusy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.enrollFaceTemplate(
+        idImage: idImage,
+        selfieImage: selfie,
+      );
+      if (mounted) {
+        setState(() {
+          _faceTemplateEnabled = true;
+          _idPhoto = null;
+          _selfiePhoto = null;
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = switch (error.detail) {
+            'face_mismatch' => 'The ID portrait and selfie did not match. Check both photos and try again.',
+            'face_image_invalid' => 'Use one clear face in each photo.',
+            _ => 'Could not save the face reference (${error.detail}).',
+          };
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Could not reach the face matcher. Try again later.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _faceTemplateBusy = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _newAttempt() async {
@@ -650,6 +784,22 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
         subtitle: const Text(
           'The ID photo and selfie are sent to our self-hosted matcher for a '
           'face comparison. SixthSense does not save the images in its database.',
+        ),
+      ),
+    ),
+    const SizedBox(height: 8),
+    Card(
+      child: CheckboxListTile(
+        key: const ValueKey('face-template-consent'),
+        value: _faceTemplateConsent,
+        onChanged: (value) =>
+            setState(() => _faceTemplateConsent = value ?? false),
+        controlAffinity: ListTileControlAffinity.leading,
+        title: const Text(
+          'Save an encrypted face reference for Walk With Me checks (optional).',
+        ),
+        subtitle: const Text(
+          'Only a CompreFace embedding is retained, never either photo. It is used to compare a fresh selfie before each companion walk. You can delete it from this screen later.',
         ),
       ),
     ),
@@ -1034,6 +1184,80 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
       const SizedBox(height: 8),
       Text(message),
       const SizedBox(height: 20),
+      if (status == 'verified')
+        if (_faceTemplateEnabled)
+          OutlinedButton.icon(
+            onPressed: _faceTemplateBusy ? null : _deleteFaceTemplate,
+            icon: const Icon(Icons.delete_outline),
+            label: Text(
+              _faceTemplateBusy
+                  ? 'Deleting…'
+                  : 'Delete saved Walk With Me face reference',
+            ),
+          )
+        else ...[
+          if (_faceTemplateConsent)
+            const Text(
+              'Identity verification succeeded, but the matcher did not return a reusable face reference. You can retry enrollment below.',
+            ),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CheckboxListTile(
+                    key: const ValueKey('face-template-reenrollment-consent'),
+                    contentPadding: EdgeInsets.zero,
+                    value: _faceTemplateConsent,
+                    onChanged: (value) =>
+                        setState(() => _faceTemplateConsent = value ?? false),
+                    title: const Text(
+                      'I consent to saving an encrypted face reference.',
+                    ),
+                    subtitle: const Text(
+                      'Only the embedding is retained. The new ID portrait and selfie are used for this match and then discarded.',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _faceTemplateBusy ? null : _pickTemplateIdPhoto,
+                    icon: const Icon(Icons.badge_outlined),
+                    label: Text(
+                      _idPhoto == null
+                          ? 'Choose ID portrait'
+                          : 'Replace ID portrait',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _faceTemplateBusy ? null : _takeTemplateSelfie,
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: Text(
+                      _selfiePhoto == null
+                          ? 'Take enrollment selfie'
+                          : 'Retake selfie',
+                    ),
+                  ),
+                  if (_idPhoto != null && _selfiePhoto != null)
+                    const Text('Both images are ready for a face match.'),
+                  FilledButton.tonal(
+                    key: const ValueKey('enroll-face-template'),
+                    onPressed:
+                        !_faceTemplateConsent ||
+                            _idPhoto == null ||
+                            _selfiePhoto == null ||
+                            _faceTemplateBusy
+                        ? null
+                        : _enrollFaceTemplate,
+                    child: _faceTemplateBusy
+                        ? const CircularProgressIndicator()
+                        : const Text('Save face reference'),
+                  ),
+                  if (_error != null) _inlineError(_error!),
+                ],
+              ),
+            ),
+          ),
+        ],
       if (status == 'verified')
         FilledButton(
           onPressed: () => _finish(true),

@@ -1,5 +1,7 @@
 """Transient image comparison through the local CompreFace installation."""
 
+from dataclasses import dataclass
+from math import isfinite
 from typing import Any
 
 import httpx
@@ -13,6 +15,13 @@ class FaceMatchError(Exception):
     def __init__(self, code: str = "face_match_unavailable") -> None:
         super().__init__(code)
         self.code = code
+
+
+@dataclass(frozen=True)
+class FaceComparison:
+    similarity: float
+    source_embedding: list[float] | None = None
+    calculator_version: str | None = None
 
 
 def _upload_filename(prefix: str, image_type: str) -> str:
@@ -33,13 +42,15 @@ def compare_faces(
     id_image_type: str,
     selfie_image: bytes,
     selfie_image_type: str,
-) -> float:
+    capture_template: bool = False,
+) -> float | FaceComparison:
     if not settings.compreface_api_key:
         raise FaceMatchError("face matcher is not configured")
 
     try:
         response = httpx.post(
             f"{settings.compreface_api_url.rstrip('/')}/api/v1/verification/verify",
+            params={"face_plugins": "calculator"} if capture_template else None,
             headers={"x-api-key": settings.compreface_api_key},
             files={
                 "source_image": (
@@ -74,4 +85,96 @@ def compare_faces(
     similarity = matches[0].get("similarity")
     if not isinstance(similarity, (int, float)) or not 0.0 <= similarity <= 1.0:
         raise FaceMatchError("matcher returned an invalid score")
-    return float(similarity)
+    if not capture_template:
+        return float(similarity)
+    source = results[0].get("source_image_face")
+    embedding = source.get("embedding") if isinstance(source, dict) else None
+    versions = results[0].get("plugins_versions")
+    version = versions.get("calculator") if isinstance(versions, dict) else None
+    if (
+        not isinstance(embedding, list)
+        or not 1 <= len(embedding) <= 2048
+        or any(not isinstance(value, (int, float)) or not isfinite(value) for value in embedding)
+        or not isinstance(version, str)
+        or not version
+    ):
+        raise FaceMatchError("face_template_unavailable")
+    return FaceComparison(float(similarity), [float(value) for value in embedding], version)
+
+
+def compare_template_to_selfie(
+    settings: Settings,
+    *,
+    template_embedding: list[float],
+    calculator_version: str,
+    selfie_image: bytes,
+    selfie_image_type: str,
+) -> float:
+    if not settings.compreface_api_key:
+        raise FaceMatchError("face matcher is not configured")
+    try:
+        # Verification service supports the calculator plugin; duplicating the fresh selfie
+        # yields its embedding without persisting or registering the source image in CompreFace.
+        image_response = httpx.post(
+            f"{settings.compreface_api_url.rstrip('/')}/api/v1/verification/verify",
+            params={"face_plugins": "calculator"},
+            headers={"x-api-key": settings.compreface_api_key},
+            files={
+                "source_image": (
+                    _upload_filename("walk-selfie-source", selfie_image_type),
+                    selfie_image,
+                    selfie_image_type,
+                ),
+                "target_image": (
+                    _upload_filename("walk-selfie-target", selfie_image_type),
+                    selfie_image,
+                    selfie_image_type,
+                ),
+            },
+            timeout=30.0,
+        )
+        image_response.raise_for_status()
+        payload: Any = image_response.json()
+        result = payload.get("result") if isinstance(payload, dict) else None
+        if not isinstance(result, list) or len(result) != 1:
+            raise FaceMatchError("face_image_invalid")
+        face = result[0].get("source_image_face")
+        embedding = face.get("embedding") if isinstance(face, dict) else None
+        versions = result[0].get("plugins_versions")
+        version = versions.get("calculator") if isinstance(versions, dict) else None
+        matches = result[0].get("face_matches")
+        if (
+            not isinstance(matches, list)
+            or len(matches) != 1
+            or not isinstance(embedding, list)
+            or not 1 <= len(embedding) <= 2048
+            or any(
+                not isinstance(value, (int, float)) or not isfinite(value) for value in embedding
+            )
+            or version != calculator_version
+        ):
+            code = (
+                "face_image_invalid"
+                if version == calculator_version
+                else "face_template_model_changed"
+            )
+            raise FaceMatchError(code)
+        verify_response = httpx.post(
+            f"{settings.compreface_api_url.rstrip('/')}/api/v1/verification/embeddings/verify",
+            headers={"x-api-key": settings.compreface_api_key},
+            json={"source": template_embedding, "targets": [[float(value) for value in embedding]]},
+            timeout=30.0,
+        )
+        verify_response.raise_for_status()
+        verify_payload: Any = verify_response.json()
+    except FaceMatchError:
+        raise
+    except (httpx.HTTPError, ValueError) as exc:
+        raise FaceMatchError("face matcher request failed") from exc
+    results = verify_payload.get("result") if isinstance(verify_payload, dict) else None
+    score = (
+        results[0].get("similarity") if isinstance(results, list) and len(results) == 1 else None
+    )
+    if not isinstance(score, (int, float)) or not isfinite(score) or not 0.0 <= score <= 1.0:
+        raise FaceMatchError()
+    return float(score)

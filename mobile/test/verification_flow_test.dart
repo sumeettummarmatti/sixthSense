@@ -776,6 +776,7 @@ class _FakeVerificationApi extends DemoApi {
   @override
   Future<Map<String, dynamic>> createVerificationSession({
     required bool consent,
+    bool faceTemplateConsent = false,
   }) async => {'id': 'session-1', 'status': 'not_submitted'};
 
   @override
@@ -871,6 +872,7 @@ class _FaceMismatchRetryVerificationApi extends _FakeVerificationApi {
   @override
   Future<Map<String, dynamic>> createVerificationSession({
     required bool consent,
+    bool faceTemplateConsent = false,
   }) async {
     createdSessions++;
     return {'id': 'session-$createdSessions', 'status': 'not_submitted'};

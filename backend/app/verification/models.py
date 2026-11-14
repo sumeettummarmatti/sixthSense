@@ -36,6 +36,9 @@ class VerificationSession(Base):
     attempt_no: Mapped[int] = mapped_column(Integer, server_default="1")
     consent_version: Mapped[str] = mapped_column(Text)
     consent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    face_template_consent: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -60,3 +63,19 @@ class IdentityRecord(Base):
     valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class FaceTemplate(Base):
+    """Encrypted reusable biometric reference; no source document or image is retained."""
+
+    __tablename__ = "face_templates"
+
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    embedding_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    calculator_version: Mapped[str] = mapped_column(Text, nullable=False)
+    consent_version: Mapped[str] = mapped_column(Text, nullable=False)
+    consent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

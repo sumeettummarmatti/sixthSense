@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     compreface_api_url: str = "http://localhost:8003"
     compreface_api_key: str = ""
     compreface_match_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    face_template_key: str = Field(default="dev-only-face-template-key-change-me", min_length=32)
 
     # Trusted contacts (P2-W2)
     max_trusted_contacts: int = 5  # accepted + pending invites
@@ -91,6 +92,7 @@ class Settings(BaseSettings):
                 "data_key",
                 "alert_signing_key",
                 "identity_hmac_secret",
+                "face_template_key",
             ):
                 if getattr(self, name).startswith(_DEV_SECRET_PREFIX):
                     raise ValueError(f"{name.upper()} must be a real secret when ENV={self.env}")

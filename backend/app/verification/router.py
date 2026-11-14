@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
 from app.identity.router import CurrentSession, get_current_session
-from app.verification.models import IdentityRecord, VerificationSession
-from app.verification.service import start_session, submit_document
+from app.verification.models import FaceTemplate, IdentityRecord, VerificationSession
+from app.verification.service import enroll_face_template, start_session, submit_document
 
 router = APIRouter(prefix="/verification", tags=["verification"])
 DbDep = Annotated[Session, Depends(get_db)]
@@ -25,6 +25,7 @@ class ConsentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     purpose: str = "responder"
     consent: bool
+    face_template_consent: bool = False
 
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -74,7 +75,11 @@ def create_session(body: ConsentRequest, db: DbDep, current: SessionDep) -> Veri
         raise HTTPException(422, "unsupported_verification_purpose")
     if not body.consent:
         raise HTTPException(400, "consent_required")
-    row = start_session(db, current.account_id, datetime.now(UTC))
+    row = start_session(db, current.account_id, datetime.now(UTC), body.face_template_consent)
+    if body.face_template_consent:
+        from app.core import audit
+
+        audit.record(db, "verification.face_template_consent_granted", actor=current.account_id)
     db.commit()
     return VerificationStatus(id=row.id, status="not_submitted", expires_at=row.expires_at)
 
@@ -137,11 +142,59 @@ def get_me(db: DbDep, current: SessionDep) -> dict:
     )
     status = _public_status(latest) if latest else "not_started"
     return {
-        "status": "verified"
-        if identity and not identity.revoked_at
-        else status,
+        "status": "verified" if identity and not identity.revoked_at else status,
         "is_adult": identity.is_adult if identity else None,
         "valid_until": identity.valid_until if identity else None,
         "session_id": latest.id if latest else None,
         "reason_code": _public_reason(latest, status) if latest else None,
+        "face_template_enabled": db.get(FaceTemplate, current.account_id) is not None,
     }
+
+
+@router.delete("/face-template", status_code=204)
+def delete_face_template(db: DbDep, current: SessionDep) -> None:
+    from app.core import audit
+
+    template = db.get(FaceTemplate, current.account_id)
+    if template is not None:
+        db.delete(template)
+        audit.record(db, "verification.face_template_deleted", actor=current.account_id)
+        db.commit()
+
+
+@router.post("/face-template")
+async def enroll_reusable_face_template(
+    consent: Annotated[bool, Form()],
+    id_image: Annotated[UploadFile, File()],
+    selfie_image: Annotated[UploadFile, File()],
+    db: DbDep,
+    current: SessionDep,
+    settings: SettingsDep,
+) -> dict[str, bool]:
+    identity = db.get(IdentityRecord, current.account_id)
+    now = datetime.now(UTC)
+    if (
+        identity is None
+        or not identity.is_adult
+        or identity.revoked_at is not None
+        or identity.valid_until <= now
+    ):
+        raise HTTPException(403, "identity_not_verified")
+    if not consent:
+        raise HTTPException(400, "face_template_consent_required")
+    id_bytes = await _image_bytes(id_image)
+    selfie_bytes = await _image_bytes(selfie_image)
+    matched = enroll_face_template(
+        db,
+        current.account_id,
+        settings,
+        id_bytes,
+        id_image.content_type or "image/jpeg",
+        selfie_bytes,
+        selfie_image.content_type or "image/jpeg",
+        now,
+    )
+    db.commit()
+    if not matched:
+        raise HTTPException(422, "face_mismatch")
+    return {"enabled": True}

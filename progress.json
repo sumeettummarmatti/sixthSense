@@ -1,6 +1,6 @@
 {
   "project": "sixthsense",
-  "updated_at": "2026-11-14T14:58:12+05:30",
+  "updated_at": "2026-11-14T15:24:00+05:30",
   "updated_by": "Tan",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
@@ -428,6 +428,25 @@
           "status": "todo",
           "week": 3,
           "notes": "Tan: later work when Walk With Me matching exists."
+        },
+        {
+          "id": "P3-W3-walk-face-template",
+          "title": "Consent-based encrypted face template and per-walk companion selfie match",
+          "status": "in_progress",
+          "week": 3,
+          "notes": "Tan: Added migration 0009 and encrypted CompreFace embeddings extracted from the ID portrait only after separate optional recurring-check consent and a successful initial face match. Added authenticated per-walk selfie extraction/comparison, server-side companion eligibility gate, audit events, template status/deletion, Flutter opt-in and delete controls, and companion selfie-check gating in the Walk With Me preview. Added re-enrollment for verified users who skipped or deleted the reference, with fresh consent and images. Static checks: Ruff and flutter analyze clean. Still needs migration application, approved companion role grant/walk lifecycle integration, and manual emulator/phone check.",
+          "updated_at": "2026-11-14T15:24:00+05:30",
+          "updated_by": "Tan",
+          "next_steps": [
+            "Apply Alembic migration 0009 in the local backend environment.",
+            "Grant an approved companion role when P3-W3-companion-grant is available, then manually verify matching and deletion on emulator/phone."
+          ],
+          "blockers": [
+            {
+              "by": "Tan",
+              "description": "Walk matching and companion role grants are not implemented yet; the new selfie gate correctly returns not_eligible until an approved companion lifecycle exists."
+            }
+          ]
         },
         {
           "id": "P3-W1-vendor-selection",

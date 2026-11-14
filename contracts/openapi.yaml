@@ -22,6 +22,7 @@ tags:
   - {name: routing, description: "Route with caution level (P4)"}
   - {name: dashboard, description: "Clusters, mark addressed, metrics (P4)"}
   - {name: realtime, description: "WebSocket: ciphertext relay, alerts, walk updates (P2)"}
+
 paths:
   /healthz:
     get:
@@ -37,6 +38,97 @@ paths:
                 properties:
                   status: {type: string, example: ok}
                   service: {type: string, enum: [core, insight]}
+  /verification/sessions:
+    post:
+      tags: [verification]
+      summary: Start consented responder verification
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, consent]
+              properties:
+                purpose: {type: string, enum: [responder]}
+                consent: {type: boolean, const: true}
+                face_template_consent:
+                  type: boolean
+                  default: false
+                  description: Separate optional consent to retain an encrypted CompreFace embedding for recurring Walk With Me companion checks.
+      responses:
+        "201": {description: Verification session created}
+        "400": {description: Consent required}
+  /verification/face-template:
+    post:
+      tags: [verification]
+      summary: Enroll or replace a reusable face embedding
+      description: Requires an active verified adult identity and explicit consent. Both images are transient. A face match is required before an encrypted embedding is retained.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [consent, id_image, selfie_image]
+              properties:
+                consent: {type: boolean, const: true}
+                id_image: {type: string, format: binary}
+                selfie_image: {type: string, format: binary}
+      responses:
+        "200": {description: Enrolled or replaced after a passing face match}
+        "403": {description: Identity is not currently verified}
+        "422": {description: Images are invalid or the face comparison failed}
+    delete:
+      tags: [verification]
+      summary: Delete the current account's reusable face embedding
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Deleted, or already absent}
+  /verification/me:
+    get:
+      tags: [verification]
+      summary: Read own verification and reusable face-template status
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: Own status only; never returns the embedding
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string}
+                  face_template_enabled: {type: boolean}
+  /walks/face-check:
+    post:
+      tags: [walk]
+      summary: Require a fresh face match before a companion walk
+      description: Requires an eligible approved companion and a previously consented face template. The uploaded selfie is transient and never stored. Returns only a pass/fail result.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [selfie_image]
+              properties:
+                selfie_image: {type: string, format: binary}
+      responses:
+        "200":
+          description: Face check result; only pass/fail is returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [matched]
+                properties:
+                  matched: {type: boolean}
+        "403": {description: Companion is not eligible}
+        "409": {description: Reusable face template is not enrolled}
   /auth/otp/request:
     post:
       tags: [auth]

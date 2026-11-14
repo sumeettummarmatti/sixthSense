@@ -6,14 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/api/device_identity.dart';
+
 typedef SelfieCapture = Future<Uint8List?> Function();
 
-/// Local UI prototype for Walk With Me. It does not match real people or send
-/// chat, location, selfie, or verification data to a service.
+/// Local Walk With Me preview with a real server-side companion selfie gate.
+/// Matching, chat, location and walk lifecycle remain prototype-only.
 class WalkFlow extends StatefulWidget {
-  const WalkFlow({super.key, this.captureSelfie});
+  const WalkFlow({super.key, this.captureSelfie, this.api = const DemoApi()});
 
   final SelfieCapture? captureSelfie;
+  final DemoApi api;
 
   @override
   State<WalkFlow> createState() => _WalkFlowState();
@@ -66,6 +69,9 @@ class _WalkFlowState extends State<WalkFlow> {
   Uint8List? _selfieBytes;
   bool _isOnDuty = false;
   bool _isCapturing = false;
+  bool _isCheckingFace = false;
+  bool _walkFaceCheckPassed = false;
+  String? _faceCheckMessage;
 
   @override
   void initState() {
@@ -123,7 +129,13 @@ class _WalkFlowState extends State<WalkFlow> {
     try {
       final bytes = await (widget.captureSelfie ?? _captureSelfie)();
       if (!mounted) return;
-      if (bytes != null) setState(() => _selfieBytes = bytes);
+      if (bytes != null) {
+        setState(() {
+          _selfieBytes = bytes;
+          _walkFaceCheckPassed = false;
+          _faceCheckMessage = null;
+        });
+      }
     } on PlatformException catch (error) {
       if (!mounted) return;
       _showMessage(error.message ?? 'The camera could not capture a selfie.');
@@ -132,6 +144,53 @@ class _WalkFlowState extends State<WalkFlow> {
       _showMessage('The camera could not capture a selfie. Try again.');
     } finally {
       if (mounted) setState(() => _isCapturing = false);
+    }
+  }
+
+  Future<void> _checkWalkFace() async {
+    final bytes = _selfieBytes;
+    if (bytes == null || _isCheckingFace) return;
+    setState(() {
+      _isCheckingFace = true;
+      _faceCheckMessage = null;
+    });
+    try {
+      final result = await widget.api.walkFaceCheck(
+        VerificationImage(bytes: bytes, mimeType: 'image/jpeg'),
+      );
+      if (!mounted) return;
+      final matched = result['matched'] == true;
+      setState(() {
+        _selfieBytes = null;
+        _walkFaceCheckPassed = matched;
+        _faceCheckMessage = matched
+            ? 'Face match passed for this walk. The selfie was not saved.'
+            : 'This selfie did not match the enrolled reference. Retake it before continuing.';
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _selfieBytes = null;
+        _walkFaceCheckPassed = false;
+        _faceCheckMessage = switch (error.detail) {
+          'not_eligible' => 'Companion approval and current verification are required before a walk check.',
+          'face_template_not_enrolled' => 'No reusable face reference is enrolled. Enroll it in Respond verification first.',
+          'face_image_invalid' => 'Use one clear, centered face in the selfie.',
+          'face_template_model_changed' => 'The face matcher model changed. Enroll your reference again before accepting walks.',
+          _ =>
+            'The face check could not finish (${error.detail}). Try again when the server is available.',
+        };
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _selfieBytes = null;
+          _walkFaceCheckPassed = false;
+          _faceCheckMessage = 'Could not reach the face matcher. Try again when the server is available.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isCheckingFace = false);
     }
   }
 
@@ -221,7 +280,7 @@ class _WalkFlowState extends State<WalkFlow> {
       ),
       const SizedBox(height: 12),
       const Text(
-        'Prototype preview only. No real companion matching, identity checks, or communication happens here.',
+        'Companion eligibility and the fresh selfie check use the server. Matching, location, and communication remain a preview.',
         textAlign: TextAlign.center,
       ),
       const SizedBox(height: 24),
@@ -468,7 +527,7 @@ class _WalkFlowState extends State<WalkFlow> {
           ),
         const SizedBox(height: 14),
         _notice(
-          'A photo capture is not a liveness check. No face matching or verification SDK is connected; do not use this demo to accept a real walk.',
+          'This checks the fresh selfie against your encrypted enrolled face reference. It is a face match, not liveness detection, and the demo still does not create a real companion match.',
         ),
         const SizedBox(height: 20),
         OutlinedButton.icon(
@@ -484,11 +543,25 @@ class _WalkFlowState extends State<WalkFlow> {
           ),
         ),
         const SizedBox(height: 8),
-        FilledButton(
-          onPressed: _selfieBytes == null
+        FilledButton.tonal(
+          key: const ValueKey('walk-face-check'),
+          onPressed: _selfieBytes == null || _isCheckingFace
               ? null
-              : () => setState(() => _screen = _WalkScreen.handshake),
-          child: const Text('Continue demo only'),
+              : _checkWalkFace,
+          child: _isCheckingFace
+              ? const CircularProgressIndicator()
+              : const Text('Check selfie for this walk'),
+        ),
+        if (_faceCheckMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(_faceCheckMessage!, textAlign: TextAlign.center),
+        ],
+        const SizedBox(height: 8),
+        FilledButton(
+          onPressed: _walkFaceCheckPassed
+              ? () => setState(() => _screen = _WalkScreen.handshake)
+              : null,
+          child: const Text('Continue after face check'),
         ),
       ],
     ),

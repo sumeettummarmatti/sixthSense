@@ -41,6 +41,7 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | P3 (working branch) | `P3-W2-verification-admin` | Pilot CLI for in-person verification, approval, and revocation |
 | P3 (working branch) | `P3-W3-device-recovery` | Revoke old device keys and apply a cooldown after account recovery/key rotation |
 | P3 (working branch) | `P3-W3-companion-grant` | Companion role grant and eligibility gate when Walk With Me matching exists |
+| P3 (working branch) | `P3-W3-walk-face-template` | With separate consent, retain an encrypted CompreFace embedding and require a fresh selfie match for companion walk acceptance; support deletion |
 
 ---
 

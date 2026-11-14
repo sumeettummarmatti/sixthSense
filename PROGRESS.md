@@ -3,6 +3,14 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-14 — Tan: retain an encrypted face reference for Walk With Me
+
+- Tan: Added migration `0009` for opt-in consent tracking and an account-scoped face-template table. The reusable CompreFace embedding is encrypted with a dedicated `FACE_TEMPLATE_KEY`; ID and selfie image bytes remain transient and are never saved by SixthSense.
+- Tan: Successful initial ID/selfie comparison saves the ID portrait embedding only when the user separately opts in. The Walk With Me companion preview captures a fresh selfie and calls an authenticated server endpoint; it checks current companion eligibility, compares with the same CompreFace calculator model, records a PII-free audit event, and returns only pass/fail.
+- Tan: Added own-template status and deletion APIs, plus re-enrollment for verified users who skipped or deleted the template. Re-enrollment requires fresh consent and new ID/selfie photos, and stores a replacement only after a passing match. Added Flutter consent, capture, delete and per-walk controls, API contract and design notes, and an in-progress planner task.
+- Tan: Emulator/phone manual check and migration application remain. Real companion matching cannot pass until the separate companion-grant and walk-lifecycle work exists.
+- Tan: Static checks: backend Ruff and Flutter analyze pass. Automated tests and live CompreFace matching were not run for this change.
+
 ## 2026-11-14 — Tan: fix CompreFace multipart image filenames
 
 - Tan: CompreFace logs showed HTTP 400 because multipart filenames `id-image` and `selfie` had no file extensions. The backend now derives `.jpg`, `.png`, or `.webp` filenames from each image MIME type.

@@ -1,5 +1,9 @@
 # SafeThread: Verification & Post-Session Anonymity
 
+## Current implementation note (2026-11-14)
+
+For the prototype, a responder can separately opt in to a reusable Walk With Me face reference after the ID-portrait/selfie comparison succeeds. SixthSense keeps only a Fernet-encrypted CompreFace calculator embedding, its calculator version, and consent metadata; the ID and selfie images are sent transiently to the local matcher and are not stored in the Core database. Before a companion accepts a walk, the server requires current companion eligibility and compares a newly captured selfie against the stored embedding. The account holder can delete the embedding from the verification result screen. This is a face-match gate, not liveness detection or proof that the supplied ID is authentic. The local walk lifecycle and companion role-grant flow still need integration.
+
 > Companion to `SafeThread_HLD.md`. This document goes deep on the two pillars that decide whether the responder network and Walk With Me are trustworthy:
 >
 > 1. **Who is this person?** How exactly people are verified, so a stranger walking beside you is accountable.

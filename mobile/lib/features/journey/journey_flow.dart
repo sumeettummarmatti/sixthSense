@@ -567,6 +567,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       onEnd: _endJourney,
       onSos: _requestSos,
       onRequestBatteryExemption: _requestBatteryExemption,
+      api: widget.api,
       sharing: widget.relay?.sharing,
       helpersPanel: widget.relay == null || _serverJourneyId == null
           ? null
@@ -913,6 +914,7 @@ class ActiveJourneyScreen extends StatelessWidget {
     required this.onEnd,
     required this.onSos,
     required this.onRequestBatteryExemption,
+    this.api = const DemoApi(),
     this.sharing,
     this.helpersPanel,
     this.compact,
@@ -933,6 +935,7 @@ class ActiveJourneyScreen extends StatelessWidget {
   final VoidCallback onEnd;
   final ValueChanged<bool> onSos;
   final VoidCallback onRequestBatteryExemption;
+  final DemoApi api;
 
   @override
   Widget build(BuildContext context) {
@@ -982,7 +985,7 @@ class ActiveJourneyScreen extends StatelessWidget {
             tooltip: 'Walk With Me',
             onPressed: () => Navigator.of(
               context,
-            ).push(MaterialPageRoute<void>(builder: (_) => const WalkFlow())),
+            ).push(MaterialPageRoute<void>(builder: (_) => WalkFlow(api: api))),
             icon: const Icon(Icons.directions_walk_rounded),
           ),
           IconButton(
