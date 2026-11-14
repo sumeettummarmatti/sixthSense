@@ -46,7 +46,8 @@ class Settings(BaseSettings):
     # going"). "mock": the phone confirms one face is in front of the camera and the server
     # accepts any real image (no matching). "compreface": the selfie must match the face
     # template saved during verification (needs CompreFace and template consent).
-    face_check_provider: Literal["mock", "compreface"] = "mock"
+    # "auto": "compreface" for helpers with a saved template, the phone check for the rest.
+    face_check_provider: Literal["mock", "compreface", "auto"] = "mock"
     # One-time identity verification compares the ID photo with a selfie in CompreFace.
     # "mock" skips that comparison (always matches) for laptops without CompreFace. Dev only.
     face_matcher: Literal["compreface", "mock"] = "compreface"

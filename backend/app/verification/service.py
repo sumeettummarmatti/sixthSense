@@ -14,6 +14,7 @@ from app.core.config import Settings
 from app.verification.face_match import (
     FaceComparison,
     FaceMatchError,
+    best_embedding_match,
     compare_faces,
     compare_template_to_selfie,
 )
@@ -85,6 +86,9 @@ def submit_document(
         audit.record(db, f"verification.{result.status}", actor=session.account_id)
         return result
 
+    from app.moderation import service as moderation  # lazy: moderation imports this package
+
+    banned = moderation.banned_faces(db)
     template_unavailable = False
     try:
         comparison = compare_faces(
@@ -93,9 +97,14 @@ def submit_document(
             id_image_type=id_image_type,
             selfie_image=selfie_image,
             selfie_image_type=selfie_image_type,
-            capture_template=session.face_template_consent,
+            # Embeddings are needed to keep a template (consented) or to check the ban list.
+            capture_template=session.face_template_consent or bool(banned),
         )
     except FaceMatchError as exc:
+        if banned:
+            # The ban list must be checked: fail closed rather than skip it.
+            status_code = 422 if exc.code == "face_image_invalid" else 503
+            raise HTTPException(status_code, exc.code) from exc
         if session.face_template_consent and exc.code in {
             "face_template_unavailable",
             "face matcher request failed",
@@ -129,6 +138,14 @@ def submit_document(
     # document identifier rather than DOB (DOB-only hashes would block unrelated people).
     # A real provider adapter must supply a stable person reference for cross-ID deduplication.
     person_hash = _hmac(settings.identity_hmac_secret, "person", normalized)
+    if moderation.banned_hashes(db, id_hash, person_hash) or _banned_face(
+        settings, comparison, banned
+    ):
+        session.status = "rejected"
+        session.reason_code = "not_eligible"
+        session.completed_at = now
+        audit.record(db, "verification.banned_match", actor=session.account_id)
+        return ProviderResult("rejected", "not_eligible")
     duplicate = db.scalar(select(IdentityRecord).where(IdentityRecord.id_hmac == id_hash))
     if duplicate or db.scalar(
         select(IdentityRecord).where(
@@ -180,6 +197,27 @@ def submit_document(
     session.completed_at = now
     audit.record(db, "verification.verified", actor=session.account_id)
     return result
+
+
+def _banned_face(
+    settings: Settings, comparison: float | FaceComparison, banned: list[tuple[bytes, str]]
+) -> bool:
+    """Does the live selfie match anyone on the ban list? Embeddings are compared in memory."""
+    if not banned:
+        return False
+    selfie = comparison.target_embedding if isinstance(comparison, FaceComparison) else None
+    if selfie is None:
+        raise HTTPException(503, "face_match_unavailable")
+    targets = [
+        decrypt_embedding(settings, enc)
+        for enc, version in banned
+        if version == comparison.calculator_version
+    ]
+    try:
+        best = best_embedding_match(settings, selfie, targets)
+    except FaceMatchError as exc:
+        raise HTTPException(503, exc.code) from exc
+    return best >= settings.compreface_match_threshold
 
 
 def check_walk_selfie(

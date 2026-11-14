@@ -200,6 +200,11 @@ def device_verify(
     return _issue_session(redis, settings, account.id, device.id)
 
 
+# Accounts banned by an admin (P2-W4-helper-ban): their live tokens stop working at once.
+# Kept in sync with app.moderation.service.BANNED_KEY.
+BANNED_ACCOUNTS_KEY = "banned_accounts"
+
+
 @dataclass(frozen=True)
 class CurrentSession:
     account_id: uuid.UUID
@@ -214,6 +219,8 @@ def session_from_token(settings: Settings, redis: Redis, token: str) -> CurrentS
     if value is None:
         return None
     account_id, device_id = value.decode().split(":")
+    if redis.sismember(BANNED_ACCOUNTS_KEY, account_id):
+        return None  # banned: HTTP calls get 401 and the relay socket closes
     return CurrentSession(uuid.UUID(account_id), uuid.UUID(device_id))
 
 
@@ -277,3 +284,30 @@ def upload_e2e_keys(
         x25519_public_key=base64.b64encode(x25519).decode(),
         ed25519_public_key=base64.b64encode(ed25519).decode(),
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    session: CurrentSessionDep,
+    settings: SettingsDep,
+    redis: RedisDep,
+    db: DbDep,
+    authorization: Annotated[str | None, Header()] = None,
+) -> None:
+    """Sign this phone out: end the token and retire its device key (the app makes a new one).
+
+    Also takes the person off duty as a responder or companion, so nobody is matched to a phone
+    that has signed out.
+    """
+    from app.matching import nearby  # lazy: matching imports this module
+    from app.walks.service import clear_presence
+
+    _, _, token = (authorization or "").partition(" ")
+    redis.delete(f"at:{security.keyed_hash(settings.token_secret, 'access', token)}")
+    device = db.get(Device, session.device_id)
+    if device is not None and device.revoked_at is None:
+        device.revoked_at = datetime.now(UTC)
+    nearby.clear_presence(redis, session.account_id)
+    clear_presence(redis, session.account_id)
+    audit.record(db, "auth.logout", actor=session.account_id, target=f"device:{session.device_id}")
+    db.commit()

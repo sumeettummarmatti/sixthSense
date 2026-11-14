@@ -8,6 +8,9 @@ import httpx
 
 from app.core.config import Settings
 
+# CompreFace only returns plugins_versions (needed to keep a face template) with status=true.
+_TEMPLATE_PARAMS = {"face_plugins": "calculator", "status": "true"}
+
 
 class FaceMatchError(Exception):
     """The local face matcher could not produce a safe comparison result."""
@@ -20,8 +23,17 @@ class FaceMatchError(Exception):
 @dataclass(frozen=True)
 class FaceComparison:
     similarity: float
-    source_embedding: list[float] | None = None
+    source_embedding: list[float] | None = None  # the ID photo's face
     calculator_version: str | None = None
+    target_embedding: list[float] | None = None  # the live selfie's face (ban-list check)
+
+
+def _valid_embedding(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and 1 <= len(value) <= 2048
+        and all(isinstance(v, (int, float)) and isfinite(v) for v in value)
+    )
 
 
 def _upload_filename(prefix: str, image_type: str) -> str:
@@ -54,7 +66,7 @@ def compare_faces(
     try:
         response = httpx.post(
             f"{settings.compreface_api_url.rstrip('/')}/api/v1/verification/verify",
-            params={"face_plugins": "calculator"} if capture_template else None,
+            params=_TEMPLATE_PARAMS if capture_template else None,
             headers={"x-api-key": settings.compreface_api_key},
             files={
                 "source_image": (
@@ -95,15 +107,43 @@ def compare_faces(
     embedding = source.get("embedding") if isinstance(source, dict) else None
     versions = results[0].get("plugins_versions")
     version = versions.get("calculator") if isinstance(versions, dict) else None
-    if (
-        not isinstance(embedding, list)
-        or not 1 <= len(embedding) <= 2048
-        or any(not isinstance(value, (int, float)) or not isfinite(value) for value in embedding)
-        or not isinstance(version, str)
-        or not version
-    ):
+    if not _valid_embedding(embedding) or not isinstance(version, str) or not version:
         raise FaceMatchError("face_template_unavailable")
-    return FaceComparison(float(similarity), [float(value) for value in embedding], version)
+    selfie = matches[0].get("embedding")
+    return FaceComparison(
+        float(similarity),
+        [float(value) for value in embedding],
+        version,
+        [float(value) for value in selfie] if _valid_embedding(selfie) else None,
+    )
+
+
+def best_embedding_match(
+    settings: Settings, embedding: list[float], targets: list[list[float]]
+) -> float:
+    """Highest similarity between one face embedding and a list of stored ones (0 if none)."""
+    if not targets:
+        return 0.0
+    if not settings.compreface_api_key:
+        raise FaceMatchError("face matcher is not configured")
+    try:
+        response = httpx.post(
+            f"{settings.compreface_api_url.rstrip('/')}/api/v1/verification/embeddings/verify",
+            headers={"x-api-key": settings.compreface_api_key},
+            json={"source": embedding, "targets": targets},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        payload: Any = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise FaceMatchError("face matcher request failed") from exc
+    results = payload.get("result") if isinstance(payload, dict) else None
+    scores = [r.get("similarity") for r in results] if isinstance(results, list) else []
+    if not scores or any(
+        not isinstance(x, (int, float)) or not isfinite(x) or not 0.0 <= x <= 1.0 for x in scores
+    ):
+        raise FaceMatchError()
+    return float(max(scores))
 
 
 def compare_template_to_selfie(
@@ -121,7 +161,7 @@ def compare_template_to_selfie(
         # yields its embedding without persisting or registering the source image in CompreFace.
         image_response = httpx.post(
             f"{settings.compreface_api_url.rstrip('/')}/api/v1/verification/verify",
-            params={"face_plugins": "calculator"},
+            params=_TEMPLATE_PARAMS,
             headers={"x-api-key": settings.compreface_api_key},
             files={
                 "source_image": (

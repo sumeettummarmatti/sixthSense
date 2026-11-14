@@ -10,6 +10,8 @@ Providers (FACE_CHECK_PROVIDER):
   the server only checks that a real image was sent. It does NOT match faces. Demo only.
 - compreface: the selfie is compared with the encrypted face template saved at verification
   (reuses the verification module's check_walk_selfie). Needs CompreFace and template consent.
+- auto: compreface for helpers who saved a face template, the phone check (mock) for the rest,
+  so turning real matching on never locks out helpers who verified before templates worked.
 
 The image is read into memory, checked and dropped: it is never stored or logged (rule 2).
 """
@@ -23,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.core import audit
 from app.core.config import Settings
+from app.verification.models import FaceTemplate
 from app.verification.service import check_walk_selfie
 
 Purpose = Literal["walk", "responder"]
@@ -62,7 +65,10 @@ def check(
     target: str,
 ) -> None:
     """Pass silently, or raise. A failed match is audited and committed before raising."""
-    if settings.face_check_provider == "compreface":
+    provider = settings.face_check_provider
+    if provider == "auto" and db.get(FaceTemplate, account_id) is None:
+        provider = "auto_device"  # no template yet: the phone's one-face check stands
+    if provider in ("compreface", "auto"):
         # Raises 409 face_template_not_enrolled / 422 face_image_invalid / 503 when unavailable.
         matched = check_walk_selfie(db, account_id, settings, image, content_type, now)
     else:
@@ -70,7 +76,7 @@ def check(
     result = "passed" if matched else "failed"
     audit.record(
         db,
-        f"{purpose}.face_scan.{result}.{settings.face_check_provider}",
+        f"{purpose}.face_scan.{result}.{provider}",
         actor=account_id,
         target=target,
     )

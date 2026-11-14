@@ -32,3 +32,20 @@ class FeedbackIn(BaseModel):
 
 class FeedbackOut(BaseModel):
     id: uuid.UUID
+
+
+class ResponderToRate(BaseModel):
+    """A responder who said "I'm going" on this journey's alert, for the traveller to rate."""
+
+    offer_id: uuid.UUID
+    name: str
+
+
+class RespondersToRate(BaseModel):
+    responders: list[ResponderToRate]
+
+
+class ResponderRatingIn(BaseModel):
+    offer_id: uuid.UUID
+    stars: int = Field(ge=1, le=5)
+    note: Note = ""
