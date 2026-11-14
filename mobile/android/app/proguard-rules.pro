@@ -5,3 +5,10 @@
 -keep class org.vosk.** { *; }
 -dontwarn java.awt.**
 -dontwarn com.sun.jna.**
+
+# ML Kit text recognition (ID-photo OCR): only the Latin recognizer is bundled. The plugin
+# references the optional Chinese/Devanagari/Japanese/Korean packs, which we do not ship.
+-dontwarn com.google.mlkit.vision.text.chinese.**
+-dontwarn com.google.mlkit.vision.text.devanagari.**
+-dontwarn com.google.mlkit.vision.text.japanese.**
+-dontwarn com.google.mlkit.vision.text.korean.**
