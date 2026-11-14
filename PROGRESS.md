@@ -3,6 +3,9 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-14 — sumeet: Walk With Me planned (not built yet)
+- Plan recorded as 5 tasks on branch `p3/walk-with-me`: Profile tab, mocked companion verification, companion matching with handshake, post-journey feedback stored raw, admin CSV export. Open decisions listed in `progress.json` next_steps. Nothing is pushed until tested and approved by sumeet.
+
 ## 2026-11-14 — sumeet: merged shruj's safe routes with sudden SOS; routes in the app
 
 - Merged `p4/safe-routes-bengaluru` (shruj) with `p1/sudden-sos` (which already has nearby responders and live location) on `integration/safe-routes-sos`.

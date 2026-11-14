@@ -29,6 +29,11 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | sumeet | `ALL-W1-demo-branch-server` | Create Telegram bot (@BotFather), merge into `demo`, run server on laptop, phone reaches it |
 | shruj | `P2-W1-demo-telegram-live` | Put bot token in `.env`, prove a real Telegram alert arrives end to end, fix bugs |
 | sumeet | `P1-W2-safe-routes-in-app` | Journey planner shows Shruj's ranked walking routes (anonymous request to Insight), the chosen route on the journey map, and a check-in nudge when far off it |
+| sumeet | `P1-W3-profile-tab` | Profile tab: name, bio, strengths, languages, companion opt-in; collected after first sign-in, editable; shown only inside a consented walk |
+| sumeet | `P3-W3-companion-verification-mock` | Mocked companion verification (always passes, stored as verified·mock) until campus office / offline e-KYC |
+| sumeet | `P3-W3-walk-matching` | Traveller picks a nearby verified companion (bio, strengths, rating), accept/decline, handshake code, public meeting point, two-way E2E location |
+| sumeet | `P1-W3-journey-feedback` | After a journey or walk: route and companion rating, chips, note; stored raw |
+| sumeet | `P2-W3-feedback-store-admin` | Feedback table + API; `scripts/feedback.py export` CSV for admins |
 | shruj | `P4-W1-demo-safe-routes` | Hackathon: ranked walking routes for one Bengaluru area (Indiranagar) from open data + anonymous place reports; demo map at `/routes/demo` |
 | tanisha | `P1-W1-demo-api-wiring` | Connect sign-up, contacts (+ "Get alerts on Telegram"), journey and SOS to the server; test on a real phone |
 | jival | `ALL-W1-demo-script-slides` | Demo script + slides; rehearse |
@@ -262,7 +267,7 @@ Auth · Verification · Contacts · Journey · Escalation · Walk · Responder �
 | 11 | `ALL-W11-red-team` | ← | ← | ← |
 | 12 | `ALL-W12-pilot-pentest` | ← | ← | ← |
 | Demo (now) | `P1-W1-demo-api-wiring` `P1-W1-demo-live-location` `P1-W1-demo-home-people` `P1-W1-demo-map-picker` `P1-W1-demo-background-location` | `P2-W1-demo-telegram-live` | `P3-W1-nearby-responders` | `P4-W1-demo-safe-routes` |
-| Demo (now) | `P1-W2-background-volume-sos` `P1-W2-sos-audio-evidence` `P1-W2-voice-sos-spike` `P1-W2-voice-sos` `P1-W3-audio-escort` `P1-W2-safe-routes-in-app` | `P2-W2-encrypted-audio-relay` | — | — |
+| Demo (now) | `P1-W2-background-volume-sos` `P1-W2-sos-audio-evidence` `P1-W2-voice-sos-spike` `P1-W2-voice-sos` `P1-W3-audio-escort` `P1-W2-safe-routes-in-app` `P1-W3-profile-tab` `P1-W3-journey-feedback` | `P2-W2-encrypted-audio-relay` `P2-W3-feedback-store-admin` | `P3-W3-companion-verification-mock` `P3-W3-walk-matching` | — |
 | Demo (now) | `ALL-W1-demo-branch-server` `ALL-W1-demo-script-slides` | ← | ← | ← |
 | Later | `P1-LATER-ios-port` (Swift modules; iOS can't auto-send SMS or read hardware buttons; needs a Mac + Apple account) | `P2-LATER-whatsapp-phone-otp` (Twilio WhatsApp code as 2nd sign-up check) `P2-LATER-fcm-push` | | |
 
