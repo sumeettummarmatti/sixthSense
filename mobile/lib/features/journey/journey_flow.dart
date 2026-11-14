@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -37,6 +38,7 @@ class JourneyFlow extends StatefulWidget {
     this.onCovertSosRequested,
     this.relay,
     this.sos,
+    this.restoreOnStart = true,
   });
 
   /// Shares live location with contacts during a journey; null turns it off (tests).
@@ -44,11 +46,17 @@ class JourneyFlow extends StatefulWidget {
 
   /// Sudden SOS on the phone (volume buttons, voice, recording, escort).
   final SuddenSos? sos;
+
+  /// Resume a journey still open after the app was closed (off in some widget tests).
+  final bool restoreOnStart;
   final DateTime Function()? now;
   final JourneyRuntime runtime;
   final DemoApi api;
   final VoidCallback? onDuressRequested;
   final VoidCallback? onCovertSosRequested;
+
+  /// The open server journey, for the Walk With Me tab (asking needs a journey).
+  static final activeJourneyId = ValueNotifier<String?>(null);
 
   @override
   State<JourneyFlow> createState() => _JourneyFlowState();
@@ -59,7 +67,12 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   DateTime? _nextCheckIn;
   Timer? _ticker;
   Timer? _heartbeatTicker;
-  String? _serverJourneyId;
+  String? _serverJourneyIdValue;
+  String? get _serverJourneyId => _serverJourneyIdValue;
+  set _serverJourneyId(String? id) {
+    _serverJourneyIdValue = id;
+    JourneyFlow.activeJourneyId.value = id;
+  }
   var _promptReported = false;
   Duration _remaining = Duration.zero;
   bool _checkInDue = false;
@@ -96,6 +109,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     _sos.attach();
     _sosEvents = _sos.events.listen(_onSosEvent);
     widget.relay?.myPosition.addListener(_checkOffRoute);
+    if (widget.restoreOnStart) unawaited(_restoreJourney());
   }
 
   void _checkOffRoute() {
@@ -482,6 +496,13 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       nextCheckIn = remote.nextCheckInAt;
       heartbeatTimeoutMinutes = remote.heartbeatTimeoutMinutes;
     } on ApiException catch (error) {
+      if (error.detail == 'invalid_for_state' ||
+          error.detail == 'journey_already_open') {
+        // An alert is still open on the server: starting a phone-only journey
+        // would leave SOS unable to reach anyone (no_server_journey).
+        if (mounted) await _explainOpenAlert();
+        return;
+      }
       serverWarning = error.detail;
     } catch (_) {
       serverWarning = 'server_unreachable';
@@ -531,6 +552,31 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
     }
 
     if (!mounted) return;
+    _activate(
+      plan,
+      serverJourneyId: serverJourneyId,
+      nextCheckIn: nextCheckIn,
+      heartbeatTimeoutMinutes: heartbeatTimeoutMinutes,
+    );
+    unawaited(_savePlan(plan, serverJourneyId));
+    if (serverWarning != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Server unavailable. The local timer and opted-in SMS fallback are active; contact alerts are not connected.',
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Shows [plan] as the running journey: countdown, heartbeats, help updates.
+  void _activate(
+    JourneyPlan plan, {
+    required String? serverJourneyId,
+    required DateTime nextCheckIn,
+    required int heartbeatTimeoutMinutes,
+  }) {
     _ticker?.cancel();
     final route = plan.route;
     _offRoute = route == null ? null : OffRouteWatch(route.points);
@@ -556,16 +602,147 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         (_) => _sendHeartbeat(),
       );
     }
-    if (serverWarning != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Server unavailable. The local timer and opted-in SMS fallback are active; contact alerts are not connected.',
-          ),
-        ),
+    _updateCountdown();
+  }
+
+  // ---- Keep the journey across app restarts (P1-W4-journey-restore) ----
+
+  /// The running plan, Keystore-encrypted on this phone; deleted when the journey ends.
+  static const _planKey = 'active_journey_plan';
+
+  Future<void> _savePlan(JourneyPlan plan, String? journeyId) async {
+    try {
+      await widget.api.identity.saveValue(
+        _planKey,
+        jsonEncode({...plan.toJson(), 'journey_id': journeyId}),
       );
+    } catch (_) {
+      // Not available in widget tests; the journey still runs.
     }
   }
+
+  Future<void> _forgetPlan() async {
+    try {
+      await widget.api.identity.saveValue(_planKey, null);
+    } catch (_) {}
+  }
+
+  /// After the app was closed (Back, swipe away, phone restart): pick the journey
+  /// back up instead of showing an empty planner while it is still open.
+  Future<void> _restoreJourney() async {
+    Map<String, dynamic>? stored;
+    try {
+      final raw = await widget.api.identity.readValue(_planKey);
+      if (raw != null) stored = jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      stored = null;
+    }
+    JourneySnapshot? remote;
+    var reachable = true;
+    try {
+      remote = await widget.api.currentJourney();
+    } on ApiException catch (error) {
+      reachable = error.statusCode != 0;
+      if (error.statusCode == 401) return; // signed out: nothing to resume
+    } catch (_) {
+      reachable = false;
+    }
+    if (!mounted || _plan != null) return;
+    if (stored == null) {
+      if (remote != null) await _offerToCloseOldJourney(remote);
+      return;
+    }
+    final plan = JourneyPlan.fromJson(stored);
+    final storedId = stored['journey_id'] as String?;
+    if (remote == null && reachable) {
+      // The server ended it (arrived, ended, or a contact confirmed you are OK).
+      await _forgetPlan();
+      try {
+        await widget.runtime.endJourney();
+      } catch (_) {}
+      return;
+    }
+    final serverId = remote?.id ?? storedId;
+    final nextCheckIn = remote?.nextCheckInAt ?? _now().add(plan.checkInInterval);
+    try {
+      // The phone timer may have stopped with the app; start it again.
+      await widget.runtime.startJourney(
+        nextCheckIn: nextCheckIn,
+        smsNumbers: plan.smsNumbers,
+        smsFallbackEnabled: plan.smsFallbackEnabled,
+        journeyId: serverId,
+        apiBaseUrl: widget.api.baseUri.toString(),
+        listenForWords: plan.listenForWords,
+      );
+    } catch (_) {
+      // Keep the screen in sync with the server even if the timer can't restart.
+    }
+    if (!mounted) return;
+    _activate(
+      plan,
+      serverJourneyId: serverId,
+      nextCheckIn: nextCheckIn,
+      heartbeatTimeoutMinutes: remote?.heartbeatTimeoutMinutes ?? 10,
+    );
+    if (serverId != storedId) unawaited(_savePlan(plan, serverId));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Your journey is still running.')),
+    );
+  }
+
+  /// A journey is open on the server but this phone has no plan for it (started
+  /// on an older app version). Offer to end it so a new one can start.
+  Future<void> _offerToCloseOldJourney(JourneySnapshot remote) async {
+    final alert =
+        remote.state == 'full_escalation' || remote.state == 'contact_alert';
+    if (alert) {
+      await _explainOpenAlert();
+      return;
+    }
+    final end = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('A journey is still open'),
+        content: const Text(
+          'A journey from before is still open. End it so you can start a new one?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('End it'),
+          ),
+        ],
+      ),
+    );
+    if (end != true) return;
+    try {
+      await widget.api.endJourney(remote.id);
+    } on ApiException {
+      if (mounted) await _explainOpenAlert();
+    } catch (_) {}
+  }
+
+  Future<void> _explainOpenAlert() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Your alert is still open'),
+      content: const Text(
+        'Your trusted contacts were alerted and the alert is still open. '
+        'A new journey can start once one of them confirms you are OK in their app. '
+        'If you need help now, call 112.',
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
 
   void _updateCountdown() {
     final deadline = _nextCheckIn;
@@ -757,7 +934,9 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         try {
           await widget.api.endJourney(journeyId);
         } on ApiException catch (error) {
-          serverError = error.detail;
+          // journey_over: the server already closed it (e.g. a contact confirmed
+          // the person is OK). That is the outcome we wanted, not a failure.
+          if (error.detail != 'journey_over') serverError = error.detail;
         } catch (_) {
           serverError = 'server_unreachable';
         }
@@ -785,6 +964,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
         _remaining = Duration.zero;
         _checkInDue = false;
       });
+      unawaited(_forgetPlan());
       if (serverError != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -796,6 +976,7 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       } else if (journeyId != null && mounted) {
         // "How was it?" (skippable), stored raw by journey id.
         await showFeedbackSheet(context, api: widget.api, journeyId: journeyId);
+        if (mounted) await _rateResponders(journeyId);
       }
     }
   }
@@ -803,11 +984,13 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   /// A contact confirmed the user is OK after a full alert, which ends the
   /// journey on the server. Stop the phone timer too and say why.
   Future<void> _journeyEndedOnServer() async {
+    final journeyId = _serverJourneyId;
     try {
       await widget.runtime.endJourney();
     } on PlatformException {
       // Still clear the screen; the timer only re-alerts for an active journey.
     }
+    unawaited(_forgetPlan());
     if (!mounted) return;
     _ticker?.cancel();
     _heartbeatTicker?.cancel();
@@ -826,6 +1009,23 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
           'Your contact confirmed you are OK, so this journey has ended. Start a new one any time.',
         ),
       ),
+    );
+    if (journeyId != null) await _rateResponders(journeyId);
+  }
+
+  /// After an alert: rate each responder who said "I'm going" (skippable).
+  Future<void> _rateResponders(String journeyId) async {
+    List<ResponderToRate> responders;
+    try {
+      responders = await widget.api.respondersToRate(journeyId);
+    } catch (_) {
+      return;
+    }
+    if (responders.isEmpty || !mounted) return;
+    await showResponderRatingSheet(
+      context,
+      api: widget.api,
+      responders: responders,
     );
   }
 
@@ -979,6 +1179,35 @@ class JourneyPlan {
   final String duressPin;
   final List<String> smsNumbers;
   final bool smsFallbackEnabled;
+
+  /// Saved encrypted on this phone while the journey runs, so it survives an app
+  /// restart. The route is not kept (rule 2).
+  Map<String, dynamic> toJson() => {
+    'destination': destination,
+    'check_in_seconds': checkInInterval.inSeconds,
+    'real_pin': realPin,
+    'duress_pin': duressPin,
+    'sms_numbers': smsNumbers,
+    'sms_fallback': smsFallbackEnabled,
+    'lat': destinationLatitude,
+    'lng': destinationLongitude,
+    'listen_for_words': listenForWords,
+    'record_audio': recordAudio,
+  };
+
+  factory JourneyPlan.fromJson(Map<String, dynamic> json) => JourneyPlan(
+    destination: json['destination'] as String? ?? 'Your journey',
+    checkInInterval: Duration(seconds: json['check_in_seconds'] as int? ?? 1800),
+    realPin: json['real_pin'] as String? ?? '',
+    duressPin: json['duress_pin'] as String? ?? '',
+    smsNumbers: (json['sms_numbers'] as List<dynamic>? ?? const [])
+        .cast<String>(),
+    smsFallbackEnabled: json['sms_fallback'] as bool? ?? false,
+    destinationLatitude: (json['lat'] as num?)?.toDouble(),
+    destinationLongitude: (json['lng'] as num?)?.toDouble(),
+    listenForWords: json['listen_for_words'] as bool? ?? false,
+    recordAudio: json['record_audio'] as bool? ?? true,
+  );
 }
 
 class JourneySetupScreen extends StatefulWidget {

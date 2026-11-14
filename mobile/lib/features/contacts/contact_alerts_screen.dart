@@ -20,6 +20,7 @@ class ContactAlertsScreen extends StatefulWidget {
     this.api = const DemoApi(),
     this.pollInterval = const Duration(seconds: 5),
     this.relay,
+    this.embedded = false,
   });
 
   final DemoApi api;
@@ -27,6 +28,9 @@ class ContactAlertsScreen extends StatefulWidget {
 
   /// Shares my location back to the person while I'm on my way (null in tests).
   final LiveLocationRelay? relay;
+
+  /// Inside the People tab, which shows its own app bar.
+  final bool embedded;
 
   @override
   State<ContactAlertsScreen> createState() => _ContactAlertsScreenState();
@@ -195,7 +199,9 @@ class _ContactAlertsScreenState extends State<ContactAlertsScreen> {
   Widget build(BuildContext context) {
     final alerts = _alerts;
     return Scaffold(
-      appBar: AppBar(title: const Text('People you support')),
+      appBar: widget.embedded
+          ? null
+          : AppBar(title: const Text('People you support')),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refresh,

@@ -108,6 +108,13 @@ internal object DeviceIdentityVault {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(SESSION).apply()
     }
 
+    /** Logout: drop the session and every saved value, and delete the device sign-in key. */
+    fun signOut(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(SIGNING_KEY_ALIAS)) store.deleteEntry(SIGNING_KEY_ALIAS)
+    }
+
     private fun keyPair(): java.security.KeyPair {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = store.getCertificate(SIGNING_KEY_ALIAS)

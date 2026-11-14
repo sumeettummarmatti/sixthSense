@@ -5,9 +5,12 @@ import '../../core/contacts/contact_book.dart';
 
 /// My trusted contacts: add one any time, see who has accepted, remove quietly.
 class MyPeopleScreen extends StatefulWidget {
-  const MyPeopleScreen({super.key, required this.api});
+  const MyPeopleScreen({super.key, required this.api, this.embedded = false});
 
   final DemoApi api;
+
+  /// Inside the People tab, which shows its own app bar.
+  final bool embedded;
 
   @override
   State<MyPeopleScreen> createState() => _MyPeopleScreenState();
@@ -116,7 +119,7 @@ class _MyPeopleScreenState extends State<MyPeopleScreen> {
     final accepted =
         links?.where((link) => link['status'] == 'accepted').length ?? 0;
     return Scaffold(
-      appBar: AppBar(title: const Text('My people')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('My people')),
       floatingActionButton: FloatingActionButton.extended(
         key: const ValueKey('add-person'),
         onPressed: _busy ? null : _add,

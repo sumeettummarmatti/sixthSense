@@ -784,7 +784,9 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
         title: const Text('I agree to the demo face match.'),
         subtitle: const Text(
           'The ID photo and selfie are sent to our self-hosted matcher for a '
-          'face comparison. SixthSense does not save the images in its database.',
+          'face comparison. SixthSense does not save the images in its database. '
+          'Your selfie is also checked, in memory, against people removed from '
+          'SixthSense for misconduct.',
         ),
       ),
     ),
@@ -1161,6 +1163,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
       'underage' => 'You can’t respond as a helper yet',
       'expired' => 'Verification expired',
       'rejected' when _reason == 'duplicate' => 'Identity already used',
+      'rejected' when _reason == 'not_eligible' => 'You can’t help on SixthSense',
       'rejected' => 'Verification not approved',
       _ => 'Verification needs attention',
     };
@@ -1172,6 +1175,8 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
         'This verification session expired. Start a new attempt to continue.',
       'rejected' when _reason == 'duplicate' =>
         'This sample identity is already associated with another account.',
+      'rejected' when _reason == 'not_eligible' =>
+        'This identity can’t be used to help as a responder or companion.',
       'rejected' => 'The simulated check returned ${_reason ?? 'a rejection'}.',
       _ => _error ?? 'The verification service could not complete this check.',
     };

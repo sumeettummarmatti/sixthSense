@@ -161,6 +161,17 @@ class MainActivity : FlutterActivity() {
                             DeviceIdentityVault.clearSession(this)
                             result.success(null)
                         }
+                        "signOut" -> {
+                            // Logout: forget the session and this phone's saved values, and
+                            // retire the device key so the next sign-in binds a fresh one.
+                            DeviceIdentityVault.signOut(this)
+                            result.success(null)
+                        }
+                        "moveToBack" -> {
+                            // Back on the home screen: keep the app (and a running journey) alive.
+                            moveTaskToBack(true)
+                            result.success(null)
+                        }
                         "shareInvite" -> {
                             val url = call.argument<String>("url")
                             val name = call.argument<String>("contactName").orEmpty()

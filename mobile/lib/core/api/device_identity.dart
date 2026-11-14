@@ -74,6 +74,18 @@ class DeviceIdentity {
     await _channel.invokeMethod<void>('clearSession');
   }
 
+  /// Logout: forget the session and saved values, and retire the device key.
+  Future<void> signOut() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('signOut');
+  }
+
+  /// Send the app to the background (Back on the home screen) instead of closing it.
+  Future<void> moveToBack() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('moveToBack');
+  }
+
   Future<void> shareInvite(String inviteUrl, String contactName) async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
     await _channel.invokeMethod<void>('shareInvite', {
@@ -432,6 +444,43 @@ class DemoApi {
       await endJourney(current['id'] as String);
       return JourneySnapshot.fromJson(await create());
     }
+  }
+
+  /// The journey still open on the server for this account, or null (404).
+  Future<JourneySnapshot?> currentJourney() async {
+    try {
+      return JourneySnapshot.fromJson(
+        await _request('GET', '/journeys/current'),
+      );
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// Signs this phone out on the server (token ended, device key retired).
+  Future<void> logout() async {
+    await _request('POST', '/auth/logout', retryUnauthorized: false);
+  }
+
+  /// Responders who said "I'm going" on this journey's alert, not rated yet.
+  Future<List<ResponderToRate>> respondersToRate(String journeyId) async {
+    final json = await _request('GET', '/feedback/responders/$journeyId');
+    return (json['responders'] as List<dynamic>? ?? const [])
+        .map((item) => ResponderToRate.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> rateResponder({
+    required String offerId,
+    required int stars,
+    String note = '',
+  }) async {
+    await _request(
+      'POST',
+      '/feedback/responder',
+      body: {'offer_id': offerId, 'stars': stars, 'note': note},
+    );
   }
 
   Future<JourneySnapshot> heartbeat(String journeyId) async =>
@@ -841,6 +890,18 @@ class ApiException implements Exception {
 
   @override
   String toString() => 'API request failed ($statusCode): $detail';
+}
+
+class ResponderToRate {
+  const ResponderToRate({required this.offerId, required this.name});
+
+  final String offerId;
+  final String name;
+
+  factory ResponderToRate.fromJson(Map<String, dynamic> json) => ResponderToRate(
+    offerId: json['offer_id'] as String,
+    name: json['name'] as String? ?? 'Responder',
+  );
 }
 
 class JourneySnapshot {

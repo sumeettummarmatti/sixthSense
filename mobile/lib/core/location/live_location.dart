@@ -150,6 +150,17 @@ class LiveLocationRelay {
     await _connect();
   }
 
+  /// Logout: close the socket and stop reconnecting until [start] is called again.
+  Future<void> stop() async {
+    await stopSharing();
+    _api = null;
+    _reconnect?.cancel();
+    _ping?.cancel();
+    final socket = _socket;
+    _socket = null;
+    await socket?.close();
+  }
+
   Future<void> _connect() async {
     final api = _api;
     if (api == null || _connecting || _socket != null) return;

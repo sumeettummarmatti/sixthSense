@@ -194,6 +194,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       'telegram_not_configured' =>
         'Telegram alerts are not configured on the server yet.',
       'contact_limit_reached' => 'You have reached the trusted-contact limit.',
+      'account_suspended' =>
+        'This account has been blocked after a safety review. If you need help now, call 112.',
       'server_unreachable' || 'server_timeout' =>
         'Could not reach the server. Check that it is running on this network.',
       _ =>

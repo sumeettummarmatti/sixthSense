@@ -141,6 +141,12 @@ class _FeedbackSheetState extends State<FeedbackSheet> {
                 value: _companionStars,
                 onChanged: (stars) => setState(() => _companionStars = stars),
               ),
+              if (_companionStars == 1)
+                Text(
+                  'One star stops this person walking with anyone until our team reviews it.',
+                  key: const ValueKey('companion-one-star-warning'),
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
             ],
             const SizedBox(height: 12),
             Wrap(
@@ -222,6 +228,155 @@ class _Stars extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// After an alert: stars for each responder who said "I'm going" (P2-W4-helper-ban).
+/// Skippable. One star suspends that responder until an admin reviews it, so the
+/// sheet says so before sending.
+Future<void> showResponderRatingSheet(
+  BuildContext context, {
+  required DemoApi api,
+  required List<ResponderToRate> responders,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => ResponderRatingSheet(api: api, responders: responders),
+  );
+}
+
+class ResponderRatingSheet extends StatefulWidget {
+  const ResponderRatingSheet({
+    super.key,
+    required this.api,
+    required this.responders,
+  });
+
+  final DemoApi api;
+  final List<ResponderToRate> responders;
+
+  @override
+  State<ResponderRatingSheet> createState() => _ResponderRatingSheetState();
+}
+
+class _ResponderRatingSheetState extends State<ResponderRatingSheet> {
+  final _stars = <String, int>{};
+  final _note = TextEditingController();
+  var _sending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_stars.isEmpty) {
+      setState(() => _error = 'Pick the stars, or tap Skip.');
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      for (final entry in _stars.entries) {
+        try {
+          await widget.api.rateResponder(
+            offerId: entry.key,
+            stars: entry.value,
+            note: _note.text.trim(),
+          );
+        } on ApiException catch (error) {
+          if (error.detail != 'feedback_already_given') rethrow;
+        }
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('Thanks for the feedback')));
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = 'Could not send (${error.detail}).');
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not send. Try again.');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final anyOneStar = _stars.values.any((stars) => stars == 1);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'How were the people who came?',
+              style: theme.textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 4),
+            const Text('Your rating helps us keep responders trustworthy.'),
+            for (final responder in widget.responders) ...[
+              const SizedBox(height: 12),
+              Text(responder.name, style: theme.textTheme.titleSmall),
+              _Stars(
+                keyPrefix: 'responder-star-${responder.offerId}',
+                value: _stars[responder.offerId] ?? 0,
+                onChanged: (stars) =>
+                    setState(() => _stars[responder.offerId] = stars),
+              ),
+            ],
+            if (anyOneStar)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'One star stops this person helping anyone until our team reviews it.',
+                  key: const ValueKey('responder-one-star-warning'),
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('responder-note'),
+              controller: _note,
+              maxLength: 500,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'What happened? (optional)',
+                helperText: 'Seen only by the SixthSense team.',
+              ),
+            ),
+            if (_error != null)
+              Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+            const SizedBox(height: 12),
+            FilledButton(
+              key: const ValueKey('responder-send'),
+              onPressed: _sending ? null : _send,
+              child: Text(_sending ? 'Sending…' : 'Send'),
+            ),
+            Center(
+              child: TextButton(
+                onPressed: _sending ? null : () => Navigator.of(context).pop(),
+                child: const Text('Skip'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
