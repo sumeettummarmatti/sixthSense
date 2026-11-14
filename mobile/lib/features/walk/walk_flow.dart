@@ -6,14 +6,21 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../core/api/device_identity.dart';
 import '../../core/location/live_location.dart';
+import '../face_scan/face_scan_screen.dart';
 import '../feedback/feedback_sheet.dart';
 import '../profile/profile_screen.dart';
+import '../verification/verification_flow.dart';
 
 /// Where I roughly am, as (latitude, longitude); null when location is off.
 typedef Locate = Future<(double, double)?> Function();
 
 /// Walk With Me (P3-W3): a traveller on a journey asks a verified companion
 /// nearby to walk with them; a companion goes available and accepts requests.
+///
+/// Companions verify their identity once (ID + selfie, the same verification
+/// as responders) and can then be found straight away: there is no approval
+/// step. Every accept needs a fresh face scan, checked by the server in the
+/// same request, before any location is shared.
 ///
 /// Privacy: a traveller sees only companions who chose to be available; a
 /// companion sees a traveller's first name and rough area only after being
@@ -29,7 +36,8 @@ class WalkFlow extends StatefulWidget {
     this.locate,
     this.pollInterval = const Duration(seconds: 3),
     this.presenceInterval = const Duration(minutes: 1),
-    this.verificationDelay = const Duration(seconds: 2),
+    this.faceScanCamera,
+    this.verifyIdentity,
   });
 
   final DemoApi api;
@@ -43,8 +51,12 @@ class WalkFlow extends StatefulWidget {
   final Duration pollInterval;
   final Duration presenceInterval;
 
-  /// How long the DEMO selfie/ID step pretends to check (it always passes).
-  final Duration verificationDelay;
+  /// Front camera + on-device face count for the accept scan (tests inject one).
+  final FaceScanCamera? faceScanCamera;
+
+  /// Opens identity verification and returns whether it passed (tests inject
+  /// one; the app opens the ID + selfie verification flow).
+  final Future<bool> Function(BuildContext context)? verifyIdentity;
 
   @override
   State<WalkFlow> createState() => _WalkFlowState();
@@ -69,7 +81,7 @@ class _WalkFlowState extends State<WalkFlow> {
   // Companion
   CompanionMe? _me;
   Profile? _profile;
-  bool _verifying = false;
+  bool _joining = false;
   bool _available = false;
   Timer? _presence;
   Timer? _requestPoll;
@@ -222,14 +234,24 @@ class _WalkFlowState extends State<WalkFlow> {
     }
   }
 
-  /// STUB: the selfie/ID step is a demo. It always passes after a short wait;
-  /// no photo or ID leaves the phone. The server records verified_method
-  /// 'mock'. Replace with a real check before any pilot.
-  Future<void> _demoVerification() async {
-    setState(() => _verifying = true);
-    await Future<void>.delayed(widget.verificationDelay);
+  /// Join as a companion: verify identity first if needed (ID + selfie, done
+  /// once), then join. No approval step.
+  Future<void> _join() async {
+    setState(() => _joining = true);
     try {
-      final me = await widget.api.verifyAsCompanion();
+      if (!(_me?.identityVerified ?? false)) {
+        final verified = await (widget.verifyIdentity ?? _openVerification)(
+          context,
+        );
+        if (!mounted) return;
+        if (!verified) {
+          final me = await widget.api.companionMe();
+          if (!mounted) return;
+          setState(() => _me = me);
+          if (!me.identityVerified) return;
+        }
+      }
+      final me = await widget.api.joinAsCompanion();
       if (!mounted) return;
       setState(() => _me = me);
       if (me.approved) _startRequestPoll();
@@ -238,9 +260,17 @@ class _WalkFlowState extends State<WalkFlow> {
     } catch (_) {
       _say('Could not reach SixthSense.');
     } finally {
-      if (mounted) setState(() => _verifying = false);
+      if (mounted) setState(() => _joining = false);
     }
   }
+
+  Future<bool> _openVerification(BuildContext context) async =>
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => VerificationFlowScreen(api: widget.api),
+        ),
+      ) ??
+      false;
 
   Future<void> _setAvailable(bool on) async {
     if (!on) {
@@ -299,16 +329,39 @@ class _WalkFlowState extends State<WalkFlow> {
     }
   }
 
+  /// Accept with a fresh face scan: the server checks it in the same request
+  /// and only then shares the traveller's location.
   Future<void> _accept(WalkRequestView request) async {
-    try {
-      final walk = await widget.api.acceptWalk(request.id);
+    WalkView? accepted;
+    String? problem;
+    await FaceScanScreen.open(
+      context,
+      title: 'Accept walk',
+      reason:
+          "Before you see ${request.travellerFirstName}'s location, confirm "
+          'that you, the verified companion, are holding this phone.',
+      actionLabel: 'accept the walk and start sharing live location',
+      camera: widget.faceScanCamera,
+      submit: (scan) async {
+        try {
+          accepted = await widget.api.acceptWalk(request.id, scan: scan);
+          return null;
+        } on ApiException catch (error) {
+          final faceProblem = faceScanProblem(error);
+          if (faceProblem != null) return faceProblem; // retry on this screen
+          problem = _explain(error.detail);
+          return null; // close the scan: the request itself is gone
+        }
+      },
+    );
+    if (!mounted) return;
+    final walk = accepted;
+    if (walk != null) {
       _requestPoll?.cancel();
-      if (mounted) _showWalk(walk);
-    } on ApiException catch (error) {
-      _say(_explain(error.detail));
+      _showWalk(walk);
+    } else if (problem != null) {
+      _say(problem!);
       unawaited(_loadRequests());
-    } catch (_) {
-      _say('Could not reach SixthSense.');
     }
   }
 
@@ -452,7 +505,8 @@ class _WalkFlowState extends State<WalkFlow> {
     'no_profile' => 'Add your first name in the Profile tab first.',
     'profile_not_willing' =>
       'Turn on "Willing to be a companion" in your Profile first.',
-    'not_an_approved_companion' => 'You are not approved as a companion yet.',
+    'not_eligible' ||
+    'identity_not_verified' => 'Verify your identity to walk as a companion.',
     'companion_revoked' => 'Your companion access was removed.',
     'walk_expired' => 'That request expired.',
     'already_walking' => 'You are already on a walk.',
@@ -606,9 +660,12 @@ class _WalkFlowState extends State<WalkFlow> {
           child: const Text('Open my profile'),
         ),
       ]);
-    } else if (me.status == 'none') {
+    } else if (me.status == 'none' || !me.identityVerified) {
       children.addAll([
-        Text('Demo verification', style: theme.textTheme.headlineSmall),
+        Text(
+          me.identityVerified ? 'Join as a companion' : 'Verify your identity',
+          style: theme.textTheme.headlineSmall,
+        ),
         const SizedBox(height: 8),
         Card(
           child: Padding(
@@ -621,53 +678,47 @@ class _WalkFlowState extends State<WalkFlow> {
                   color: theme.colorScheme.primary,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Companions take a selfie and show a college ID. In this '
-                  'demo the step always passes and nothing is uploaded.',
+                Text(
+                  me.identityVerified
+                      ? 'Your identity is verified. Join to be found by '
+                            'travellers nearby, straight away.'
+                      : 'Companions verify once with an ID photo and a '
+                            'selfie, the same check as responders. Then you '
+                            'can be found straight away: no waiting for '
+                            'approval. Each time you accept a walk you take a '
+                            'quick face scan so travellers know it is you.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                if (_verifying) ...[
-                  const LinearProgressIndicator(),
-                  const SizedBox(height: 8),
-                  const Text('Checking (demo)…'),
-                ] else
+                if (_joining)
+                  const LinearProgressIndicator()
+                else
                   FilledButton.icon(
-                    key: const ValueKey('walk-demo-verify'),
-                    onPressed: _demoVerification,
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('Start demo verification'),
+                    key: const ValueKey('walk-join'),
+                    onPressed: _join,
+                    icon: Icon(
+                      me.identityVerified
+                          ? Icons.how_to_reg_outlined
+                          : Icons.camera_alt_outlined,
+                    ),
+                    label: Text(
+                      me.identityVerified
+                          ? 'Join as companion'
+                          : 'Verify and join',
+                    ),
                   ),
               ],
             ),
           ),
         ),
       ]);
-    } else if (me.status == 'pending') {
-      children.addAll([
-        Text('Waiting for approval', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 8),
-        Text(
-          'Demo verification passed${me.verifiedAt == null ? '' : ' on ${_date(me.verifiedAt!)}'}. '
-          'The SixthSense team approves companions by hand; check back soon.',
-        ),
-        const SizedBox(height: 16),
-        OutlinedButton(
-          onPressed: _openCompanion,
-          child: const Text('Check again'),
-        ),
-      ]);
     } else if (me.status == 'revoked') {
       children.add(const Text('Your companion access was removed.'));
     } else {
       children.addAll([
-        Chip(
-          avatar: const Icon(Icons.verified_outlined, size: 18),
-          label: Text(
-            me.verifiedMethod == 'mock'
-                ? 'Approved · demo verification'
-                : 'Approved companion',
-          ),
+        const Chip(
+          avatar: Icon(Icons.verified_outlined, size: 18),
+          label: Text('Verified companion'),
         ),
         SwitchListTile(
           key: const ValueKey('walk-available'),
@@ -861,9 +912,6 @@ class _WalkFlowState extends State<WalkFlow> {
     final left = until.difference(DateTime.now()).inSeconds;
     return left <= 0 ? 0 : (left / 60).ceil();
   }
-
-  static String _date(DateTime when) =>
-      '${when.day}/${when.month}/${when.year}';
 }
 
 class _CompanionTile extends StatelessWidget {

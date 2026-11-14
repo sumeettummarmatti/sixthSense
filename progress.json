@@ -1,7 +1,7 @@
 {
   "project": "sixthsense",
   "updated_at": "2026-11-14",
-  "updated_by": "shruj",
+  "updated_by": "jival",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
@@ -107,6 +107,19 @@
           "notes": ""
         },
         {
+          "id": "ALL-W1-integration-pipeline",
+          "title": "Document merge sequence and end-to-end integration pipeline across current feature branches",
+          "status": "done",
+          "week": 1,
+          "notes": "Tan: Added Docs/INTEGRATION_PIPELINE.md after reviewing the pulled branch graph, current verification/face-template work, Shruj's Walk With Me changes, and the inherited demo/sudden-SOS/safe-route/nearby-responder work. The document records branch ancestry, duplicate 0008 migration IDs, the mock-verification conflict, canonical eligibility requirements, walk-scoped face-match acceptance, merge order, data/privacy invariants, test sequence, and suggested owners. This marks the integration-plan document complete only; the actual merge and pipeline verification remain team work.",
+          "updated_at": "2026-11-14T15:38:00+05:30",
+          "updated_by": "Tan",
+          "next_steps": [
+            "Use Docs/INTEGRATION_PIPELINE.md to create the shared integration branch and reconcile migrations before running the combined stack.",
+            "Track actual implementation and acceptance-run results in the existing P1-P4 task entries."
+          ]
+        },
+        {
           "id": "ALL-W11-red-team",
           "title": "Red-team week: stalk after walk, fake companion, poison reports, spoof alerts",
           "status": "todo",
@@ -133,6 +146,13 @@
           "status": "done",
           "week": 0,
           "notes": "sumeet: setup/foundation pushed; PR #1 https://github.com/sumeettummarmatti/sixthSense/pull/1"
+        },
+        {
+          "id": "ALL-W1-verify-walk-integration",
+          "title": "Merge p1/responder-verification into p3/walk-with-me on a new branch without losing features; remove manual approval",
+          "status": "in_progress",
+          "week": 1,
+          "notes": "jival: branch integration/verify-walk (from origin/p3/walk-with-me + origin/p1/responder-verification; neither source branch changed). Migrations renumbered to one chain: 0008 walk_with_me -> 0009 identity_verification -> 0010 reusable_face_templates -> 0011 no_manual_approval (pending rows become active). eligible() = verified adult unexpired identity + joined role + not revoked (no 'approved' requirement). Companions join after identity verification (mock verify removed); responders are active on apply. Revoke kept for both. Removed the 'Waiting for approval' screens (Respond, Walk With Me) and the approval wording in the verification screen. Dev switch FACE_MATCHER=mock (refused outside dev/test) lets identity verification pass without CompreFace. Checks: backend ruff + 268 tests, Flutter analyze (no errors/warnings) + 82 tests. Emulator run and two-phone test still to do."
         }
       ]
     },
@@ -458,6 +478,67 @@
           "notes": "sumeet: 2026-11-13 branch p3/nearby-responders. Backend: escalation_helpers, responder_profiles, responder_offers (migration 0006); on-duty rough area (~110 m) in Redis 5 min; traveller's rough area during full alert 10 min; worker asks nearest approved on-duty responders 500 m -> 1 km -> 2 km (1 step/min), max 5 asked, first 2 'I'm going' get E2E precise location; helpers share location back to traveller only. Approve: backend/scripts/responders.py. 198 backend + 21 app tests pass; live smoke test: offer 4 s after SOS. Not yet tested on multiple emulators. 2026-11-13 map upgrade: one LiveMap everywhere (tilted 3D buildings, markers glide between fixes, pulsing SOS ring, search-radius circle, labels with ETA, dashed helper lines), full-screen maps for traveller and helpers, counts \"searching 500 m · N on duty nearby · asked · coming\". Walking route from routing.openstreetmap.de on the helper phone only (sends two points; replace with own Valhalla before pilot). Open question: who can end a full alert when there are no contacts (only a contact can today). 2026-11-13 evening: tested with shruj (scenes 1-2 passed, 3 partly). Added scripts/sim_responders.py (5 simulated responders, real accounts + E2E, walk real streets; scenarios normal/slow/far/busy; --center). Verified live: 500 m -> 1 km -> 2 km growth, stop asking at 2 going. Fixed: map freeze (update pile-up), journey screen overflow, black maps after tab switch, emulator needed 4 CPU cores. Maps now flat 2D everywhere; card maps static."
         },
         {
+          "id": "P3-W2-verification-core",
+          "title": "Verification schema, eligibility, and preserve traveller safety access",
+          "status": "in_progress",
+          "week": 2,
+          "notes": "Tan: added verification_sessions and identity_records, migration 0008, responder/companion role-scoped profiles, device key_rotated_at, settings, eligible(), MockProvider, consent/document/selfie/status API, HMAC duplicate fields, and fake mock verification for simulated responders. Tests show travellers remain ungated and mock scenarios are server-flagged. 42 targeted verification/responder/identity tests pass. Remaining core work: complete state machine, Redis daily attempt limit, robust duplicate/person-reference handling, and callback later. Local DB advanced 0005 -> 0006 -> 0008; API is available on 8000 and 8001. Corrected local .env core DB port to 5434; simulated responders verified and reached on-duty, then were taken off duty cleanly. Emulator uses 10.0.2.2:8001 because another local app intercepts 8000; its device challenge and Mailpit access on 8025 respond. Reset the emulator app install to replace a sign-in key bound to another account; app is relaunched and ready for fresh OTP sign-in. No server device rows were changed. This branch has no migration 0007; reconcile heads when sudden-SOS integrates."
+        },
+        {
+          "id": "P3-W2-verification-gates",
+          "title": "Gate responder presence, offers, acceptance, and relay by eligibility",
+          "status": "done",
+          "week": 2,
+          "notes": "Tan: gated presence, dispatch, offer listing/going/arrival, and relay routes with eligible(). Revocation clears presence, declines open offers, removes open-alert helper rows, and audits. Updated scripts/sim_responders.py to verify each simulated responder through the consented MockProvider approve flow. 42 targeted verification/responder/identity tests pass. Migration ordering remains an integration follow-up."
+        },
+        {
+          "id": "P3-W2-verification-app",
+          "title": "Consent-first simulated verification flow for responder/companion roles",
+          "status": "done",
+          "week": 2,
+          "notes": "Tan: consent-first Respond -> Apply flow now uploads an ID photo and captures a selfie; authenticated multipart sends both with ID details to the backend. CompreFace is self-hosted via infra/docker-compose.yml. Face score >= COMPREFACE_MATCH_THRESHOLD (default 0.8) is required; ID authenticity and liveness remain unchecked. Raw photos are not persisted in SixthSense DB records. Debug scenario selector remains for rejection/error demos; 'approve' still requires a matching score. Backend tests: 8 passed; Flutter verification widget tests: 4 passed; flutter analyze and ruff clean; Compose config validates. CompreFace runs at localhost:8003 (HTTP 200); its API key is configured and accepted. Restarted SixthSense API on port 8002; /healthz returns HTTP 200; DB untouched. Started Medium_Phone_API_37.0 and launched latest debug app with API_BASE_URL=http://10.0.2.2:8002. After 409 device_key_in_use on email sign-in, uninstalled only the emulator app and relaunched to generate a fresh key; backend records unchanged. Actual matching of real images awaits signing in again and manual app test.\nTan: clarified the three visible stages (email sign-in, face match, responder approval) and made unsubmitted sessions report `not_submitted` until ID details and both images are sent. This prevents a new draft from appearing as under review. Backend verification tests: 5 passed; Flutter verification widget tests: 6 passed; flutter analyze clean.\nTan: gated progression on valid, non-future YYYY-MM-DD DOB, non-empty ID number, and an uploaded ID photo; disabled comparison until the selfie is captured. Added requirement hints and widget coverage. Flutter verification widget tests: 8 passed; flutter analyze clean.\nTan: verification status endpoints now report expired unsubmitted drafts as `expired` with `session_expired`; an upload that races with expiry opens the dedicated expiry result and new-attempt action. Backend verification tests: 6 passed; Flutter verification widget tests: 10 passed; flutter analyze and Ruff clean.\nTan: retryable matcher/network failures preserve the draft and show `Retry face comparison`; the app fetches session status before retrying so a result whose response was lost is not submitted twice. Flutter verification widget tests: 12 passed; flutter analyze clean.\nTan: the selfie picker requests the front-facing camera; selected/captured temporary picker files are deleted after loading into memory, best effort. Flutter verification widget tests: 13 passed; flutter analyze clean.\nTan: normalized supported photo MIME types from picker metadata/extensions, rejected unsupported formats with a JPG/PNG/WebP hint, and blocked images over the backend 5 MB limit before upload. Flutter verification widget tests: 15 passed; flutter analyze clean.\nTan: matcher reports `face_image_invalid` separately from service outages so users can replace unclear photos. Face mismatches can start a new session and retake only the selfie while retaining ID details/photo. Backend verification/face matcher tests: 11 passed; Flutter widget tests: 17 passed; Flutter analysis and Ruff clean.\nTan: added standalone on-device ML Kit OCR for the ID photo. The parser retains only an ID number pattern for the separately selected type and a DOB next to a DOB label; other OCR text is discarded. OCR temp copies are deleted, empty fields are autofilled, and manually entered values are preserved. Targeted OCR/verification tests: 22 passed; flutter analyze clean; debug APK built. Real-card recognition still needs manual phone testing.\nTan: OCR-filled ID number and DOB are marked as editable suggestions; manual edits clear suggestion state. Added a review page showing selected ID type, details, and both photos; face comparison requires explicit checkbox confirmation. Targeted OCR/verification tests: 23 passed; flutter analyze clean; debug APK build succeeded. Real-device verification remains for manual testing.\nTan: Marked the active emulator account’s expired, unsubmitted verification draft as expired to allow a fresh attempt; retained the account, device, identity data, and audit history.\nTan: Reproduced premature review state from the stale API on port 8002; restarted it and confirmed a fresh draft opens at ID type with `Not submitted` before photo upload. Emulator OCR test with supplied passport filled only ID number and DOB as editable suggestions. No image was sent to the face matcher; temporary gallery copy removed.\nTan: CompreFace logs identified HTTP 400 `FileExtensionException`: multipart filenames lacked extensions. Backend now sets `.jpg`, `.png`, or `.webp` from MIME type. Restarted API on port 8002; face matcher tests: 4 passed; Ruff clean. A real-image comparison after the fix remains to be rerun.\nTan: User confirmed the real-image face comparison completed successfully after restarting the fixed API."
+        },
+        {
+          "id": "P3-W2-verification-admin",
+          "title": "Pilot admin CLI for verification, approval, and revocation",
+          "status": "todo",
+          "week": 2,
+          "notes": "Tan: pending verification service and eligibility gates. jival: on integration/verify-walk there is no approval step any more; scripts/responders.py and scripts/companions.py are list + revoke only (revoke clears presence, open offers/requests, ends an accepted walk)."
+        },
+        {
+          "id": "P3-W3-device-recovery",
+          "title": "Device recovery, old-key revocation, and rotation cooldown",
+          "status": "todo",
+          "week": 3,
+          "notes": "Tan: later work; new device sign-in and Telegram notice."
+        },
+        {
+          "id": "P3-W3-companion-grant",
+          "title": "Companion role grant and eligibility gate",
+          "status": "done",
+          "week": 3,
+          "notes": "jival: done on integration/verify-walk: POST /walks/companion/join needs a willing profile and a verified identity; eligible(..., 'companion') checks identity + joined + not revoked on presence, search, ask, accept and the walk relay. No approval step (team decision 2026-11-14)."
+        },
+        {
+          "id": "P3-W3-walk-face-template",
+          "title": "Consent-based encrypted face template and per-walk companion selfie match",
+          "status": "in_progress",
+          "week": 3,
+          "notes": "Tan: Added migration 0009 and encrypted CompreFace embeddings extracted from the ID portrait only after separate optional recurring-check consent and a successful initial face match. Added authenticated per-walk selfie extraction/comparison, server-side companion eligibility gate, audit events, template status/deletion, Flutter opt-in and delete controls, and companion selfie-check gating in the Walk With Me preview. Added re-enrollment for verified users who skipped or deleted the reference, with fresh consent and images. Static checks: Ruff and flutter analyze clean. Still needs migration application, approved companion role grant/walk lifecycle integration, and manual emulator/phone check. jival: on integration/verify-walk the standalone /walks/face-check is folded into POST /walks/{id}/accept (and POST /responders/offers/{id}/going) through app/face_scan; FACE_CHECK_PROVIDER=compreface reuses check_walk_selfie unchanged.",
+          "updated_at": "2026-11-14T15:24:00+05:30",
+          "updated_by": "Tan",
+          "next_steps": [
+            "Apply Alembic migration 0009 in the local backend environment.",
+            "Grant an approved companion role when P3-W3-companion-grant is available, then manually verify matching and deletion on emulator/phone."
+          ],
+          "blockers": [
+            {
+              "by": "Tan",
+              "description": "Walk matching and companion role grants are not implemented yet; the new selfie gate correctly returns not_eligible until an approved companion lifecycle exists."
+            }
+          ]
+        },
+        {
           "id": "P3-W1-vendor-selection",
           "title": "Free verification design: college email + security sign-off, ML Kit face check",
           "status": "todo",
@@ -511,7 +592,7 @@
           "title": "Mock companion verification (always passes after 2 s), stored as verified·mock·date; clearly a stub",
           "status": "done",
           "week": 3,
-          "notes": "sumeet: planned 2026-11-14. Replace with campus-office / offline e-KYC before the pilot (see decisions). Open: anyone who passes the mock, or script-approved accounts only like responders? shruj: done 2026-11-14. 'Continue as companion' -> needs a willing profile -> 'Demo verification' (selfie/ID step, always passes after ~2 s, nothing uploaded) -> POST /walks/companion/verify stores verified_method='mock' + date (stub, marked in code). Approval by hand: backend/scripts/companions.py list | approve <name> | approve-all | revoke <name>; COMPANION_AUTO_APPROVE (default false) for dev laptops. Approved companions go available with PUT /walks/companion/presence (rough area ~110 m in Redis, forgotten after 5 min, refreshed every minute). Tests: backend + widget."
+          "notes": "sumeet: planned 2026-11-14. Replace with campus-office / offline e-KYC before the pilot (see decisions). Open: anyone who passes the mock, or script-approved accounts only like responders? shruj: done 2026-11-14. 'Continue as companion' -> needs a willing profile -> 'Demo verification' (selfie/ID step, always passes after ~2 s, nothing uploaded) -> POST /walks/companion/verify stores verified_method='mock' + date (stub, marked in code). Approval by hand: backend/scripts/companions.py list | approve <name> | approve-all | revoke <name>; COMPANION_AUTO_APPROVE (default false) for dev laptops. Approved companions go available with PUT /walks/companion/presence (rough area ~110 m in Redis, forgotten after 5 min, refreshed every minute). Tests: backend + widget. jival: superseded on integration/verify-walk: the always-pass /walks/companion/verify is removed; companions use the real identity verification (ID + selfie) and join with POST /walks/companion/join."
         },
         {
           "id": "P3-W3-walk-matching",
@@ -519,6 +600,13 @@
           "status": "done",
           "week": 3,
           "notes": "sumeet: planned 2026-11-14. Build on existing mobile/lib/features/walk + companion stubs and PLANNER P3-W7-walk-lifecycle. Open: 'women companions only' option. shruj: done 2026-11-14. POST /walks/search (needs the traveller's open journey; coordinates in the body): available approved companions within 2 km, first name, bio, strengths, languages, average rating from walk feedback, distance rounded to 100 m; 'women companions only' filters on profile gender. POST /walks asks one (companion gets push/Telegram with first name + rough distance); GET /walks/requests (companion: first name + rough area only), accept/decline, requests expire after 10 min; one open request per traveller; busy companions not offered. On accept both get the same 4-digit handshake code (HMAC of the walk id, nothing stored), 'meet near' the traveller's rough area, and each other's E2E keys; live location goes both ways over the relay with session id = walk id (routing.py allow-list: the two walkers only). Either side ends (POST /walks/{id}/end); ends automatically with the journey. SOS during a walk adds the companion as an alert recipient (kind=companion): sees it in I support, can say I'm on it (shows as coming, does NOT stop the contacts' alerts), cannot resolve or raise (403 contacts_only). Journey check-ins, SOS and sudden SOS untouched. App: walk_flow.dart rebuilt on the real API (replaces the local prototype screen). Tests: 19 backend, 6 widget; live run against a real local API: 32/32 checks (two-way relay, SOS reaches companion, rating). shruj: 2026-11-14 tested in the real app on the emulator (both roles, with a scripted partner): handshake codes matched, two-way E2E location, SOS reached the companion, walk + journey feedback, decline, end from either side. Fixed: feedback sheet / accept row crashed with the app theme (full-width buttons in a Row); Walk With Me added to the Plan a journey screen for companions."
+        },
+        {
+          "id": "P3-W3-face-scan-gate",
+          "title": "Fresh face scan before a companion or responder receives someone's location",
+          "status": "in_progress",
+          "week": 3,
+          "notes": "jival: app/face_scan: the scan travels in the same request as POST /walks/{id}/accept and POST /responders/offers/{id}/going (428 face_scan_required, 403 face_mismatch), so it cannot be skipped or replayed; the image is never stored, pass/fail audited. FACE_CHECK_PROVIDER=mock (default; phone checks exactly one face with ML Kit, server checks a real image; NOT a match) or compreface (match the encrypted template from verification). Flutter FaceScanScreen used by Accept and I'm going. Companion: every accept; responder: every 'I'm going'. Emulator run still to do."
         }
       ]
     },
@@ -939,6 +1027,24 @@
       "by": "shruj",
       "decision": "Companion endpoints live under /walks/companion/* (one router per module, prefix /walks)",
       "why": "Keeps the module convention (test_all_modules_mounted)"
+    },
+    {
+      "date": "2026-11-13",
+      "decision": "Identity verification gates responder/companion roles only; travellers keep all protection access. Mock ID types are Driving Licence, Voter ID, and Passport; Aadhaar is excluded.",
+      "why": "Preserve the rule that protection never requires ID and follow the verification implementation plan",
+      "by": "Tan"
+    },
+    {
+      "date": "2026-11-14",
+      "by": "jival",
+      "decision": "No manual approval for responders or companions: a verified identity (ID + selfie, adult, unexpired, not revoked) is enough. Revoke stays (scripts) for complaints.",
+      "why": "Verification already proves who they are; the 'Waiting for approval' step blocked the demo and duplicated the check. Overrides the separate role-approval step in Docs/INTEGRATION_PIPELINE.md section 3.2."
+    },
+    {
+      "date": "2026-11-14",
+      "by": "jival",
+      "decision": "Companions (every accept) and responders (every 'I'm going') take a fresh face scan in the same request before any location is shared; mock provider for now, CompreFace template match switchable.",
+      "why": "Confirms the verified account holder is the one holding the phone at the moment location would be shared (rule 1 spirit, rule 4). Mock is a demo only: it does not match faces and is not liveness."
     }
   ],
   "blockers": [
@@ -987,6 +1093,8 @@
     }
   ],
   "next_steps": [
+    "jival: run integration/verify-walk on the emulator (traveller + scripted companion; SOS + sim_responders.py) and check: verify -> join -> available -> accept with scan -> handshake + live location; 'I'm going' with scan",
+    "team: review integration/verify-walk before merging anywhere; decide when to switch FACE_CHECK_PROVIDER to compreface (needs CompreFace + template consent for every companion)",
     "shruj: Walk With Me built and tested on p3/walk-with-me (5 tasks done; backend 247, Insight 37, Flutter 52, APK builds; live API run 32/32; real app on the emulator, both roles); pushed to origin/p3/walk-with-me at shruj's request, NOT merged",
     "sumeet: two-phone test of Walk With Me (traveller + companion): profile after sign-up, demo verification, approve with scripts/companions.py approve <name>, available, search, ask, accept, handshake code matches, both see each other move, SOS during the walk reaches the companion, end walk, feedback; then decide on merging",
     "sumeet/shruj: a companion stays 'available' up to 5 min after leaving the Walk With Me screen (presence TTL); decide whether leaving should switch it off",
@@ -998,6 +1106,8 @@
     "shruj + sumeet: download voice pack, Practice mode with our own voices (help help / bachao / madad / bacha lo), and 10 min of TV/street noise for false alarms",
     "shruj + sumeet: Audio Escort two-phone test (shruj listens; Ask to keep someone company; duress stop)",
     "sumeet: legal review line in privacy notice for audio recording; decide evidence retention policy text",
+    "Tan: continue P3-W2-verification-core with illegal-transition checks, Redis daily attempt limits, robust duplicate/person-reference handling, and service/API tests; keep travellers ungated",
+    "Tan: rework the responder admin CLI to show verification status, verify in-person, enforce eligibility before approval, and revoke with transactional cleanup",
     "sumeet + shruj: resume the scene list from Scene 3 (Shruj walks to Sumeet), then Scenes 4-12; responders: cd backend && uv run python scripts/sim_responders.py --scenario <normal|slow|far|busy> --center 12.8870,77.5785",
     "sumeet: decide who can end a full alert without contacts (suggested: traveller's real PIN after a helper says arrived)",
     "sumeet: resume live sharing + journey after an app restart (today a crash stops sharing until a new journey)",

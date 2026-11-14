@@ -8,9 +8,9 @@ from app.core.db import Base
 
 
 class CompanionProfile(Base):
-    """Someone who offered to walk with travellers. Companions are verified (rule 1): for now a
-    DEMO verification step (verified_method='mock') plus approval by hand
-    (scripts/companions.py). Replace the mock with campus-office / offline e-KYC before a pilot."""
+    """Someone who joined Walk With Me as a companion. Companions are verified (rule 1) through
+    identity verification (ID + selfie); there is no approval step. status 'approved' means
+    joined, 'revoked' removes them (scripts/companions.py revoke)."""
 
     __tablename__ = "companion_profiles"
     __table_args__ = (
@@ -23,7 +23,7 @@ class CompanionProfile(Base):
         ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
     )
     status: Mapped[str] = mapped_column(Text, server_default="pending")
-    verified_method: Mapped[str] = mapped_column(Text)  # 'mock' until real verification exists
+    verified_method: Mapped[str] = mapped_column(Text)  # 'identity' (older rows: 'mock')
     verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

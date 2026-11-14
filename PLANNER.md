@@ -48,6 +48,16 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | sumeet | `P1-W2-voice-sos-spike` | Vosk small Hindi + Indian-English, full transcription + word spotting: 0/16 false alarms, 12/13 caught clean (10/13 with noise) on synthetic voices; grammar mode rejected (false alarms). Needs real voices from the team |
 | sumeet | `P1-W2-voice-sos` | "help / bachao / madad / bacha lo" heard offline during a journey → 3–9 s adaptive countdown (shout/struggle shorter, still phone longer); voice pack downloaded on request; Practice mode sends nothing |
 | sumeet | `P1-W3-audio-escort` | Owner starts (or accepts a contact's request), picks listeners and ≤ 3 h; listeners hear live and see location; stop needs the PIN, duress PIN looks stopped but raises a covert SOS |
+| P3 (working branch) | `P3-W2-verification-core` | Verification schema, keyed identity outcomes, single eligibility check, and prove unverified travellers keep safety access |
+| P3 (working branch) | `P3-W2-verification-gates` | Gate responder presence, offers, acceptance, and relay; revocation removes active responder access |
+| P3 (working branch) | `P3-W2-verification-app` | Consent-first simulated verification flow for responder/companion roles; ordinary protection stays ungated |
+| P3 (working branch) | `P3-W2-verification-admin` | Pilot CLI for in-person verification, approval, and revocation |
+| P3 (working branch) | `P3-W3-device-recovery` | Revoke old device keys and apply a cooldown after account recovery/key rotation |
+| P3 (working branch) | `P3-W3-companion-grant` | Companion role grant and eligibility gate when Walk With Me matching exists |
+| P3 (working branch) | `P3-W3-walk-face-template` | With separate consent, retain an encrypted CompreFace embedding and require a fresh selfie match for companion walk acceptance; support deletion |
+| team (integration) | `ALL-W1-integration-pipeline` | Reconcile demo, sudden-SOS/safe-route, nearby-responder, Walk With Me, strict verification and face-template branches into one tested end-to-end pipeline |
+| jival | `ALL-W1-verify-walk-integration` | Branch `integration/verify-walk`: `p3/walk-with-me` + `p1/responder-verification` merged with no feature dropped; migrations renumbered (0009/0010) plus 0011; identity verification replaces manual approval for responders and companions (revoke kept) |
+| jival | `P3-W3-face-scan-gate` | Fresh face scan inside "accept walk" and "I'm going", before any location is shared; `FACE_CHECK_PROVIDER` mock (phone checks one face, demo) or compreface (match the saved template) |
 
 ---
 

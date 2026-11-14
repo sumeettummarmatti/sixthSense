@@ -14,6 +14,7 @@ from app import (
     relay,
     routing,
     trust_safety,
+    verification,
     walks,
 )
 from app.core.logging import configure_logging
@@ -33,6 +34,7 @@ MODULES = [
     comms,
     routing,
     trust_safety,
+    verification,
 ]
 
 

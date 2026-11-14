@@ -24,6 +24,7 @@ tags:
   - {name: routing, description: "Route with caution level (P4)"}
   - {name: dashboard, description: "Clusters, mark addressed, metrics (P4)"}
   - {name: realtime, description: "WebSocket: ciphertext relay, alerts, walk updates (P2)"}
+
 paths:
   /healthz:
     get:
@@ -39,6 +40,70 @@ paths:
                 properties:
                   status: {type: string, example: ok}
                   service: {type: string, enum: [core, insight]}
+  /verification/sessions:
+    post:
+      tags: [verification]
+      summary: Start consented responder verification
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, consent]
+              properties:
+                purpose: {type: string, enum: [responder]}
+                consent: {type: boolean, const: true}
+                face_template_consent:
+                  type: boolean
+                  default: false
+                  description: Separate optional consent to retain an encrypted CompreFace embedding for recurring Walk With Me companion checks.
+      responses:
+        "201": {description: Verification session created}
+        "400": {description: Consent required}
+  /verification/face-template:
+    post:
+      tags: [verification]
+      summary: Enroll or replace a reusable face embedding
+      description: Requires an active verified adult identity and explicit consent. Both images are transient. A face match is required before an encrypted embedding is retained.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [consent, id_image, selfie_image]
+              properties:
+                consent: {type: boolean, const: true}
+                id_image: {type: string, format: binary}
+                selfie_image: {type: string, format: binary}
+      responses:
+        "200": {description: Enrolled or replaced after a passing face match}
+        "403": {description: Identity is not currently verified}
+        "422": {description: Images are invalid or the face comparison failed}
+    delete:
+      tags: [verification]
+      summary: Delete the current account's reusable face embedding
+      security: [{bearer: []}]
+      responses:
+        "204": {description: Deleted, or already absent}
+  /verification/me:
+    get:
+      tags: [verification]
+      summary: Read own verification and reusable face-template status
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: Own status only; never returns the embedding
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string}
+                  face_template_enabled: {type: boolean}
   /auth/otp/request:
     post:
       tags: [auth]
@@ -840,7 +905,7 @@ paths:
     post:
       tags: [matching]
       summary: "Apply to be a responder"
-      description: "Pilot: approved by hand after an in-person check (scripts/responders.py). No ID stored."
+      description: "No approval step: applying makes me a responder. I can go on duty and be asked only while my identity is verified (ID + selfie, /verification), adult, unexpired and not revoked (403 not_eligible otherwise). Revoked by scripts/responders.py after a complaint. No ID stored."
       security: [{bearer: []}]
       requestBody:
         required: true
@@ -858,7 +923,7 @@ paths:
     get:
       tags: [matching]
       summary: "My responder status"
-      description: "none | pending | approved | revoked, and whether I'm on duty."
+      description: "none | approved (applied; no approval step) | revoked, and whether I'm on duty."
       security: [{bearer: []}]
       responses:
         "200":
@@ -910,10 +975,25 @@ paths:
     post:
       tags: [matching]
       summary: "I'm going"
-      description: "The first two get the traveller's precise live location (E2E); 409 enough_helpers after that. Returns the traveller's keys so I can share my location back."
+      description: >
+        The first two get the traveller's precise live location (E2E); 409 enough_helpers after
+        that. Returns the traveller's keys so I can share my location back. Saying "I'm going"
+        needs a fresh face scan of the person holding the phone (selfie_image) in this same
+        request: FACE_CHECK_PROVIDER=mock checks only that a real image was sent (the phone checks
+        one face is visible); compreface matches it against the face template saved at
+        verification. The image is never stored. Asking again once going returns the keys without
+        a new scan.
       security: [{bearer: []}]
       parameters:
         - {name: offer_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: false
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                selfie_image: {type: string, format: binary, description: "JPEG, PNG or WebP, max 5 MB"}
       responses:
         "200":
           description: OK
@@ -921,6 +1001,13 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/OwnerKeys"}
         "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "403": {description: "not_eligible, not_a_responder or face_mismatch"}
+        "409": {description: "enough_helpers, or face_template_not_enrolled (compreface)"}
+        "413": {description: image_too_large}
+        "415": {description: unsupported_image_type}
+        "422": {description: "empty_image or face_image_invalid"}
+        "428": {description: face_scan_required}
+        "503": {description: "Face matcher unavailable (compreface): fails closed, retry"}
   /responders/offers/{offer_id}/decline:
     post:
       tags: [matching]
@@ -1146,19 +1233,19 @@ paths:
         "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/Profile"}}}}
         "401": {$ref: "#/components/responses/NotAuthenticated"}
         "422": {description: Invalid field}
-  /walks/companion/verify:
+  /walks/companion/join:
     post:
       tags: [walk]
-      summary: DEMO companion verification (stub, always passes)
+      summary: Become a companion (needs a verified identity; no approval step)
       description: >
-        Records verified_method "mock" and the date. No image or ID is sent or stored. Needs a
-        profile with willing_companion. Approval is by hand (backend/scripts/companions.py)
-        unless COMPANION_AUTO_APPROVE is on (dev only).
+        Needs a profile with willing_companion and a verified, adult, unexpired identity from
+        /verification (ID + selfie); 409 identity_not_verified sends the app to verification.
+        Replaces the old always-pass demo verification. Revoked by backend/scripts/companions.py.
       security: [{bearer: []}]
       responses:
         "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/CompanionMe"}}}}
         "403": {description: companion_revoked}
-        "409": {description: profile_not_willing}
+        "409": {description: "profile_not_willing or identity_not_verified"}
   /walks/companion/me:
     get:
       tags: [walk]
@@ -1169,7 +1256,7 @@ paths:
   /walks/companion/presence:
     put:
       tags: [walk]
-      summary: I'm available (approved companions; refresh every minute, rough area only)
+      summary: I'm available (eligible companions; refresh every minute, rough area only)
       security: [{bearer: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/WalkArea"}}}}
       responses:
@@ -1181,7 +1268,7 @@ paths:
                 type: object
                 required: [available, expires_in_seconds]
                 properties: {available: {type: boolean}, expires_in_seconds: {type: integer}}
-        "403": {description: not_an_approved_companion}
+        "403": {description: "not_eligible (not joined, identity not verified/expired, or revoked)"}
         "409": {description: profile_not_willing}
     delete:
       tags: [walk]
@@ -1275,12 +1362,33 @@ paths:
   /walks/{walk_id}/accept:
     post:
       tags: [walk]
-      summary: Companion accepts; both now see the handshake code and share live location (E2E)
+      summary: Companion accepts with a fresh face scan; both then see the handshake code and share live location (E2E)
+      description: >
+        Every accept needs a fresh face scan of the person holding the phone (selfie_image) in
+        this same request, so a modified app cannot skip it. Only a passing scan accepts the walk
+        and opens the two-way live location. FACE_CHECK_PROVIDER=mock checks only that a real
+        image was sent (the phone checks one face is visible); compreface matches it against the
+        face template saved at verification. The image is never stored; pass/fail is audited.
       security: [{bearer: []}]
       parameters: [{name: walk_id, in: path, required: true, schema: {type: string, format: uuid}}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [selfie_image]
+              properties:
+                selfie_image: {type: string, format: binary, description: "JPEG, PNG or WebP, max 5 MB"}
       responses:
         "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WalkView"}}}}
-        "409": {description: "walk_expired, walk_declined, walk_cancelled or already_walking"}
+        "403": {description: "not_eligible or face_mismatch"}
+        "409": {description: "walk_expired, walk_declined, walk_cancelled, already_walking, or face_template_not_enrolled (compreface)"}
+        "413": {description: image_too_large}
+        "415": {description: unsupported_image_type}
+        "422": {description: "empty_image or face_image_invalid"}
+        "428": {description: face_scan_required}
+        "503": {description: "Face matcher unavailable (compreface): fails closed, retry"}
   /walks/{walk_id}/decline:
     post:
       tags: [walk]
@@ -1813,8 +1921,9 @@ components:
       type: object
       required: [status, available]
       properties:
-        status: {type: string, enum: [none, pending, approved, revoked]}
-        verified_method: {type: string, nullable: true, description: '"mock" = demo verification (stub)'}
+        status: {type: string, enum: [none, approved, revoked], description: "approved = joined (no approval step)"}
+        identity_verified: {type: boolean, description: "Verified, adult, unexpired identity (ID + selfie)"}
+        verified_method: {type: string, nullable: true, description: '"identity" = joined after identity verification'}
         verified_at: {type: string, format: date-time, nullable: true}
         available: {type: boolean}
     WalkArea:

@@ -7,23 +7,33 @@ import '../../core/api/device_identity.dart';
 import '../../core/location/geo.dart';
 import '../../core/location/live_location.dart';
 import '../contacts/live_location_panel.dart';
+import '../face_scan/face_scan_screen.dart';
 import '../sos/sos_widgets.dart';
 import '../map/live_map.dart';
+import '../verification/verification_flow.dart';
 
 /// Verified responders (F6): go on duty, get asked when someone nearby
 /// presses SOS, and say "I'm going". Until then only a rough area (~110 m)
 /// and distance are shown; after it, their precise live location (E2E).
+///
+/// Verifying identity (ID + selfie) is all it takes: there is no approval
+/// step. Saying "I'm going" needs a fresh face scan, checked by the server in
+/// the same request, before the traveller's location is shared.
 class RespondScreen extends StatefulWidget {
   const RespondScreen({
     super.key,
     required this.api,
     this.relay,
     this.pollInterval = const Duration(seconds: 5),
+    this.faceScanCamera,
   });
 
   final DemoApi api;
   final LiveLocationRelay? relay;
   final Duration pollInterval;
+
+  /// Front camera + on-device face count for the scan (tests inject one).
+  final FaceScanCamera? faceScanCamera;
 
   @override
   State<RespondScreen> createState() => _RespondScreenState();
@@ -31,6 +41,7 @@ class RespondScreen extends StatefulWidget {
 
 class _RespondScreenState extends State<RespondScreen> {
   ResponderMe? _me;
+  String? _verificationStatus;
   List<ResponderOffer> _offers = const [];
   String? _error;
   bool _busy = false;
@@ -57,10 +68,12 @@ class _RespondScreenState extends State<RespondScreen> {
   Future<void> _load() async {
     try {
       final me = await widget.api.responderMe();
+      final verification = await widget.api.verificationMe();
       final wasOnDuty = await widget.api.identity.readValue('on_duty') == '1';
       if (!mounted) return;
       setState(() {
         _me = me;
+        _verificationStatus = verification['status'] as String?;
         _error = null;
       });
       if (me.approved && wasOnDuty && !_onDuty) await _setOnDuty(true);
@@ -76,15 +89,37 @@ class _RespondScreenState extends State<RespondScreen> {
       builder: (_) => const _ApplyDialog(),
     );
     if (name == null || !mounted) return;
+    if (_verificationStatus != 'verified') {
+      final verified = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => VerificationFlowScreen(api: widget.api),
+        ),
+      );
+      if (verified != true || !mounted) return;
+    }
     setState(() => _busy = true);
     try {
       final me = await widget.api.applyAsResponder(name);
-      if (mounted) setState(() => _me = me);
+      if (mounted) {
+        setState(() {
+          _me = me;
+          _verificationStatus = 'verified';
+        });
+      }
     } catch (_) {
       _show('Could not send your application.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _verifyExistingApplication() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => VerificationFlowScreen(api: widget.api),
+      ),
+    );
+    if (mounted) await _load();
   }
 
   Future<bool> _locationAllowed() async {
@@ -170,19 +205,45 @@ class _RespondScreenState extends State<RespondScreen> {
     }
   }
 
+  /// "I'm going" with a fresh face scan: the server checks it in the same
+  /// request and only then shares the traveller's precise live location.
   Future<void> _going(ResponderOffer offer) async {
     setState(() => _busy = true);
+    OwnerKeys? owner;
+    String? problem;
     try {
-      final owner = await widget.api.goingToHelp(offer.id);
-      final shared = await widget.relay?.startHelping(widget.api, owner);
-      if (shared ?? false) _helpingWith.add(owner.journeyId);
-      _show('Thank you. They can see you coming. Head to their live location.');
-    } on ApiException catch (error) {
-      _show(
-        error.detail == 'enough_helpers'
-            ? 'Two people are already going. Thank you for offering.'
-            : 'Could not send that (${error.detail}).',
+      await FaceScanScreen.open(
+        context,
+        title: 'I\'m going',
+        reason:
+            'Before you see their live location, confirm that you, the '
+            'verified responder, are holding this phone.',
+        actionLabel: 'tell them you are coming and share live location',
+        camera: widget.faceScanCamera,
+        submit: (scan) async {
+          try {
+            owner = await widget.api.goingToHelp(offer.id, scan: scan);
+            return null;
+          } on ApiException catch (error) {
+            final faceProblem = faceScanProblem(error);
+            if (faceProblem != null) return faceProblem; // retry the scan
+            problem = error.detail == 'enough_helpers'
+                ? 'Two people are already going. Thank you for offering.'
+                : 'Could not send that (${error.detail}).';
+            return null;
+          }
+        },
       );
+      final keys = owner;
+      if (keys != null) {
+        final shared = await widget.relay?.startHelping(widget.api, keys);
+        if (shared ?? false) _helpingWith.add(keys.journeyId);
+        _show(
+          'Thank you. They can see you coming. Head to their live location.',
+        );
+      } else if (problem != null) {
+        _show(problem!);
+      }
     } catch (_) {
       _show('Could not reach the server.');
     } finally {
@@ -231,8 +292,15 @@ class _RespondScreenState extends State<RespondScreen> {
                 padding: EdgeInsets.only(top: 48),
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (me != null && !me.approved)
-              _NotYet(me: me, busy: _busy, onApply: _apply, onRefresh: _load)
+            else if (me != null &&
+                (!me.approved || _verificationStatus != 'verified'))
+              _NotYet(
+                me: me,
+                busy: _busy,
+                verificationStatus: _verificationStatus,
+                onApply: _apply,
+                onVerify: _verifyExistingApplication,
+              )
             else if (me != null) ...[
               _DutyCard(
                 name: me.displayName ?? 'You',
@@ -272,20 +340,25 @@ class _NotYet extends StatelessWidget {
   const _NotYet({
     required this.me,
     required this.busy,
+    required this.verificationStatus,
     required this.onApply,
-    required this.onRefresh,
+    required this.onVerify,
   });
 
   final ResponderMe me;
   final bool busy;
+  final String? verificationStatus;
   final VoidCallback onApply;
-  final VoidCallback onRefresh;
+  final VoidCallback onVerify;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final pending = me.status == 'pending';
+    final revoked = me.status == 'revoked';
+    // Applied, but the identity check is not done (or has expired).
+    final needsVerification =
+        !revoked && me.status != 'none' && verificationStatus != 'verified';
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -306,10 +379,10 @@ class _NotYet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            pending
-                ? 'Thanks, ${me.displayName}. Waiting for approval.'
-                : me.status == 'revoked'
+            revoked
                 ? 'Your responder access was removed.'
+                : needsVerification
+                ? 'Verify your identity to start helping'
                 : 'Help people near you',
             style: theme.textTheme.titleLarge?.copyWith(
               color: colors.onPrimary,
@@ -317,8 +390,8 @@ class _NotYet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            pending
-                ? 'The campus team checks responders in person before they can be asked to help. Pull down to refresh.'
+            needsVerification
+                ? 'Upload your ID portrait and take a selfie. Once it matches you can go on duty straight away.'
                 : 'When someone within a few minutes\' walk presses SOS, verified responders on duty are asked to go. You only see a rough area until you say "I\'m going".',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colors.onPrimary.withValues(alpha: 0.92),
@@ -331,10 +404,11 @@ class _NotYet extends StatelessWidget {
               onPressed: busy ? null : onApply,
               child: const Text('Become a responder'),
             )
-          else if (pending)
+          else if (needsVerification)
             FilledButton.tonal(
-              onPressed: onRefresh,
-              child: const Text('Check again'),
+              key: const ValueKey('continue-verification'),
+              onPressed: busy ? null : onVerify,
+              child: const Text('Start face match'),
             ),
         ],
       ),

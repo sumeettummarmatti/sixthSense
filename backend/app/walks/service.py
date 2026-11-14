@@ -99,9 +99,25 @@ def handshake_code(settings: Settings, walk_id: uuid.UUID) -> str:
     return f"{int(digest[:8], 16) % 10000:04d}"
 
 
-def is_approved(db: Session, account_id: uuid.UUID) -> bool:
+def revoke_companion(db: Session, redis: Redis, account_id: uuid.UUID, now: datetime) -> bool:
+    """Remove someone as a companion (after a complaint): no longer findable, open requests to
+    them are declined and an accepted walk ends now, which stops the live location relay.
+    The caller commits."""
     profile = db.get(CompanionProfile, account_id)
-    return profile is not None and profile.status == "approved"
+    if profile is None:
+        return False
+    clear_presence(redis, account_id)
+    profile.status = "revoked"
+    for walk in db.scalars(
+        select(Walk).where(Walk.companion_id == account_id, Walk.status.in_(OPEN))
+    ):
+        if walk.status == "accepted":
+            end(db, redis, walk, "companion_revoked", now)
+        else:
+            walk.status, walk.responded_at = "declined", now
+            clear_area(redis, walk.id)
+    audit.record(db, "companion.revoked", target=f"account:{account_id}")
+    return True
 
 
 def rating_of(db: Session, companion_id: uuid.UUID) -> tuple[float | None, int]:

@@ -16,8 +16,13 @@ class Area(BaseModel):
 
 
 class CompanionMe(BaseModel):
-    status: Literal["none", "pending", "approved", "revoked"]
-    verified_method: str | None = Field(None, description="'mock' = demo verification (stub)")
+    status: Literal["none", "approved", "revoked"] = Field(
+        description="none = not joined; approved = joined (no manual approval); revoked"
+    )
+    identity_verified: bool = Field(
+        False, description="Verified, adult, unexpired identity (ID + selfie)"
+    )
+    verified_method: str | None = Field(None, description="'identity' = joined after verification")
     verified_at: datetime | None = None
     available: bool = False
 

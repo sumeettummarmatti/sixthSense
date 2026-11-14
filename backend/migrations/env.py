@@ -15,6 +15,7 @@ from app.journey import models as journey_models  # noqa: F401
 from app.matching import models as matching_models  # noqa: F401
 from app.notification import models as notification_models  # noqa: F401
 from app.profiles import models as profile_models  # noqa: F401
+from app.verification import models as verification_models  # noqa: F401
 from app.walks import models as walk_models  # noqa: F401
 
 config = context.config

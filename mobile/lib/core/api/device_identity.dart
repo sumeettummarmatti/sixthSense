@@ -9,6 +9,13 @@ import 'walk_models.dart';
 
 export 'walk_models.dart';
 
+class VerificationImage {
+  const VerificationImage({required this.bytes, required this.mimeType});
+
+  final Uint8List bytes;
+  final String mimeType;
+}
+
 /// Android Keystore backed identity and session operations for the demo API.
 class DeviceIdentity {
   const DeviceIdentity();
@@ -136,6 +143,59 @@ class DemoApi {
     );
     await _saveSession(session);
   }
+
+  Future<Map<String, dynamic>> createVerificationSession({
+    required bool consent,
+    bool faceTemplateConsent = false,
+  }) => _request(
+    'POST',
+    '/verification/sessions',
+    body: {
+      'purpose': 'responder',
+      'consent': consent,
+      'face_template_consent': faceTemplateConsent,
+    },
+  );
+
+  Future<Map<String, dynamic>> submitVerificationSelfie({
+    required String sessionId,
+    required String idType,
+    required String idNumber,
+    required String dateOfBirth,
+    required VerificationImage idImage,
+    required VerificationImage selfieImage,
+    String? scenario,
+  }) {
+    final fields = <String, String>{
+      'id_type': idType,
+      'id_number': idNumber,
+      'date_of_birth': dateOfBirth,
+    };
+    if (scenario case final value?) fields['scenario'] = value;
+    return _requestMultipart(
+      '/verification/sessions/$sessionId/selfie',
+      fields: fields,
+      images: {'id_image': idImage, 'selfie_image': selfieImage},
+    );
+  }
+
+  Future<Map<String, dynamic>> verificationSession(String sessionId) =>
+      _request('GET', '/verification/sessions/$sessionId');
+
+  Future<Map<String, dynamic>> verificationMe() =>
+      _request('GET', '/verification/me');
+
+  Future<void> deleteFaceTemplate() =>
+      _request('DELETE', '/verification/face-template');
+
+  Future<void> enrollFaceTemplate({
+    required VerificationImage idImage,
+    required VerificationImage selfieImage,
+  }) => _requestMultipart(
+    '/verification/face-template',
+    fields: const {'consent': 'true'},
+    images: {'id_image': idImage, 'selfie_image': selfieImage},
+  );
 
   /// Returns false when this install has never completed email verification.
   Future<bool> trySilentSignIn() async {
@@ -329,8 +389,19 @@ class DemoApi {
   }
 
   /// "I'm going": returns the traveller's keys for sharing my location back.
-  Future<OwnerKeys> goingToHelp(String offerId) async => OwnerKeys.fromJson(
-    await _request('POST', '/responders/offers/$offerId/going'),
+  /// Saying it needs a fresh face [scan]; once going, asking again (no scan)
+  /// returns the keys.
+  Future<OwnerKeys> goingToHelp(
+    String offerId, {
+    VerificationImage? scan,
+  }) async => OwnerKeys.fromJson(
+    scan == null
+        ? await _request('POST', '/responders/offers/$offerId/going')
+        : await _requestMultipart(
+            '/responders/offers/$offerId/going',
+            fields: const {},
+            images: {'selfie_image': scan},
+          ),
   );
 
   Future<void> declineOffer(String offerId) =>
@@ -493,9 +564,10 @@ class DemoApi {
   Future<CompanionMe> companionMe() async =>
       CompanionMe.fromJson(await _request('GET', '/walks/companion/me'));
 
-  /// DEMO verification (stub): the server records verified_method 'mock'.
-  Future<CompanionMe> verifyAsCompanion() async =>
-      CompanionMe.fromJson(await _request('POST', '/walks/companion/verify'));
+  /// Become a companion. Needs a verified identity (409 identity_not_verified:
+  /// open identity verification first). No approval step.
+  Future<CompanionMe> joinAsCompanion() async =>
+      CompanionMe.fromJson(await _request('POST', '/walks/companion/join'));
 
   Future<void> sendCompanionPresence(double lat, double lng) => _request(
     'PUT',
@@ -565,8 +637,17 @@ class DemoApi {
   Future<WalkView> walk(String walkId) async =>
       WalkView.fromJson(await _request('GET', '/walks/$walkId'));
 
-  Future<WalkView> acceptWalk(String walkId) async =>
-      WalkView.fromJson(await _request('POST', '/walks/$walkId/accept'));
+  /// Accept with a fresh face [scan], checked by the server in this request.
+  Future<WalkView> acceptWalk(
+    String walkId, {
+    required VerificationImage scan,
+  }) async => WalkView.fromJson(
+    await _requestMultipart(
+      '/walks/$walkId/accept',
+      fields: const {},
+      images: {'selfie_image': scan},
+    ),
+  );
 
   Future<void> declineWalk(String walkId) =>
       _request('POST', '/walks/$walkId/decline');
@@ -654,6 +735,92 @@ class DemoApi {
       }
       if (responseBody.isEmpty) return <String, dynamic>{};
       if (responseBody.trim().isEmpty) return <String, dynamic>{}; // 204
+      return jsonDecode(responseBody) as Map<String, dynamic>;
+    } on SocketException catch (error) {
+      throw ApiException(0, 'server_unreachable', cause: error);
+    } on TimeoutException catch (error) {
+      throw ApiException(0, 'server_timeout', cause: error);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<Map<String, dynamic>> _requestMultipart(
+    String path, {
+    required Map<String, String> fields,
+    required Map<String, VerificationImage> images,
+    bool retryUnauthorized = true,
+  }) async {
+    var token = await identity.accessToken();
+    if (token == null || token.isEmpty) {
+      final deviceId = await identity.deviceId();
+      if (deviceId == null || deviceId.isEmpty) {
+        throw const ApiException(401, 'not_authenticated');
+      }
+      await _signInWithDevice(deviceId);
+      token = await identity.accessToken();
+    }
+    final uri = baseUri.resolve(path);
+    final boundary = 'sixthsense-${DateTime.now().microsecondsSinceEpoch}';
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 12);
+    try {
+      final request = await client
+          .postUrl(uri)
+          .timeout(const Duration(seconds: 15));
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(
+        HttpHeaders.contentTypeHeader,
+        'multipart/form-data; boundary=$boundary',
+      );
+      if (token != null && token.isNotEmpty) {
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      }
+      for (final entry in fields.entries) {
+        request.write('--$boundary\r\n');
+        request.write(
+          'Content-Disposition: form-data; name="${entry.key}"\r\n\r\n',
+        );
+        request.write(entry.value);
+        request.write('\r\n');
+      }
+      for (final entry in images.entries) {
+        request.write('--$boundary\r\n');
+        request.write(
+          'Content-Disposition: form-data; name="${entry.key}"; '
+          'filename="${entry.key}.jpg"\r\n',
+        );
+        request.write('Content-Type: ${entry.value.mimeType}\r\n\r\n');
+        request.add(entry.value.bytes);
+        request.write('\r\n');
+      }
+      request.write('--$boundary--\r\n');
+      final response = await request.close().timeout(
+        const Duration(seconds: 35),
+      );
+      final responseBody = await utf8.decoder.bind(response).join();
+      if (response.statusCode == 401 && retryUnauthorized) {
+        final deviceId = await identity.deviceId();
+        if (deviceId != null && deviceId.isNotEmpty) {
+          await _signInWithDevice(deviceId);
+          return await _requestMultipart(
+            path,
+            fields: fields,
+            images: images,
+            retryUnauthorized: false,
+          );
+        }
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        var detail = 'request_failed';
+        try {
+          detail =
+              (jsonDecode(responseBody) as Map)['detail'] as String? ?? detail;
+        } on FormatException {
+          // Preserve only a short status code for non-JSON responses.
+        }
+        throw ApiException(response.statusCode, detail);
+      }
       return jsonDecode(responseBody) as Map<String, dynamic>;
     } on SocketException catch (error) {
       throw ApiException(0, 'server_unreachable', cause: error);
@@ -876,7 +1043,7 @@ class ResponderMe {
     this.onDuty = false,
   });
 
-  /// none | pending | approved | revoked
+  /// none | approved (applied; no approval step) | revoked
   final String status;
   final String? displayName;
   final bool onDuty;

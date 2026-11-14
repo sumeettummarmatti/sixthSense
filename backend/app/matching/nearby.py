@@ -27,6 +27,7 @@ from app.escalation.models import Escalation, EscalationRecipient
 from app.journey.state import State
 from app.matching.models import ResponderOffer, ResponderProfile
 from app.notification.channels import Message, Senders
+from app.verification.eligibility import eligible
 
 log = logging.getLogger(__name__)
 
@@ -176,6 +177,7 @@ def dispatch(db: Session, redis: Redis, senders: Senders, settings: Settings, no
             )
         )
     )
+    approved = {account for account in approved if eligible(db, account, "responder", now)}
     asked = 0
     for escalation in escalations:
         area = alert_area(redis, escalation.journey_id)

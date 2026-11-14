@@ -1,6 +1,7 @@
 # ruff: noqa: F811  (pytest fixtures imported from other test modules)
-"""Walk With Me (P3-W3): demo verification, approval, availability, matching, handshake,
-two-way E2E location, ending, and SOS during a walk."""
+"""Walk With Me (P3-W3): joining as a companion after identity verification (no approval step),
+availability, matching, the face scan on accept, handshake, two-way E2E location, ending,
+revocation, and SOS during a walk."""
 
 import subprocess
 import sys
@@ -8,11 +9,21 @@ import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select
 from test_alerts import Clock, FakeSender, people, senders  # noqa: F401  (fixtures)
 from test_relay import open_socket, raw_key, test_sessions  # noqa: F401
-from test_responders import FAR_3KM, HOME, NEAR_300M, NEAR_800M, keys_for, tick
+from test_responders import (
+    FAR_3KM,
+    HOME,
+    NEAR_300M,
+    NEAR_800M,
+    SCAN,
+    keys_for,
+    tick,
+    verified_identity,
+)
 
+from app.core.audit import AuditEvent
 from app.core.config import Settings, get_settings
 from app.escalation.models import EscalationRecipient
 from app.escalation.router import _now as escalation_now
@@ -20,7 +31,7 @@ from app.journey.router import _now as journey_now
 from app.main import app
 from app.matching.router import _now as responders_now
 from app.walks import service
-from app.walks.models import CompanionProfile, Walk
+from app.walks.models import Walk
 from app.walks.router import _now as walks_now
 
 PROFILE = {"bio": "", "strengths": [], "languages": [], "gender": None}
@@ -40,8 +51,9 @@ def profile(client, user, name: str, gender=None, willing=False, **extra) -> Non
 
 
 def companion(
-    client, db, make_user, name: str, at, gender="woman", approve=True, available=True
+    client, db, make_user, name: str, at, gender="woman", verified=True, available=True
 ) -> dict:
+    """Joins as a companion. A verified identity is all it takes: there is no approval."""
     user = make_user(f"{name.lower()}@college.edu")
     user["keys"] = keys_for(client, user)
     client.put(
@@ -56,15 +68,12 @@ def companion(
         bio=f"{name} walks this way daily",
         strengths=["first_aid_trained"],
     )
-    verified = client.post("/walks/companion/verify", headers=user["headers"]).json()
-    assert verified["status"] == "pending" and verified["verified_method"] == "mock"
-    if approve:
-        db.execute(
-            update(CompanionProfile)
-            .where(CompanionProfile.account_id == uuid.UUID(user["account_id"]))
-            .values(status="approved")
-        )
-    if approve and available:
+    if not verified:
+        return user
+    verified_identity(db, user["account_id"])
+    joined = client.post("/walks/companion/join", headers=user["headers"]).json()
+    assert joined["status"] == "approved" and joined["identity_verified"] is True
+    if available:
         resp = client.put(
             "/walks/companion/presence",
             json={"latitude": at[0], "longitude": at[1]},
@@ -72,6 +81,12 @@ def companion(
         )
         assert resp.status_code == 200, resp.text
     return user
+
+
+def accept(client, walk_id: str, user, scan=True):
+    return client.post(
+        f"/walks/{walk_id}/accept", headers=user["headers"], files=SCAN if scan else None
+    )
 
 
 @pytest.fixture
@@ -113,65 +128,73 @@ def ask(client, traveller, who, at=HOME):
 
 def accepted_walk(client, traveller, riya) -> dict:
     walk = ask(client, traveller, riya).json()
-    resp = client.post(f"/walks/{walk['id']}/accept", headers=riya["headers"])
+    resp = accept(client, walk["id"], riya)
     assert resp.status_code == 200, resp.text
     return resp.json()
 
 
-# --- verification and approval ---------------------------------------------------------------
+# --- joining as a companion ---------------------------------------------------------------------
 
 
-def test_verify_needs_willing_profile_and_is_a_mock(client, db, make_user, clock) -> None:
+def test_join_needs_willing_profile_and_verified_identity(client, db, make_user, clock) -> None:
     user = make_user("x@college.edu")
-    assert client.post("/walks/companion/verify", headers=user["headers"]).status_code == 409
+    assert client.post("/walks/companion/join", headers=user["headers"]).status_code == 409
     profile(client, user, "Xen", willing=True)
-    me = client.post("/walks/companion/verify", headers=user["headers"]).json()
+    resp = client.post("/walks/companion/join", headers=user["headers"])
+    assert resp.status_code == 409 and resp.json()["detail"] == "identity_not_verified"
+    me = client.get("/walks/companion/me", headers=user["headers"]).json()
+    assert me["status"] == "none" and me["identity_verified"] is False
+
+    verified_identity(db, user["account_id"])
+    me = client.post("/walks/companion/join", headers=user["headers"]).json()
     assert me == {
-        "status": "pending",
-        "verified_method": "mock",
+        "status": "approved",
+        "identity_verified": True,
+        "verified_method": "identity",
         "verified_at": clock.now.isoformat().replace("+00:00", "Z"),
         "available": False,
     }
-    # Pending companions cannot go available.
+    # No approval step: they can go available straight away.
     resp = client.put(
         "/walks/companion/presence",
         json={"latitude": HOME[0], "longitude": HOME[1]},
         headers=user["headers"],
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200
 
 
-def test_auto_approve_setting_for_dev(client, make_user, clock) -> None:
-    from app.core.config import get_settings as real
-
-    app.dependency_overrides[real] = lambda: Settings(companion_auto_approve=True)
-    try:
-        user = make_user("auto@college.edu")
-        profile(client, user, "Auto", willing=True)
-        assert (
-            client.post("/walks/companion/verify", headers=user["headers"]).json()["status"]
-            == "approved"
-        )
-    finally:
-        app.dependency_overrides.pop(real)
+def test_mock_verify_endpoint_is_gone(client, make_user) -> None:
+    user = make_user("old@college.edu")
+    assert client.post("/walks/companion/verify", headers=user["headers"]).status_code in (
+        404,
+        405,
+    )
 
 
-def test_revoked_companion_cannot_reverify(client, db, make_user, clock) -> None:
+def test_revoked_companion_cannot_rejoin_or_go_available(
+    client, db, redis, make_user, clock
+) -> None:
     riya = companion(client, db, make_user, "Riya", NEAR_300M)
-    db.execute(update(CompanionProfile).values(status="revoked"))
-    assert client.post("/walks/companion/verify", headers=riya["headers"]).status_code == 403
+    service.revoke_companion(db, redis, uuid.UUID(riya["account_id"]), clock.now)
+    assert client.post("/walks/companion/join", headers=riya["headers"]).status_code == 403
+    resp = client.put(
+        "/walks/companion/presence",
+        json={"latitude": HOME[0], "longitude": HOME[1]},
+        headers=riya["headers"],
+    )
+    assert resp.status_code == 403 and resp.json()["detail"] == "not_eligible"
 
 
 # --- matching ---------------------------------------------------------------------------------
 
 
-def test_search_lists_available_approved_companions_nearest_first(
+def test_search_lists_available_verified_companions_nearest_first(
     client, db, make_user, traveller, clock
 ) -> None:
     companion(client, db, make_user, "Riya", NEAR_800M)
     companion(client, db, make_user, "Meera", NEAR_300M)
     companion(client, db, make_user, "Far", FAR_3KM)
-    companion(client, db, make_user, "Pending", NEAR_300M, approve=False)
+    companion(client, db, make_user, "Unverified", NEAR_300M, verified=False)
     companion(client, db, make_user, "Away", NEAR_300M, available=False)
     cards = search(client, traveller)
     assert [c["profile"]["first_name"] for c in cards] == ["Meera", "Riya"]
@@ -231,7 +254,7 @@ def test_companion_sees_first_name_and_rough_area_then_accepts(
     # Before accepting, the companion sees no profile and no handshake.
     assert client.get("/walks/current", headers=riya["headers"]).status_code == 404
 
-    accepted = client.post(f"/walks/{walk['id']}/accept", headers=riya["headers"]).json()
+    accepted = accept(client, walk["id"], riya).json()
     mine = client.get("/walks/current", headers=traveller["headers"]).json()
     assert accepted["status"] == mine["status"] == "accepted"
     assert accepted["handshake_code"] == mine["handshake_code"]
@@ -261,7 +284,7 @@ def test_decline_and_expiry(client, db, make_user, traveller, clock) -> None:
         headers=riya["headers"],
     )
     assert client.get("/walks/requests", headers=riya["headers"]).json()["requests"] == []
-    resp = client.post(f"/walks/{walk['id']}/accept", headers=riya["headers"])
+    resp = accept(client, walk["id"], riya)
     assert resp.status_code == 409 and resp.json()["detail"] == "walk_expired"
 
 
@@ -295,6 +318,74 @@ def test_strangers_cannot_touch_a_walk(client, db, make_user, traveller, people,
     assert (
         client.post(f"/walks/{walk['id']}/accept", headers=traveller["headers"]).status_code == 404
     )
+
+
+# --- face scan on accept ---------------------------------------------------------------------
+
+
+def test_accept_needs_a_fresh_face_scan(client, db, make_user, traveller, clock) -> None:
+    riya = companion(client, db, make_user, "Riya", NEAR_300M)
+    walk = ask(client, traveller, riya).json()
+    missing = accept(client, walk["id"], riya, scan=False)
+    assert missing.status_code == 428 and missing.json()["detail"] == "face_scan_required"
+    wrong_type = client.post(
+        f"/walks/{walk['id']}/accept",
+        headers=riya["headers"],
+        files={"selfie_image": ("scan.gif", b"GIF89a", "image/gif")},
+    )
+    assert wrong_type.status_code == 415
+    mine = client.get("/walks/current", headers=traveller["headers"]).json()
+    assert mine["status"] == "requested" and mine["partner_keys"] == []
+
+    accepted = accept(client, walk["id"], riya)
+    assert accepted.status_code == 200 and accepted.json()["status"] == "accepted"
+    actions = [a for (a,) in db.execute(select(AuditEvent.action))]
+    assert "walk.face_scan.passed.mock" in actions
+
+
+def test_face_mismatch_leaves_the_walk_unaccepted(
+    client, db, make_user, traveller, clock, monkeypatch
+) -> None:
+    from app.face_scan import service as face_scan
+
+    app.dependency_overrides[get_settings] = lambda: Settings(face_check_provider="compreface")
+    monkeypatch.setattr(face_scan, "check_walk_selfie", lambda *args, **kwargs: False)
+    try:
+        riya = companion(client, db, make_user, "Riya", NEAR_300M)
+        walk = ask(client, traveller, riya).json()
+        resp = accept(client, walk["id"], riya)
+        assert resp.status_code == 403 and resp.json()["detail"] == "face_mismatch"
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+    mine = client.get("/walks/current", headers=traveller["headers"]).json()
+    assert mine["status"] == "requested" and mine["handshake_code"] is None
+    actions = [a for (a,) in db.execute(select(AuditEvent.action))]
+    assert "walk.face_scan.failed.compreface" in actions
+
+
+def test_unverified_or_revoked_companions_are_not_found_or_asked(
+    client, db, redis, make_user, traveller, clock
+) -> None:
+    from app.verification.models import IdentityRecord
+
+    riya = companion(client, db, make_user, "Riya", NEAR_300M)
+    meera = companion(client, db, make_user, "Meera", NEAR_300M)
+    db.get(IdentityRecord, uuid.UUID(riya["account_id"])).revoked_at = clock.now
+    service.revoke_companion(db, redis, uuid.UUID(meera["account_id"]), clock.now)
+    db.flush()
+    assert search(client, traveller) == []
+    assert ask(client, traveller, riya).json()["detail"] == "companion_unavailable"
+
+
+def test_revoking_a_companion_ends_their_walk(
+    client, db, redis, make_user, traveller, clock
+) -> None:
+    riya = companion(client, db, make_user, "Riya", NEAR_300M)
+    walk = accepted_walk(client, traveller, riya)
+    service.revoke_companion(db, redis, uuid.UUID(riya["account_id"]), clock.now)
+    db.flush()
+    ended = client.get(f"/walks/{walk['id']}", headers=traveller["headers"]).json()
+    assert ended["status"] == "ended" and ended["end_reason"] == "companion_revoked"
 
 
 # --- ending -----------------------------------------------------------------------------------
@@ -357,7 +448,12 @@ def test_relay_between_walkers_only(
         t_ws.send_json({"type": "location", "envelopes": [_env(walk["id"], t_key, r_key)]})
         assert t_ws.receive_json() == {"type": "error", "detail": "no_open_journey"}
 
-        client.post(f"/walks/{walk['id']}/accept", headers=riya["headers"])
+        # Accepting without a face scan is refused, so still nothing flows.
+        assert accept(client, walk["id"], riya, scan=False).status_code == 428
+        t_ws.send_json({"type": "location", "envelopes": [_env(walk["id"], t_key, r_key)]})
+        assert t_ws.receive_json() == {"type": "error", "detail": "no_open_journey"}
+
+        assert accept(client, walk["id"], riya).status_code == 200
         t_ws.send_json({"type": "location", "envelopes": [_env(walk["id"], t_key, r_key)]})
         assert t_ws.receive_json()["delivered"] == 1
         assert r_ws.receive_json()["type"] == "location"
@@ -477,7 +573,8 @@ def test_companions_script_parses() -> None:
     out = subprocess.run(  # noqa: S603  (our own script, fixed arguments)
         [sys.executable, str(script), "--help"], capture_output=True, text=True, check=True
     )
-    assert "approve-all" in out.stdout and "revoke" in out.stdout
+    assert "approve" not in out.stdout.split("revoke")[0].split("usage")[1]
+    assert "list" in out.stdout and "revoke" in out.stdout
 
 
 def test_walk_rows_hold_no_location(db) -> None:

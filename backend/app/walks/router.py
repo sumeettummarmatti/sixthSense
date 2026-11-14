@@ -1,25 +1,30 @@
 """Walk With Me API (P3-W3).
 
-Companions:  POST /walks/companion/verify (demo), GET /walks/companion/me,
+Companions:  POST /walks/companion/join, GET /walks/companion/me,
              PUT|DELETE /walks/companion/presence
 Travellers:  POST /walks/search, POST /walks (ask)
-Companions:  GET /walks/requests, POST /walks/{id}/accept|decline
+Companions:  GET /walks/requests, POST /walks/{id}/accept (with a fresh face scan)|decline
 Both:        GET /walks/current, POST /walks/{id}/end; traveller: POST /walks/{id}/cancel
 
 A traveller sees only companions who chose to be available, and only while on an open journey;
 a companion sees a traveller's first name and rough area only after being asked (rule 4).
+
+Companions use the same identity verification as responders (ID + selfie, /verification); there
+is no approval step. Every accept carries a fresh face scan (app.face_scan) in the same request,
+so the traveller's location is only shared once the person holding the phone has been checked.
 """
 
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.core import audit
 from app.escalation import helpers
+from app.face_scan import service as face_scan
 from app.identity.router import CurrentSessionDep, DbDep, RedisDep, SettingsDep
 from app.journey.models import Journey
 from app.journey.state import State
@@ -27,6 +32,7 @@ from app.matching import nearby
 from app.notification.channels import Message, Senders, get_senders
 from app.profiles.models import Profile
 from app.profiles.schemas import PartnerProfile
+from app.verification.eligibility import eligible, verified_identity
 from app.walks import schemas, service
 from app.walks.models import CompanionProfile, Walk
 
@@ -62,37 +68,40 @@ def _rounded(meters: int) -> int:
 
 
 def _companion_me(db, redis, settings, account_id, now) -> schemas.CompanionMe:
+    identity_verified = verified_identity(db, account_id, now) is not None
     profile = db.get(CompanionProfile, account_id)
     if profile is None:
-        return schemas.CompanionMe(status="none")
+        return schemas.CompanionMe(status="none", identity_verified=identity_verified)
     return schemas.CompanionMe(
         status=profile.status,
+        identity_verified=identity_verified,
         verified_method=profile.verified_method,
         verified_at=profile.verified_at,
         available=service.presence_of(redis, account_id, settings, now) is not None,
     )
 
 
-@router.post("/companion/verify", response_model=schemas.CompanionMe)
-def verify(
+@router.post("/companion/join", response_model=schemas.CompanionMe)
+def join(
     session: CurrentSessionDep, db: DbDep, redis: RedisDep, settings: SettingsDep, now: NowDep
 ) -> schemas.CompanionMe:
-    """STUB: demo verification. The app shows a selfie/ID step that always passes; here we only
-    record verified_method='mock' and the date. No image or ID is ever sent or stored. Replace
-    with a real check (campus office / offline e-KYC) before any pilot."""
+    """Become a companion. Needs the profile's "willing to be a companion" and a verified
+    identity (409 identity_not_verified: the app opens identity verification). No approval."""
     profile = db.get(Profile, session.account_id)
     if profile is None or not profile.willing_companion:
         raise HTTPException(status.HTTP_409_CONFLICT, "profile_not_willing")
+    identity = verified_identity(db, session.account_id, now)
+    if identity is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "identity_not_verified")
     companion = db.get(CompanionProfile, session.account_id)
     if companion is not None and companion.status == "revoked":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "companion_revoked")
     if companion is None:
-        companion = CompanionProfile(account_id=session.account_id, status="pending")
+        companion = CompanionProfile(account_id=session.account_id)
         db.add(companion)
-    companion.verified_method, companion.verified_at = "mock", now
-    if settings.companion_auto_approve and companion.status != "approved":
-        companion.status, companion.approved_at = "approved", now
-    audit.record(db, "companion.verified.mock", actor=session.account_id)
+    companion.status, companion.approved_at = "approved", now
+    companion.verified_method, companion.verified_at = "identity", identity.verified_at
+    audit.record(db, "companion.joined", actor=session.account_id)
     db.commit()
     return _companion_me(db, redis, settings, session.account_id, now)
 
@@ -114,8 +123,8 @@ def go_available(
     now: NowDep,
 ) -> schemas.Available:
     """Available: refresh about once a minute. Rounded to ~110 m, forgotten after 5 minutes."""
-    if not service.is_approved(db, session.account_id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "not_an_approved_companion")
+    if not eligible(db, session.account_id, "companion", now):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not_eligible")
     profile = db.get(Profile, session.account_id)
     if profile is None or not profile.willing_companion:
         raise HTTPException(status.HTTP_409_CONFLICT, "profile_not_willing")
@@ -160,7 +169,7 @@ def search(
     settings: SettingsDep,
     now: NowDep,
 ) -> schemas.Companions:
-    """Approved companions who are available nearby, nearest first. Needs an open journey, so
+    """Eligible companions who are available nearby, nearest first. Needs an open journey, so
     nobody can browse companions casually. Coordinates go in the body, never in the URL."""
     _open_journey(db, session.account_id, body.journey_id)
     here = nearby.rough(body.latitude, body.longitude)
@@ -173,14 +182,16 @@ def search(
         select(CompanionProfile, Profile)
         .join(Profile, Profile.account_id == CompanionProfile.account_id)
         .where(
-            CompanionProfile.status == "approved",
+            CompanionProfile.status != "revoked",
             CompanionProfile.account_id.in_(list(duty)),
             Profile.willing_companion.is_(True),
         )
     ).all()
     cards = []
     for companion, profile in rows:
-        if companion.account_id in busy:
+        if companion.account_id in busy or not eligible(
+            db, companion.account_id, "companion", now
+        ):
             continue
         if body.women_only and profile.gender != "woman":
             continue
@@ -234,7 +245,7 @@ def ask(
     companion_area = service.presence_of(redis, body.companion_id, settings, now)
     if (
         companion_area is None
-        or not service.is_approved(db, body.companion_id)
+        or not eligible(db, body.companion_id, "companion", now)
         or body.companion_id in _busy(db, now)
     ):
         raise HTTPException(status.HTTP_409_CONFLICT, "companion_unavailable")
@@ -328,16 +339,24 @@ def accept(
     settings: SettingsDep,
     senders: SendersDep,
     now: NowDep,
+    selfie_image: Annotated[UploadFile | None, File()] = None,
 ) -> schemas.WalkView:
+    """Accept, with a fresh face scan (multipart `selfie_image`) in the same request. Only a
+    passing scan accepts the walk and opens the two-way live location (428 face_scan_required,
+    403 face_mismatch)."""
     walk = _walk_for(db, walk_id, session.account_id, "companion")
     service.refresh(db, redis, walk, now)
     if walk.status != "requested":
         db.commit()
         raise HTTPException(status.HTTP_409_CONFLICT, f"walk_{walk.status}")
-    if not service.is_approved(db, session.account_id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "not_an_approved_companion")
+    if not eligible(db, session.account_id, "companion", now):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not_eligible")
     if service.accepted_walk_for_companion(db, session.account_id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "already_walking")
+    image, content_type = face_scan.read_scan(selfie_image)
+    face_scan.check(
+        db, settings, session.account_id, "walk", image, content_type, now, f"walk:{walk.id}"
+    )
     walk.status, walk.responded_at = "accepted", now
     audit.record(db, "walk.accepted", actor=session.account_id, target=f"walk:{walk.id}")
     _notify(

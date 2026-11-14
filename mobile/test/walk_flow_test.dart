@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sixthsense_app/core/api/device_identity.dart';
+
+import 'dart:typed_data';
+
 import 'package:sixthsense_app/core/theme/app_theme.dart';
+import 'package:sixthsense_app/features/face_scan/face_scan_screen.dart';
 import 'package:sixthsense_app/features/walk/walk_flow.dart';
 
 const _riya = {
@@ -56,6 +60,9 @@ class _FakeWalkApi extends DemoApi {
   bool willing;
   final calls = <String>[];
   WalkView? next;
+
+  /// What the server says to the next accept: null = passes.
+  ApiException? acceptError;
   List<CompanionCard> cards = [
     CompanionCard.fromJson(_riya),
     CompanionCard.fromJson({
@@ -78,11 +85,12 @@ class _FakeWalkApi extends DemoApi {
   Future<CompanionMe> companionMe() async => me;
 
   @override
-  Future<CompanionMe> verifyAsCompanion() async {
-    calls.add('verify');
+  Future<CompanionMe> joinAsCompanion() async {
+    calls.add('join');
     return me = CompanionMe(
-      status: 'pending',
-      verifiedMethod: 'mock',
+      status: 'approved',
+      identityVerified: me.identityVerified,
+      verifiedMethod: 'identity',
       verifiedAt: DateTime(2026, 11, 14),
     );
   }
@@ -132,8 +140,16 @@ class _FakeWalkApi extends DemoApi {
       calls.add('presence');
 
   @override
-  Future<WalkView> acceptWalk(String walkId) async {
-    calls.add('accept:$walkId');
+  Future<WalkView> acceptWalk(
+    String walkId, {
+    required VerificationImage scan,
+  }) async {
+    calls.add('accept:$walkId:${scan.mimeType}:${scan.bytes.length}');
+    final error = acceptError;
+    if (error != null) {
+      acceptError = null;
+      throw error;
+    }
     return WalkView.fromJson(
       _walkJson('accepted', role: 'companion', code: '0427'),
     );
@@ -150,10 +166,23 @@ class _FakeWalkApi extends DemoApi {
       calls.add('feedback:${draft.walkId}:${draft.companionStars}');
 }
 
+/// A front-camera photo with [faces] faces found on the phone.
+FaceScanCamera _camera(int faces) =>
+    () async => FaceScanCapture(
+      image: VerificationImage(
+        bytes: Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]),
+        mimeType: 'image/jpeg',
+      ),
+      faces: faces,
+    );
+
 Future<void> _open(
   WidgetTester tester,
   _FakeWalkApi api, {
   String? journeyId = 'j1',
+  int faces = 1,
+  bool verifies = true,
+  List<String>? verifications,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -163,12 +192,25 @@ Future<void> _open(
         journeyId: journeyId,
         locate: () async => (12.9719, 77.6412),
         pollInterval: const Duration(milliseconds: 100),
-        verificationDelay: const Duration(milliseconds: 50),
+        faceScanCamera: _camera(faces),
+        verifyIdentity: (_) async {
+          verifications?.add('opened');
+          if (verifies) {
+            api.me = const CompanionMe(status: 'none', identityVerified: true);
+          }
+          return verifies;
+        },
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
+
+const _verifiedCompanion = CompanionMe(
+  status: 'approved',
+  identityVerified: true,
+  verifiedMethod: 'identity',
+);
 
 /// A tall phone screen so long forms and sheets fit without scrolling.
 void _tallScreen(WidgetTester tester) {
@@ -251,22 +293,57 @@ void main() {
     expect(button.onPressed, isNull);
   });
 
-  testWidgets('companion demo verification passes and waits for approval', (
+  testWidgets('companion verifies identity once, then joins with no approval', (
     tester,
   ) async {
     _tallScreen(tester);
     final api = _FakeWalkApi();
-    await _open(tester, api);
+    final verifications = <String>[];
+    await _open(tester, api, verifications: verifications);
     await tester.tap(find.byKey(const ValueKey('walk-companion-role')));
     await tester.pumpAndSettle();
-    expect(find.text('Demo verification'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('walk-demo-verify')));
-    await tester.pump();
-    expect(find.text('Checking (demo)…'), findsOneWidget);
+    expect(find.text('Verify your identity'), findsOneWidget);
+    expect(find.text('Demo verification'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('walk-join')));
     await tester.pumpAndSettle();
-    expect(api.calls, ['verify']);
-    expect(find.text('Waiting for approval'), findsOneWidget);
-    expect(find.textContaining('14/11/2026'), findsOneWidget);
+    expect(verifications, ['opened']);
+    expect(api.calls, ['join']);
+    // Straight to available: no "Waiting for approval".
+    expect(find.text('Waiting for approval'), findsNothing);
+    expect(find.text('Verified companion'), findsOneWidget);
+    expect(find.byKey(const ValueKey('walk-available')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('already verified people join without verifying again', (
+    tester,
+  ) async {
+    _tallScreen(tester);
+    final api = _FakeWalkApi(
+      me: const CompanionMe(status: 'none', identityVerified: true),
+    );
+    final verifications = <String>[];
+    await _open(tester, api, verifications: verifications);
+    await tester.tap(find.byKey(const ValueKey('walk-companion-role')));
+    await tester.pumpAndSettle();
+    expect(find.text('Join as a companion'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('walk-join')));
+    await tester.pumpAndSettle();
+    expect(verifications, isEmpty);
+    expect(api.calls, ['join']);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('verification not finished: nothing is joined', (tester) async {
+    _tallScreen(tester);
+    final api = _FakeWalkApi();
+    await _open(tester, api, verifies: false);
+    await tester.tap(find.byKey(const ValueKey('walk-companion-role')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('walk-join')));
+    await tester.pumpAndSettle();
+    expect(api.calls, isEmpty);
+    expect(find.text('Verify your identity'), findsOneWidget);
   });
 
   testWidgets('companion needs a willing profile first', (tester) async {
@@ -275,20 +352,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('walk-companion-role')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('walk-open-profile')), findsOneWidget);
-    expect(find.byKey(const ValueKey('walk-demo-verify')), findsNothing);
+    expect(find.byKey(const ValueKey('walk-join')), findsNothing);
   });
 
-  testWidgets('approved companion goes available, sees and accepts a request', (
-    tester,
-  ) async {
+  testWidgets('companion accepts only after a face scan', (tester) async {
     _tallScreen(tester);
-    final api = _FakeWalkApi(
-      me: const CompanionMe(status: 'approved', verifiedMethod: 'mock'),
-    );
+    final api = _FakeWalkApi(me: _verifiedCompanion);
     await _open(tester, api);
     await tester.tap(find.byKey(const ValueKey('walk-companion-role')));
     await tester.pumpAndSettle();
-    expect(find.text('Approved · demo verification'), findsOneWidget);
+    expect(find.text('Verified companion'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('walk-available')));
     await tester.pumpAndSettle();
@@ -301,10 +374,58 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('walk-accept-w1')));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('accept:w1'));
+    // The scan comes first; nothing is accepted yet.
+    expect(find.text("Confirm it's you"), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('accept')), isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('face-scan-start')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('accept:w1:image/jpeg:7'));
     expect(find.text('Walking with Priya'), findsOneWidget);
     expect(find.text('0427'), findsOneWidget);
     // Unmount so the poll timers stop.
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('no face or a face mismatch does not accept', (tester) async {
+    _tallScreen(tester);
+    final api = _FakeWalkApi(me: _verifiedCompanion);
+    await _open(tester, api, faces: 0);
+    await tester.tap(find.byKey(const ValueKey('walk-companion-role')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('walk-accept-w1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('face-scan-start')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('could not see a face'), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('accept')), isEmpty);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Priya asked to walk with you'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('server face mismatch keeps the scan open to retry', (
+    tester,
+  ) async {
+    _tallScreen(tester);
+    final api = _FakeWalkApi(me: _verifiedCompanion)
+      ..acceptError = const ApiException(403, 'face_mismatch')
+      ..next = WalkView.fromJson(
+        _walkJson('accepted', role: 'companion', code: '0427'),
+      );
+    await _open(tester, api);
+    await tester.tap(find.byKey(const ValueKey('walk-companion-role')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('walk-accept-w1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('face-scan-start')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('did not match'), findsOneWidget);
+    expect(find.text('Walking with Priya'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('face-scan-start')));
+    await tester.pumpAndSettle();
+    expect(find.text('Walking with Priya'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

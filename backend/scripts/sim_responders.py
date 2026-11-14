@@ -13,6 +13,10 @@ Needs the API + worker + Mailpit running (sign-up codes are read from Mailpit).
     options: --center 12.8907,77.5827  --speed 3 (x walking speed)  --api http://localhost:8000
 
 Ctrl+C takes everyone off duty. Accounts are reused between runs (backend/.sim/).
+
+Simulated people cannot hold up an ID card, so the script records a dev identity for them
+straight in the local database (verified_by='simulator'), and sends a placeholder image as the
+face scan when saying "I'm going" (accepted by FACE_CHECK_PROVIDER=mock only).
 """
 
 import argparse
@@ -27,6 +31,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -37,6 +42,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+# Placeholder "face scan" for simulated responders: a JPEG header only. The mock face check
+# accepts any real image type; it would (correctly) fail a real CompreFace match.
+FACE_SCAN = ("scan.jpg", bytes([0xFF, 0xD8, 0xFF, 0xE0]) + bytes(64), "image/jpeg")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # run from backend/ or anywhere
 
@@ -273,9 +282,41 @@ class Bot:
             },
         ).json()
         self.state["key_id"] = keys["key_id"]
+        self.ensure_verified(http)
         http.post(
             f"{self.api}/responders/apply", headers=self.headers(), json={"display_name": self.name}
         )
+
+    def ensure_verified(self, http: httpx.Client) -> None:
+        """Dev only: record a verified adult identity for this simulated person directly in the
+        local database (a real person verifies with ID + selfie in the app)."""
+        status = http.get(f"{self.api}/verification/me", headers=self.headers()).json()
+        if status["status"] == "verified":
+            return
+        import hashlib
+
+        from app.core.db import SessionLocal
+        from app.verification.models import IdentityRecord
+
+        account = uuid.UUID(self.state["account_id"])
+        digest = hashlib.sha256(f"sixthsense-simulator:{account}".encode()).digest()
+        now = datetime.now(UTC)
+        with SessionLocal() as db:
+            if db.get(IdentityRecord, account) is None:
+                db.add(
+                    IdentityRecord(
+                        account_id=account,
+                        id_type="simulator",
+                        id_hmac=digest,
+                        person_hmac=digest,
+                        hmac_key_version=0,
+                        is_adult=True,
+                        verified_by="simulator",
+                        verified_at=now,
+                        valid_until=now + timedelta(days=365),
+                    )
+                )
+                db.commit()
 
     def sign_in(self, http: httpx.Client) -> None:
         device = self.state["device_id"]
@@ -407,6 +448,7 @@ async def run_bot(bot: Bot, args) -> None:
                             resp = await http.post(
                                 f"{bot.api}/responders/offers/{offer['id']}/going",
                                 headers=bot.headers(),
+                                files={"selfie_image": FACE_SCAN},
                             )
                             if resp.status_code == 409:
                                 bot.status = "wanted to go · enough helpers already"
@@ -424,6 +466,7 @@ async def run_bot(bot: Bot, args) -> None:
                         await http.post(
                             f"{bot.api}/responders/offers/{offer['id']}/going",
                             headers=bot.headers(),
+                            files={"selfie_image": FACE_SCAN},
                         )
                     ).json()
                     bot.journey, bot.owner_keys = body["journey_id"], body["keys"]
@@ -522,23 +565,6 @@ async def show(bots: list[Bot], centre) -> None:
         await asyncio.sleep(5)
 
 
-def approve(bots: list[Bot]) -> None:
-    from sqlalchemy import update
-
-    from app.core.db import SessionLocal
-    from app.matching.models import ResponderProfile
-
-    with SessionLocal() as db:
-        db.execute(
-            update(ResponderProfile)
-            .where(
-                ResponderProfile.account_id.in_([uuid.UUID(b.state["account_id"]) for b in bots])
-            )
-            .values(status="approved")
-        )
-        db.commit()
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
@@ -571,6 +597,7 @@ def main() -> None:
             if bot.state:
                 try:
                     bot.sign_in(http)
+                    bot.ensure_verified(http)
                 except httpx.HTTPError:
                     bot.state = {}
             if not bot.state:
@@ -580,7 +607,6 @@ def main() -> None:
             bots.append(bot)
     STATE.parent.mkdir(exist_ok=True)
     STATE.write_text(json.dumps(saved, indent=1))
-    approve(bots)
     print(
         f"Scenario '{args.scenario}': " + ", ".join(f"{b.name} {b.plan[0]}" for b in bots),
         flush=True,

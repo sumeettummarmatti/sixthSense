@@ -69,6 +69,14 @@ services:
       timeout: 3s
       retries: 20
 
+  # Self-hosted face matching for the local verification demo. Open its UI at :8003,
+  # create a Face Verification service, then put that service's API key in .env.
+  compreface:
+    image: exadel/compreface:1.2.0
+    platform: linux/amd64
+    ports: ["127.0.0.1:8003:80"]
+    volumes: [compreface-data:/var/lib/postgresql/data]
+
 networks:
   core: {}
   insight: {}
@@ -77,3 +85,4 @@ volumes:
   core-db-data: {}
   insight-db-data: {}
   nats-data: {}
+  compreface-data: {}

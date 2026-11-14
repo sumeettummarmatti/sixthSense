@@ -104,23 +104,29 @@ class PartnerProfile {
 class CompanionMe {
   const CompanionMe({
     required this.status,
+    this.identityVerified = false,
     this.verifiedMethod,
     this.verifiedAt,
     this.available = false,
   });
 
-  /// none | pending | approved | revoked
+  /// none | approved (joined; no approval step) | revoked
   final String status;
 
-  /// 'mock' while verification is the demo stub.
+  /// Verified, adult, unexpired identity (ID + selfie).
+  final bool identityVerified;
+
+  /// 'identity' once joined after identity verification.
   final String? verifiedMethod;
   final DateTime? verifiedAt;
   final bool available;
 
-  bool get approved => status == 'approved';
+  /// Joined and can be found by travellers (needs a verified identity).
+  bool get approved => status == 'approved' && identityVerified;
 
   factory CompanionMe.fromJson(Map<String, dynamic> json) => CompanionMe(
     status: json['status'] as String? ?? 'none',
+    identityVerified: json['identity_verified'] as bool? ?? false,
     verifiedMethod: json['verified_method'] as String?,
     verifiedAt: DateTime.tryParse(json['verified_at'] as String? ?? '')
         ?.toLocal(),
