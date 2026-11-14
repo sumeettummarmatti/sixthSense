@@ -17,6 +17,8 @@ tags:
   - {name: journey, description: "Plan, start, heartbeat, check-in, PIN, SOS, arrive (P2)"}
   - {name: escalation, description: "Acknowledge, status for contacts (P2)"}
   - {name: walk, description: "Request, accept, confirm, handshake, end, complain (P3)"}
+  - {name: profile, description: "My profile for Walk With Me (P1)"}
+  - {name: feedback, description: "How was it? stored raw, exported by script (P2)"}
   - {name: responder, description: "On/off duty, presence (P3)"}
   - {name: reports, description: "Anonymous submit, published clusters (P4, Insight)"}
   - {name: routing, description: "Route with caution level (P4)"}
@@ -1122,6 +1124,218 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/RouteArea"}
+  /profile:
+    get:
+      tags: [profile]
+      summary: My profile (404 no_profile right after the first sign-in)
+      security: [{bearer: []}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/Profile"}}}}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "404": {description: no_profile}
+    put:
+      tags: [profile]
+      summary: Create or edit my profile
+      description: >
+        Shown to someone else only inside a consented Walk With Me match (rule 4). Gender is
+        optional and used only for the traveller's "women companions only" filter; it is never
+        shown to anyone.
+      security: [{bearer: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/Profile"}}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/Profile"}}}}
+        "401": {$ref: "#/components/responses/NotAuthenticated"}
+        "422": {description: Invalid field}
+  /walks/companion/verify:
+    post:
+      tags: [walk]
+      summary: DEMO companion verification (stub, always passes)
+      description: >
+        Records verified_method "mock" and the date. No image or ID is sent or stored. Needs a
+        profile with willing_companion. Approval is by hand (backend/scripts/companions.py)
+        unless COMPANION_AUTO_APPROVE is on (dev only).
+      security: [{bearer: []}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/CompanionMe"}}}}
+        "403": {description: companion_revoked}
+        "409": {description: profile_not_willing}
+  /walks/companion/me:
+    get:
+      tags: [walk]
+      summary: My companion status
+      security: [{bearer: []}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/CompanionMe"}}}}
+  /walks/companion/presence:
+    put:
+      tags: [walk]
+      summary: I'm available (approved companions; refresh every minute, rough area only)
+      security: [{bearer: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/WalkArea"}}}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available, expires_in_seconds]
+                properties: {available: {type: boolean}, expires_in_seconds: {type: integer}}
+        "403": {description: not_an_approved_companion}
+        "409": {description: profile_not_willing}
+    delete:
+      tags: [walk]
+      summary: I'm not available
+      security: [{bearer: []}]
+      responses: {"204": {description: Done}}
+  /walks/search:
+    post:
+      tags: [walk]
+      summary: Available companions near me (traveller on an open journey)
+      description: Rough distances only (rounded to 100 m); coordinates in the body, never the URL.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journey_id, latitude, longitude]
+              properties:
+                journey_id: {type: string, format: uuid}
+                latitude: {type: number}
+                longitude: {type: number}
+                women_only: {type: boolean, default: false}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [companions]
+                properties:
+                  companions: {type: array, items: {$ref: "#/components/schemas/CompanionCard"}}
+        "404": {description: no_open_journey}
+  /walks:
+    post:
+      tags: [walk]
+      summary: Ask a companion to walk with me
+      description: The companion sees my first name and rough area; the request expires after 10 minutes.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journey_id, companion_id, latitude, longitude]
+              properties:
+                journey_id: {type: string, format: uuid}
+                companion_id: {type: string, format: uuid}
+                latitude: {type: number}
+                longitude: {type: number}
+      responses:
+        "201": {description: Requested, content: {application/json: {schema: {$ref: "#/components/schemas/WalkView"}}}}
+        "404": {description: no_open_journey}
+        "409": {description: "companion_unavailable, walk_already_open or no_profile"}
+        "422": {description: cannot_ask_yourself}
+  /walks/requests:
+    get:
+      tags: [walk]
+      summary: Requests waiting for me (companion)
+      security: [{bearer: []}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests: {type: array, items: {$ref: "#/components/schemas/WalkRequest"}}
+  /walks/current:
+    get:
+      tags: [walk]
+      summary: My open walk (requested or accepted), as traveller or companion
+      security: [{bearer: []}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WalkView"}}}}
+        "404": {description: no_walk}
+  /walks/{walk_id}:
+    get:
+      tags: [walk]
+      summary: One of my walks, also after it ended
+      security: [{bearer: []}]
+      parameters: [{name: walk_id, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WalkView"}}}}
+        "404": {description: walk_not_found}
+  /walks/{walk_id}/accept:
+    post:
+      tags: [walk]
+      summary: Companion accepts; both now see the handshake code and share live location (E2E)
+      security: [{bearer: []}]
+      parameters: [{name: walk_id, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WalkView"}}}}
+        "409": {description: "walk_expired, walk_declined, walk_cancelled or already_walking"}
+  /walks/{walk_id}/decline:
+    post:
+      tags: [walk]
+      summary: Companion declines
+      security: [{bearer: []}]
+      parameters: [{name: walk_id, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses: {"204": {description: Done}}
+  /walks/{walk_id}/cancel:
+    post:
+      tags: [walk]
+      summary: Traveller withdraws an unanswered request
+      security: [{bearer: []}]
+      parameters: [{name: walk_id, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses: {"204": {description: Done}}
+  /walks/{walk_id}/end:
+    post:
+      tags: [walk]
+      summary: Either side ends the walk; the traveller's journey keeps running
+      security: [{bearer: []}]
+      parameters: [{name: walk_id, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WalkView"}}}}
+        "409": {description: Walk not accepted}
+  /feedback:
+    post:
+      tags: [feedback]
+      summary: How was it? (journey owner only, once per journey and once per walk)
+      description: Stored raw. No location, no names; nothing is scored yet. Exported by backend/scripts/feedback.py.
+      security: [{bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journey_id, route_stars]
+              properties:
+                journey_id: {type: string, format: uuid}
+                walk_id: {type: string, format: uuid, nullable: true, description: An ended walk on this journey}
+                route_stars: {type: integer, minimum: 1, maximum: 5}
+                companion_stars: {type: integer, minimum: 1, maximum: 5, nullable: true, description: Only with walk_id}
+                chips:
+                  type: array
+                  items: {type: string, enum: [well_lit, felt_uneasy, companion_was_late, route_confusing, would_walk_again, busy_street, poor_footpath]}
+                note: {type: string, maxLength: 500}
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema: {type: object, required: [id], properties: {id: {type: string, format: uuid}}}
+        "404": {description: "journey_not_found or walk_not_found"}
+        "409": {description: feedback_already_given}
+        "422": {description: Invalid field}
+
 components:
   securitySchemes:
     bearer:
@@ -1574,3 +1788,73 @@ components:
       required: [keys]
       properties:
         keys: {type: array, items: {$ref: "#/components/schemas/SigningKey"}}
+    Profile:
+      type: object
+      required: [first_name]
+      properties:
+        first_name: {type: string, minLength: 1, maxLength: 40}
+        bio: {type: string, maxLength: 200}
+        strengths:
+          type: array
+          items: {type: string, enum: [knows_the_area, first_aid_trained, walks_this_route_daily, speaks_kannada, speaks_hindi, self_defence_trained, calm_in_a_crisis, campus_volunteer]}
+        languages: {type: array, items: {type: string, maxLength: 30}, maxItems: 8}
+        gender: {type: string, enum: [woman, man, non_binary], nullable: true}
+        willing_companion: {type: boolean}
+    PartnerProfile:
+      type: object
+      description: What a walk partner sees. No gender, no account details.
+      required: [first_name, bio, strengths, languages]
+      properties:
+        first_name: {type: string}
+        bio: {type: string}
+        strengths: {type: array, items: {type: string}}
+        languages: {type: array, items: {type: string}}
+    CompanionMe:
+      type: object
+      required: [status, available]
+      properties:
+        status: {type: string, enum: [none, pending, approved, revoked]}
+        verified_method: {type: string, nullable: true, description: '"mock" = demo verification (stub)'}
+        verified_at: {type: string, format: date-time, nullable: true}
+        available: {type: boolean}
+    WalkArea:
+      type: object
+      required: [latitude, longitude]
+      description: A rough area, rounded to ~110 m on the server
+      properties:
+        latitude: {type: number}
+        longitude: {type: number}
+    CompanionCard:
+      type: object
+      required: [companion_id, profile, rating_count, distance_m, walk_minutes]
+      properties:
+        companion_id: {type: string, format: uuid}
+        profile: {$ref: "#/components/schemas/PartnerProfile"}
+        rating: {type: number, nullable: true, description: Average companion stars from past walks}
+        rating_count: {type: integer}
+        distance_m: {type: integer, description: Rounded to 100 m}
+        walk_minutes: {type: integer}
+    WalkRequest:
+      type: object
+      required: [id, traveller_first_name, expires_at]
+      properties:
+        id: {type: string, format: uuid}
+        traveller_first_name: {type: string}
+        rough_area: {$ref: "#/components/schemas/WalkArea"}
+        distance_m: {type: integer, nullable: true}
+        expires_at: {type: string, format: date-time}
+    WalkView:
+      type: object
+      required: [id, role, status, partner_keys, expires_at]
+      properties:
+        id: {type: string, format: uuid, description: Also the live-location session id while accepted}
+        role: {type: string, enum: [traveller, companion]}
+        status: {type: string, enum: [requested, accepted, declined, expired, cancelled, ended]}
+        journey_id: {type: string, format: uuid, nullable: true, description: Traveller only}
+        partner: {$ref: "#/components/schemas/PartnerProfile"}
+        handshake_code: {type: string, nullable: true, description: Same 4 digits on both phones}
+        meet_near: {$ref: "#/components/schemas/WalkArea"}
+        partner_keys: {type: array, items: {$ref: "#/components/schemas/HelperKey"}}
+        expires_at: {type: string, format: date-time}
+        ended_at: {type: string, format: date-time, nullable: true}
+        end_reason: {type: string, nullable: true, enum: [traveller, companion, journey_over, null]}

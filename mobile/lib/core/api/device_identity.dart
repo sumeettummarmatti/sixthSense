@@ -5,6 +5,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'walk_models.dart';
+
+export 'walk_models.dart';
+
 /// Android Keystore backed identity and session operations for the demo API.
 class DeviceIdentity {
   const DeviceIdentity();
@@ -467,6 +471,116 @@ class DemoApi {
 
   Future<void> declineEscortRequest(String requestId) =>
       _request('POST', '/escorts/requests/$requestId/decline');
+
+  // ---- Profile (P1-W3) ----
+
+  /// My profile, or null right after the first sign-in (404 no_profile).
+  Future<Profile?> profile() async {
+    try {
+      return Profile.fromJson(await _request('GET', '/profile'));
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<Profile> saveProfile(Profile profile) async => Profile.fromJson(
+    await _request('PUT', '/profile', body: profile.toJson()),
+  );
+
+  // ---- Walk With Me (P3-W3) ----
+
+  Future<CompanionMe> companionMe() async =>
+      CompanionMe.fromJson(await _request('GET', '/walks/companion/me'));
+
+  /// DEMO verification (stub): the server records verified_method 'mock'.
+  Future<CompanionMe> verifyAsCompanion() async =>
+      CompanionMe.fromJson(await _request('POST', '/walks/companion/verify'));
+
+  Future<void> sendCompanionPresence(double lat, double lng) => _request(
+    'PUT',
+    '/walks/companion/presence',
+    body: {'latitude': lat, 'longitude': lng},
+  );
+
+  Future<void> goUnavailable() =>
+      _request('DELETE', '/walks/companion/presence');
+
+  Future<List<CompanionCard>> searchCompanions({
+    required String journeyId,
+    required double lat,
+    required double lng,
+    bool womenOnly = false,
+  }) async {
+    final result = await _request(
+      'POST',
+      '/walks/search',
+      body: {
+        'journey_id': journeyId,
+        'latitude': lat,
+        'longitude': lng,
+        'women_only': womenOnly,
+      },
+    );
+    return (result['companions'] as List<dynamic>? ?? const [])
+        .map((item) => CompanionCard.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<WalkView> askCompanion({
+    required String journeyId,
+    required String companionId,
+    required double lat,
+    required double lng,
+  }) async => WalkView.fromJson(
+    await _request(
+      'POST',
+      '/walks',
+      body: {
+        'journey_id': journeyId,
+        'companion_id': companionId,
+        'latitude': lat,
+        'longitude': lng,
+      },
+    ),
+  );
+
+  Future<List<WalkRequestView>> walkRequests() async {
+    final result = await _request('GET', '/walks/requests');
+    return (result['requests'] as List<dynamic>? ?? const [])
+        .map((item) => WalkRequestView.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// My open walk (requested or accepted), or null.
+  Future<WalkView?> currentWalk() async {
+    try {
+      return WalkView.fromJson(await _request('GET', '/walks/current'));
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<WalkView> walk(String walkId) async =>
+      WalkView.fromJson(await _request('GET', '/walks/$walkId'));
+
+  Future<WalkView> acceptWalk(String walkId) async =>
+      WalkView.fromJson(await _request('POST', '/walks/$walkId/accept'));
+
+  Future<void> declineWalk(String walkId) =>
+      _request('POST', '/walks/$walkId/decline');
+
+  Future<void> cancelWalk(String walkId) =>
+      _request('POST', '/walks/$walkId/cancel');
+
+  Future<WalkView> endWalk(String walkId) async =>
+      WalkView.fromJson(await _request('POST', '/walks/$walkId/end'));
+
+  // ---- How was it? (P1-W3) ----
+
+  Future<void> sendFeedback(FeedbackDraft draft) =>
+      _request('POST', '/feedback', body: draft.toJson());
 
   Future<void> _saveSession(Map<String, dynamic> json) async {
     await identity.saveSession(

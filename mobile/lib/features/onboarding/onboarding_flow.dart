@@ -5,6 +5,7 @@ import '../contacts/contact_alerts.dart';
 import '../../core/contacts/contact_book.dart';
 import '../../core/location/live_location.dart';
 import '../home/home_shell.dart';
+import '../profile/profile_form.dart';
 
 /// Demo onboarding connected to email OTP, Android device-key auth, contacts,
 /// and Telegram linking.
@@ -90,6 +91,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       } catch (_) {
         // Not available in widget tests; the label falls back to a default.
       }
+      await _askForProfileOnce();
       if (mounted) setState(() => _step = OnboardingStep.contacts);
     } on ApiException catch (error) {
       _showApiError(error);
@@ -98,6 +100,21 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// After the first sign-in: first name, bio, strengths, languages (P1-W3).
+  /// Skippable; it can be filled in later from the Profile tab.
+  Future<void> _askForProfileOnce() async {
+    Profile? existing;
+    try {
+      existing = await widget.api.profile();
+    } catch (_) {
+      return; // offline or not reachable: the Profile tab can do it later
+    }
+    if (existing != null || !mounted) return;
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => ProfileSetupScreen(api: widget.api)),
+    );
   }
 
   Future<void> _addContact() async {

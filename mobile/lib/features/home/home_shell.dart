@@ -8,10 +8,11 @@ import '../../core/sos/live_audio.dart';
 import '../contacts/contact_alerts_screen.dart';
 import '../contacts/my_people_screen.dart';
 import '../journey/journey_flow.dart';
+import '../profile/profile_screen.dart';
 import '../respond/respond_screen.dart';
 
-/// Signed-in home: my journey, my people, the people I support, and nearby
-/// requests if I'm a verified responder.
+/// Signed-in home: my journey, my people, the people I support, nearby
+/// requests if I'm a verified responder, and my profile.
 class HomeShell extends StatefulWidget {
   const HomeShell({
     super.key,
@@ -122,6 +123,7 @@ class _HomeShellState extends State<HomeShell> {
           MyPeopleScreen(api: widget.api),
           ContactAlertsScreen(api: widget.api, relay: _relay),
           RespondScreen(api: widget.api, relay: _relay),
+          ProfileScreen(api: widget.api),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -167,6 +169,11 @@ class _HomeShellState extends State<HomeShell> {
               child: const Icon(Icons.health_and_safety_rounded),
             ),
             label: 'Respond',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profile',
           ),
         ],
       ),
