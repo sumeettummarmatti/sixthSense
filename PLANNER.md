@@ -35,6 +35,12 @@ Everything below is the long-term plan. **Right now we only need a working demo 
 | sumeet | `P1-W1-demo-map-picker` | Uber-style destination: search suggestions or long-press pin, distance + walk time, suggested check-in |
 | sumeet | `P1-W1-demo-background-location` | Live location keeps going with the screen off (foreground service notice) |
 | sumeet | `P3-W1-nearby-responders` | Who is coming (contacts + responders, distance, two-way E2E location); verified responders on duty, SOS asks those within 500 m → 1 km → 2 km |
+| P3 (working branch) | `P3-W2-verification-core` | Verification schema, keyed identity outcomes, single eligibility check, and prove unverified travellers keep safety access |
+| P3 (working branch) | `P3-W2-verification-gates` | Gate responder presence, offers, acceptance, and relay; revocation removes active responder access |
+| P3 (working branch) | `P3-W2-verification-app` | Consent-first simulated verification flow for responder/companion roles; ordinary protection stays ungated |
+| P3 (working branch) | `P3-W2-verification-admin` | Pilot CLI for in-person verification, approval, and revocation |
+| P3 (working branch) | `P3-W3-device-recovery` | Revoke old device keys and apply a cooldown after account recovery/key rotation |
+| P3 (working branch) | `P3-W3-companion-grant` | Companion role grant and eligibility gate when Walk With Me matching exists |
 
 ---
 

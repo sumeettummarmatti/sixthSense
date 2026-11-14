@@ -3,6 +3,123 @@
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
 > **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
+## 2026-11-14 — Tan: fix CompreFace multipart image filenames
+
+- Tan: CompreFace logs showed HTTP 400 because multipart filenames `id-image` and `selfie` had no file extensions. The backend now derives `.jpg`, `.png`, or `.webp` filenames from each image MIME type.
+- Tan: Restarted the API on port 8002 to load the fix. Face matcher tests: 4 passed; Ruff clean. The user retried the real-image comparison successfully after the fix.
+
+## 2026-11-14 — Tan: verify OCR flow on emulator
+
+- Tan: Reproduced the premature "Waiting for review" screen. The API on port 8002 had been running stale code; restarting it loaded the existing not-submitted draft behavior. Reopening verification showed "Not submitted" and the ID type step before any photo upload.
+- Tan: Tested the supplied passport image on the Android emulator. On-device OCR filled only the passport number and date of birth as editable suggestions. The request log showed no upload to the face matcher. Removed the temporary gallery copy after the app loaded it; the form remains open for continuing the test.
+
+## 2026-11-14 — Tan: reset expired verification test draft
+
+- Tan: Marked the active emulator account’s expired, unsubmitted verification draft as expired so a fresh attempt can start. Kept the account, device, identity data, and audit history intact.
+
+## 2026-11-14 — Tan: review OCR suggestions before face comparison
+
+- Tan: OCR-filled ID number and date of birth are visibly marked as suggestions with "Read from photo. Tap to edit." Both fields remain editable, and manual edits clear their suggestion markers.
+- Tan: Added a review screen showing the selected ID type, both details, and both photos. Face comparison cannot start until the user checks the confirmation box.
+- Tan: Targeted OCR and verification Flutter tests: 23 passed. `flutter analyze`: clean. Debug APK build succeeded. Real-device verification remains for manual testing.
+
+## 2026-11-14 — Tan: add on-device ID field autofill
+
+- Tan: Added standalone Google ML Kit Text Recognition for the Android ID-photo flow. OCR runs on-device; temporary OCR copies are deleted after processing. No Firebase or OCR service is used.
+- Tan: OCR parsing returns only the ID number matching the separately selected ID type and a date of birth next to a DOB label. It does not retain or display other recognized text. Empty fields are autofilled; existing manual entries are preserved.
+- Tan: Added a local OCR status/fallback message and parser/widget coverage. Targeted OCR and verification Flutter tests: 22 passed. `flutter analyze`: clean. Debug APK build succeeded. Real ID-card recognition on a phone remains for manual verification.
+
+## 2026-11-14 — Tan: guide face-photo corrections and retry mismatches
+
+- Tan: The matcher now distinguishes invalid face input from matcher outages. Missing or ambiguous face results return `face_image_invalid`; the app asks for a clearer photo and returns to selfie capture without losing the ID details. Users can go back and replace the ID portrait.
+- Tan: A below-threshold face mismatch now offers a fresh selfie attempt in a new session while retaining the ID details and portrait; only the selfie must be retaken.
+- Tan: Backend verification/face-matcher tests: 11 passed. Flutter verification widget tests: 17 passed. Flutter analysis and backend Ruff checks: clean.
+
+## 2026-11-14 — Tan: validate verification images before upload
+
+- Tan: Picker MIME types are normalized to JPEG, PNG, or WebP using the declared type and file extension; unsupported formats receive a clear prompt.
+- Tan: ID and selfie images above the backend’s 5 MB upload limit are rejected locally with a size hint, before the request is sent.
+- Tan: Flutter verification widget tests: 15 passed. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: improve selfie capture and temporary image cleanup
+
+- Tan: The selfie picker now requests the front-facing camera. Captured and selected picker files are read into memory and their temporary source files are deleted on a best-effort basis; the verification flow continues if cleanup itself fails.
+- Tan: Flutter verification widget tests: 13 passed, including the selfie camera-source check. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: retry face comparison without losing the draft
+
+- Tan: Retryable matcher and network failures now preserve the current session, ID details, and selected images, with a **Retry face comparison** action. Starting a new attempt remains available separately.
+- Tan: Before retrying, the app fetches the session status. It displays any result already recorded by the server instead of uploading again after a lost response.
+- Tan: Flutter verification widget tests: 12 passed, including same-session retry and lost-response recovery. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: report expired verification attempts clearly
+
+- Tan: Backend status reads now report an elapsed draft as `expired` with `session_expired`, instead of leaving it displayed as “Not submitted.” Both `/verification/me` and the session endpoint use the expiry-aware status.
+- Tan: If an upload races with session expiry, the app shows the dedicated expiry result and **Start a new attempt** action instead of a generic error screen.
+- Tan: Backend verification tests: 6 passed. Flutter verification widget tests: 10 passed. `flutter analyze` and backend Ruff checks: clean.
+
+## 2026-11-14 — Tan: gate verification steps on required inputs
+
+- Tan: The document step now requires a non-empty ID number, a valid non-future `YYYY-MM-DD` birth date, and an uploaded ID photo before continuing to selfie capture.
+- Tan: Face comparison stays disabled until the required ID details and ID photo are present and a selfie has been captured; both steps show the remaining requirements.
+- Tan: Flutter verification widget tests: 8 passed. `flutter analyze`: clean.
+
+## 2026-11-14 — Tan: verification stages and submission status
+
+- Tan: Split the verification journey into visible email sign-in, face match, and responder approval stages. The Respond screen now tells applicants whether face matching is still needed or campus approval is pending.
+- Tan: New sessions are shown as “Not submitted” until the ID details and both images are submitted; restoring an unfinished session no longer falsely displays “Waiting for review.”
+- Tan: Backend verification tests: 5 passed. Flutter verification widget tests: 6 passed. `flutter analyze`: clean. The widget tests use a tall viewport to exercise the multi-step flow without clipping the controls.
+
+## 2026-11-14 — Tan: self-hosted face-match verification
+
+- Tan: Replaced the simulated selfie submit with ID-photo upload plus camera selfie capture. The app uploads both images and the entered ID details in one authenticated multipart request; it clearly says document authenticity and liveness are not checked in this demo.
+- Tan: Added the CompreFace adapter and local Docker service. Verification requires exactly one face in each image and a similarity score at or above configurable `COMPREFACE_MATCH_THRESHOLD` (default `0.8`); missing service credentials, provider errors, ambiguous results, and mismatches fail closed. Image bytes are transient and are not stored in SixthSense database rows; raw ID number/DOB remain unpersisted.
+- Tan: Added upload size/type checks, no-PII adapter error handling, a local setup/test walkthrough, and adapter/API regression tests. `pytest tests/test_verification.py tests/test_face_match.py -q`: 8 passed; `ruff check` passed; Flutter verification widget tests passed (4); `flutter analyze` clean; Compose configuration validates.
+- Tan: Started CompreFace locally at `http://localhost:8003` (UI returns HTTP 200), bound only to localhost; this Apple Silicon Mac runs its amd64 image under emulation. Create a **Face Verification** service in the UI and add its API key to `.env`; live image matching through the backend/emulator is pending that key.
+
+## 2026-11-14 — Tan: restarted demo API for face-match testing
+
+- Tan: Restarted the SixthSense API on port 8002 so it reloads the configured CompreFace settings. Left the database and user/device records untouched. `/healthz` returns HTTP 200; CompreFace UI returns HTTP 200; a dummy invalid-image request returned HTTP 400 rather than 401/403, confirming the service key is accepted. No real face comparison has been run yet.
+
+## 2026-11-14 — Tan: launched Android emulator for face-match test
+
+- Tan: Started `Medium_Phone_API_37.0` directly after Flutter's emulator launcher left ADB offline, waited for it to boot, then rebuilt and launched the latest debug app with `API_BASE_URL=http://10.0.2.2:8002`. The app is open and ready for manual face-match testing; no real image comparison has been submitted.
+
+## 2026-11-14 — Tan: reset emulator device key after sign-in conflict
+
+- Tan: The emulator returned HTTP 409 `device_key_in_use` during email sign-in, before verification. Uninstalled only the emulator app to regenerate its Android Keystore key, then rebuilt and relaunched the debug app against `10.0.2.2:8002`. Server accounts, devices, and database were not modified. Sign in again with a fresh OTP before testing face matching.
+
+## 2026-11-14 — Tan: responder verification app flow
+
+- Tan: Built the Respond → Apply flow: consent, ID type, fake ID number/date of birth, and simulated selfie/liveness step. No image is taken or sent; a permanent SIMULATED banner appears throughout.
+- Tan: Added debug-only scenario selection, pending-session restore/status refresh on app resume, and verified/rejected/underage/duplicate/expired/error result states. Underage results explicitly say journey, check-in, and SOS protection remain available.
+- Tan: Existing pending responder applications now show a Verify identity action; newly verified applicants then submit the responder application and wait for campus approval.
+- Tan: `flutter analyze` is clean; the complete Flutter suite passes (27 tests), including consent, underage result, banner/scenario picker, and pending responder continuation tests.
+- Tan: Rebuilt and hot-reloaded the emulator against the current API on `10.0.2.2:8002`; enabled mock scenarios on this local server only. Use **Respond → Become a responder** to test, then choose a scenario in the debug picker. Mailpit remains at `10.0.2.2:8025`.
+
+## 2026-11-14 — Tan: responder gates and simulated verification
+
+- Tan: Applied `eligible()` to responder presence, nearby dispatch, offer listing/going/arrival, and relay routing in both directions. Contacts and traveller SOS/check-ins remain available without verification.
+- Tan: Added responder revocation cleanup: immediately clear Redis presence, decline open offers, remove helper rows from open alerts, and record an audit event alongside the SQL state updates.
+- Tan: Added the consented mock verification API used by `scripts/sim_responders.py`; simulated responders now submit a fake ID via the server-side `approve` scenario before they can be approved/on duty.
+- Tan: Updated regression coverage for mock scenario gating, verification outcome persistence, ineligible responders, relay allowlists, and revocation during an active alert.
+- Tan: `ruff check` passes; 42 targeted verification, responder, and identity tests pass. Existing Starlette/httpx deprecation warning remains.
+- Tan: The mock stores an HMAC of the normalized fake document identifier for both duplicate fields; DOB-only person hashes were avoided because they would wrongly conflate people who share a birthday. Cross-ID person matching requires a stable provider-issued person reference.
+- Tan: Fixed migration `0008` to allow the `underage` session outcome. Applied migrations `0006` and `0008` to the local core DB; its Alembic head is `0008` (this branch still has no `0007`). Restarted the SixthSense API on port 8000; `/healthz` returns `{"status":"ok","service":"core"}`, and `/verification/me` is mounted and correctly returns 401 without a token.
+- Tan: The current server interface is `10.41.90.155`; the previously shared `.64` address is not this Mac. Simulator can be tested with `cd backend && uv run python scripts/sim_responders.py --api http://10.41.90.155:8000` (Mailpit at `http://localhost:8025`).
+- Tan: Diagnosed the simulator's approval failure: local `.env` had `CORE_DATABASE_URL` on port 5432, while Docker maps the core DB to 5434. Corrected only the local port. Reran the simulator successfully: all five accounts verified through the mock, were approved, and reached “on duty · waiting”; stopped cleanly with Ctrl+C so they are now off duty.
+- Tan: Traced the emulator's “check that the server is running on this network” error: `10.0.2.2:8000` reached an unrelated local app and returned 404, while SixthSense was reachable on other interfaces. Left that app untouched; relaunched the current debug build against SixthSense at `10.0.2.2:8001`. Confirmed the app's device challenge returns HTTP 200 and the emulator can load Mailpit at `10.0.2.2:8025`.
+- Tan: Resolved the next 409 (`device_key_in_use`): the emulator's Android Keystore sign-in key was already bound to another account. Uninstalled only the emulator debug app to reset its local key, then reinstalled/relaunched it against port 8001. The app and backend are ready for a fresh email sign-in; server-side accounts/devices were left untouched.
+- Tan: `0008_identity_verification.py` still follows `0006`; reparent after the separate sudden-SOS migration is integrated.
+
+## 2026-11-13 — Tan: P3 identity verification core started
+
+- Tan: Created `p3/identity-verification` from `p3/nearby-responders`; sudden-SOS remains separate for later integration.
+- Tan: Added verification session and identity outcome models, migration `0008`, responder/companion role-scoped profiles, device key rotation timestamp, verification settings in `.env.example`, and the shared `eligible()` check.
+- Tan: Added the first safety regression test: an unverified traveller can check in, send visible and covert SOS, and alert trusted contacts.
+- Tan: `ruff check` passes; 38 verification, responder, and identity tests passed at that point. Provider/service/router remain next.
+- Tan: Migration `0008` currently follows `0006`; its parent must be reconciled after the sudden-SOS branch's `0007` migration is integrated.
+
 ## 2026-11-13 — sumeet: test session with shruj, simulated responders, stability fixes
 
 - Tested with shruj: map picker and SOS with responders passed; Shruj walking to me partly done.

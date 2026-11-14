@@ -8,6 +8,7 @@ import '../../core/location/geo.dart';
 import '../../core/location/live_location.dart';
 import '../contacts/live_location_panel.dart';
 import '../map/live_map.dart';
+import '../verification/verification_flow.dart';
 
 /// Verified responders (F6): go on duty, get asked when someone nearby
 /// presses SOS, and say "I'm going". Until then only a rough area (~110 m)
@@ -30,6 +31,7 @@ class RespondScreen extends StatefulWidget {
 
 class _RespondScreenState extends State<RespondScreen> {
   ResponderMe? _me;
+  String? _verificationStatus;
   List<ResponderOffer> _offers = const [];
   String? _error;
   bool _busy = false;
@@ -56,10 +58,12 @@ class _RespondScreenState extends State<RespondScreen> {
   Future<void> _load() async {
     try {
       final me = await widget.api.responderMe();
+      final verification = await widget.api.verificationMe();
       final wasOnDuty = await widget.api.identity.readValue('on_duty') == '1';
       if (!mounted) return;
       setState(() {
         _me = me;
+        _verificationStatus = verification['status'] as String?;
         _error = null;
       });
       if (me.approved && wasOnDuty && !_onDuty) await _setOnDuty(true);
@@ -75,15 +79,35 @@ class _RespondScreenState extends State<RespondScreen> {
       builder: (_) => const _ApplyDialog(),
     );
     if (name == null || !mounted) return;
+    final verified = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => VerificationFlowScreen(api: widget.api),
+      ),
+    );
+    if (verified != true || !mounted) return;
     setState(() => _busy = true);
     try {
       final me = await widget.api.applyAsResponder(name);
-      if (mounted) setState(() => _me = me);
+      if (mounted) {
+        setState(() {
+          _me = me;
+          _verificationStatus = 'verified';
+        });
+      }
     } catch (_) {
       _show('Could not send your application.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _verifyExistingApplication() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => VerificationFlowScreen(api: widget.api),
+      ),
+    );
+    if (mounted) await _load();
   }
 
   Future<bool> _locationAllowed() async {
@@ -231,7 +255,14 @@ class _RespondScreenState extends State<RespondScreen> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (me != null && !me.approved)
-              _NotYet(me: me, busy: _busy, onApply: _apply, onRefresh: _load)
+              _NotYet(
+                me: me,
+                busy: _busy,
+                verificationStatus: _verificationStatus,
+                onApply: _apply,
+                onVerify: _verifyExistingApplication,
+                onRefresh: _load,
+              )
             else if (me != null) ...[
               _DutyCard(
                 name: me.displayName ?? 'You',
@@ -271,13 +302,17 @@ class _NotYet extends StatelessWidget {
   const _NotYet({
     required this.me,
     required this.busy,
+    required this.verificationStatus,
     required this.onApply,
+    required this.onVerify,
     required this.onRefresh,
   });
 
   final ResponderMe me;
   final bool busy;
+  final String? verificationStatus;
   final VoidCallback onApply;
+  final VoidCallback onVerify;
   final VoidCallback onRefresh;
 
   @override
@@ -285,6 +320,8 @@ class _NotYet extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final pending = me.status == 'pending';
+    final needsVerification = verificationStatus != 'verified';
+    final waitingForResponderApproval = pending && !needsVerification;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -298,6 +335,19 @@ class _NotYet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (pending)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                needsVerification
+                    ? 'STAGE 2 OF 3 · FACE MATCH'
+                    : 'STAGE 3 OF 3 · RESPONDER APPROVAL',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colors.onPrimary.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           Icon(
             Icons.volunteer_activism_rounded,
             color: colors.onPrimary,
@@ -305,8 +355,10 @@ class _NotYet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            pending
-                ? 'Thanks, ${me.displayName}. Waiting for approval.'
+            pending && needsVerification
+                ? 'Face match needed before approval.'
+                : waitingForResponderApproval
+                ? 'Responder approval pending'
                 : me.status == 'revoked'
                 ? 'Your responder access was removed.'
                 : 'Help people near you',
@@ -316,8 +368,10 @@ class _NotYet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            pending
-                ? 'The campus team checks responders in person before they can be asked to help. Pull down to refresh.'
+            pending && needsVerification
+                ? 'Your email sign-in is complete. Upload the ID portrait and take a selfie to submit the face match.'
+                : waitingForResponderApproval
+                ? 'Face match passed. Campus staff review responder applications in person before responders can be asked to help. Pull down to refresh.'
                 : 'When someone within a few minutes\' walk presses SOS, verified responders on duty are asked to go. You only see a rough area until you say "I\'m going".',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colors.onPrimary.withValues(alpha: 0.92),
@@ -329,6 +383,12 @@ class _NotYet extends StatelessWidget {
               key: const ValueKey('become-responder'),
               onPressed: busy ? null : onApply,
               child: const Text('Become a responder'),
+            )
+          else if (pending && needsVerification)
+            FilledButton.tonal(
+              key: const ValueKey('continue-verification'),
+              onPressed: busy ? null : onVerify,
+              child: const Text('Start face match'),
             )
           else if (pending)
             FilledButton.tonal(

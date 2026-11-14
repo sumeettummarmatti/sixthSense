@@ -148,6 +148,24 @@ Open **one Terminal tab per app** (⌘ + T for a new tab). In each tab, `cd ~/De
 
 ---
 
+### Local responder face-match demo
+
+The responder mock compares the uploaded ID portrait and camera selfie with the self-hosted
+CompreFace service. It does not validate the document itself or perform liveness detection.
+Images are sent to the local matcher for comparison and are not written to SixthSense database
+records. The face similarity threshold is configurable (`COMPREFACE_MATCH_THRESHOLD`, default
+`0.8`).
+
+1. Start CompreFace with `docker compose -f infra/docker-compose.yml up -d compreface`.
+2. Open `http://localhost:8003`, create a CompreFace account and app, then create a **Face
+   Verification** service and copy its API key.
+3. Set `COMPREFACE_API_URL=http://localhost:8003` and `COMPREFACE_API_KEY=<service-key>` in the
+   root `.env`, then restart the backend.
+4. In the app, open **Respond → Become a responder**, consent, choose the ID type, enter the ID
+   details, upload its photo, and take a selfie. **Compare faces** approves only when CompreFace
+   returns a similarity at or above the configured threshold. The scenario selector is only for
+   debug rejection/error demos; an `approve` scenario still requires a passing face match.
+
 ## Check everything works
 
 Run this from the `sixthSense` folder before opening a pull request (there is no CI yet, so this is our safety net).

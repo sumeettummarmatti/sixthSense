@@ -1,7 +1,7 @@
 {
   "project": "sixthsense",
-  "updated_at": "2026-11-13T18:45:00+05:30",
-  "updated_by": "sumeet",
+  "updated_at": "2026-11-14T14:58:12+05:30",
+  "updated_by": "Tan",
   "current_phase": "DEMO-2day (working demo from branch demo; 12-week plan paused)",
   "platform": "android-first (iOS later: P1-LATER-ios-port)",
   "team": {
@@ -386,6 +386,48 @@
           "status": "in_progress",
           "week": 1,
           "notes": "sumeet: 2026-11-13 branch p3/nearby-responders. Backend: escalation_helpers, responder_profiles, responder_offers (migration 0006); on-duty rough area (~110 m) in Redis 5 min; traveller's rough area during full alert 10 min; worker asks nearest approved on-duty responders 500 m -> 1 km -> 2 km (1 step/min), max 5 asked, first 2 'I'm going' get E2E precise location; helpers share location back to traveller only. Approve: backend/scripts/responders.py. 198 backend + 21 app tests pass; live smoke test: offer 4 s after SOS. Not yet tested on multiple emulators. 2026-11-13 map upgrade: one LiveMap everywhere (tilted 3D buildings, markers glide between fixes, pulsing SOS ring, search-radius circle, labels with ETA, dashed helper lines), full-screen maps for traveller and helpers, counts \"searching 500 m · N on duty nearby · asked · coming\". Walking route from routing.openstreetmap.de on the helper phone only (sends two points; replace with own Valhalla before pilot). Open question: who can end a full alert when there are no contacts (only a contact can today). 2026-11-13 evening: tested with shruj (scenes 1-2 passed, 3 partly). Added scripts/sim_responders.py (5 simulated responders, real accounts + E2E, walk real streets; scenarios normal/slow/far/busy; --center). Verified live: 500 m -> 1 km -> 2 km growth, stop asking at 2 going. Fixed: map freeze (update pile-up), journey screen overflow, black maps after tab switch, emulator needed 4 CPU cores. Maps now flat 2D everywhere; card maps static."
+        },
+        {
+          "id": "P3-W2-verification-core",
+          "title": "Verification schema, eligibility, and preserve traveller safety access",
+          "status": "in_progress",
+          "week": 2,
+          "notes": "Tan: added verification_sessions and identity_records, migration 0008, responder/companion role-scoped profiles, device key_rotated_at, settings, eligible(), MockProvider, consent/document/selfie/status API, HMAC duplicate fields, and fake mock verification for simulated responders. Tests show travellers remain ungated and mock scenarios are server-flagged. 42 targeted verification/responder/identity tests pass. Remaining core work: complete state machine, Redis daily attempt limit, robust duplicate/person-reference handling, and callback later. Local DB advanced 0005 -> 0006 -> 0008; API is available on 8000 and 8001. Corrected local .env core DB port to 5434; simulated responders verified and reached on-duty, then were taken off duty cleanly. Emulator uses 10.0.2.2:8001 because another local app intercepts 8000; its device challenge and Mailpit access on 8025 respond. Reset the emulator app install to replace a sign-in key bound to another account; app is relaunched and ready for fresh OTP sign-in. No server device rows were changed. This branch has no migration 0007; reconcile heads when sudden-SOS integrates."
+        },
+        {
+          "id": "P3-W2-verification-gates",
+          "title": "Gate responder presence, offers, acceptance, and relay by eligibility",
+          "status": "done",
+          "week": 2,
+          "notes": "Tan: gated presence, dispatch, offer listing/going/arrival, and relay routes with eligible(). Revocation clears presence, declines open offers, removes open-alert helper rows, and audits. Updated scripts/sim_responders.py to verify each simulated responder through the consented MockProvider approve flow. 42 targeted verification/responder/identity tests pass. Migration ordering remains an integration follow-up."
+        },
+        {
+          "id": "P3-W2-verification-app",
+          "title": "Consent-first simulated verification flow for responder/companion roles",
+          "status": "done",
+          "week": 2,
+          "notes": "Tan: consent-first Respond -> Apply flow now uploads an ID photo and captures a selfie; authenticated multipart sends both with ID details to the backend. CompreFace is self-hosted via infra/docker-compose.yml. Face score >= COMPREFACE_MATCH_THRESHOLD (default 0.8) is required; ID authenticity and liveness remain unchecked. Raw photos are not persisted in SixthSense DB records. Debug scenario selector remains for rejection/error demos; 'approve' still requires a matching score. Backend tests: 8 passed; Flutter verification widget tests: 4 passed; flutter analyze and ruff clean; Compose config validates. CompreFace runs at localhost:8003 (HTTP 200); its API key is configured and accepted. Restarted SixthSense API on port 8002; /healthz returns HTTP 200; DB untouched. Started Medium_Phone_API_37.0 and launched latest debug app with API_BASE_URL=http://10.0.2.2:8002. After 409 device_key_in_use on email sign-in, uninstalled only the emulator app and relaunched to generate a fresh key; backend records unchanged. Actual matching of real images awaits signing in again and manual app test.\nTan: clarified the three visible stages (email sign-in, face match, responder approval) and made unsubmitted sessions report `not_submitted` until ID details and both images are sent. This prevents a new draft from appearing as under review. Backend verification tests: 5 passed; Flutter verification widget tests: 6 passed; flutter analyze clean.\nTan: gated progression on valid, non-future YYYY-MM-DD DOB, non-empty ID number, and an uploaded ID photo; disabled comparison until the selfie is captured. Added requirement hints and widget coverage. Flutter verification widget tests: 8 passed; flutter analyze clean.\nTan: verification status endpoints now report expired unsubmitted drafts as `expired` with `session_expired`; an upload that races with expiry opens the dedicated expiry result and new-attempt action. Backend verification tests: 6 passed; Flutter verification widget tests: 10 passed; flutter analyze and Ruff clean.\nTan: retryable matcher/network failures preserve the draft and show `Retry face comparison`; the app fetches session status before retrying so a result whose response was lost is not submitted twice. Flutter verification widget tests: 12 passed; flutter analyze clean.\nTan: the selfie picker requests the front-facing camera; selected/captured temporary picker files are deleted after loading into memory, best effort. Flutter verification widget tests: 13 passed; flutter analyze clean.\nTan: normalized supported photo MIME types from picker metadata/extensions, rejected unsupported formats with a JPG/PNG/WebP hint, and blocked images over the backend 5 MB limit before upload. Flutter verification widget tests: 15 passed; flutter analyze clean.\nTan: matcher reports `face_image_invalid` separately from service outages so users can replace unclear photos. Face mismatches can start a new session and retake only the selfie while retaining ID details/photo. Backend verification/face matcher tests: 11 passed; Flutter widget tests: 17 passed; Flutter analysis and Ruff clean.\nTan: added standalone on-device ML Kit OCR for the ID photo. The parser retains only an ID number pattern for the separately selected type and a DOB next to a DOB label; other OCR text is discarded. OCR temp copies are deleted, empty fields are autofilled, and manually entered values are preserved. Targeted OCR/verification tests: 22 passed; flutter analyze clean; debug APK built. Real-card recognition still needs manual phone testing.\nTan: OCR-filled ID number and DOB are marked as editable suggestions; manual edits clear suggestion state. Added a review page showing selected ID type, details, and both photos; face comparison requires explicit checkbox confirmation. Targeted OCR/verification tests: 23 passed; flutter analyze clean; debug APK build succeeded. Real-device verification remains for manual testing.\nTan: Marked the active emulator account’s expired, unsubmitted verification draft as expired to allow a fresh attempt; retained the account, device, identity data, and audit history.\nTan: Reproduced premature review state from the stale API on port 8002; restarted it and confirmed a fresh draft opens at ID type with `Not submitted` before photo upload. Emulator OCR test with supplied passport filled only ID number and DOB as editable suggestions. No image was sent to the face matcher; temporary gallery copy removed.\nTan: CompreFace logs identified HTTP 400 `FileExtensionException`: multipart filenames lacked extensions. Backend now sets `.jpg`, `.png`, or `.webp` from MIME type. Restarted API on port 8002; face matcher tests: 4 passed; Ruff clean. A real-image comparison after the fix remains to be rerun.\nTan: User confirmed the real-image face comparison completed successfully after restarting the fixed API."
+        },
+        {
+          "id": "P3-W2-verification-admin",
+          "title": "Pilot admin CLI for verification, approval, and revocation",
+          "status": "todo",
+          "week": 2,
+          "notes": "Tan: pending verification service and eligibility gates."
+        },
+        {
+          "id": "P3-W3-device-recovery",
+          "title": "Device recovery, old-key revocation, and rotation cooldown",
+          "status": "todo",
+          "week": 3,
+          "notes": "Tan: later work; new device sign-in and Telegram notice."
+        },
+        {
+          "id": "P3-W3-companion-grant",
+          "title": "Companion role grant and eligibility gate",
+          "status": "todo",
+          "week": 3,
+          "notes": "Tan: later work when Walk With Me matching exists."
         },
         {
           "id": "P3-W1-vendor-selection",
@@ -794,6 +836,12 @@
       "by": "sumeet",
       "decision": "Nearby alerts go only to approved, on-duty responders (not any app user); rough area until 'I'm going'; only SOS/full alerts, never a single missed check-in; contacts still alerted in parallel",
       "why": "Rules 1 and 4: a stalker must not be able to install the app and get pinged with women's live positions"
+    },
+    {
+      "date": "2026-11-13",
+      "decision": "Identity verification gates responder/companion roles only; travellers keep all protection access. Mock ID types are Driving Licence, Voter ID, and Passport; Aadhaar is excluded.",
+      "why": "Preserve the rule that protection never requires ID and follow the verification implementation plan",
+      "by": "Tan"
     }
   ],
   "blockers": [
@@ -836,6 +884,8 @@
     }
   ],
   "next_steps": [
+    "Tan: continue P3-W2-verification-core with illegal-transition checks, Redis daily attempt limits, robust duplicate/person-reference handling, and service/API tests; keep travellers ungated",
+    "Tan: rework the responder admin CLI to show verification status, verify in-person, enforce eligibility before approval, and revoke with transactional cleanup",
     "sumeet + shruj: resume the scene list from Scene 3 (Shruj walks to Sumeet), then Scenes 4-12; responders: cd backend && uv run python scripts/sim_responders.py --scenario <normal|slow|far|busy> --center 12.8870,77.5785",
     "sumeet: decide who can end a full alert without contacts (suggested: traveller's real PIN after a helper says arrived)",
     "sumeet: resume live sharing + journey after an app restart (today a crash stops sharing until a new journey)",
