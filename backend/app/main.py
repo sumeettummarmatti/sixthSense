@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
 
     for module in MODULES:
         app.include_router(module.router)
+    app.include_router(feedback.admin_router)
     return app
 
 

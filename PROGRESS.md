@@ -1,7 +1,17 @@
 # SixthSense — Progress Log
 
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
-> **Every entry heading names its author:** `## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
+> **Every entry heading names its author:** `## 2026-11-14 — sumeet: first test deployment on Vultr + release APK
+
+- sumeet: Vultr server `sixthsense-test` (Bangalore, voc-c-8c-16gb-150s, Ubuntu 24.04, $0.24/hr), Vultr firewall + ufw allow only 22/80/443, SSH key-only. Branch `integration/verify-walk` cloned with a read-only GitHub deploy key.
+- sumeet: Docker runs core-db, insight-db, redis, nats, mailpit, CompreFace, all bound to 127.0.0.1 (server-only override `infra/docker-compose.server.yml`, not in git). systemd runs `sixthsense-core`, `sixthsense-worker`, `sixthsense-insight`; Caddy serves HTTPS at `api.` / `insight.139-84-220-87.sslip.io`.
+- sumeet: `.env` secrets generated on the server (never left it); `ENV=staging`, `FACE_MATCHER=compreface` with a real verification key; `PUBLISH_MIN_REPORTS/DEVICES=1` for testing.
+- sumeet: Release APK built with `--dart-define=API_BASE_URL/INSIGHT_BASE_URL` pointing at the server. Checks: both `/healthz` OK over public HTTPS; an OTP request returned 202 and the email landed in Mailpit.
+- sumeet: Gmail SMTP (alertssixthsense@gmail.com, App password) and the existing @Sixtysensebot token are set on the server; test email sent. Don't run a laptop backend with the same bot token during the test (both poll getUpdates).
+- sumeet: New `P2-W3-feedback-admin-page` (branch `p2/admin-feedback-page`): `/admin/feedback` on the Core API shows every rating (route + companion stars, chips, note) with a summary and a **Download CSV** button, behind HTTP Basic login (`ADMIN_USERNAME`/`ADMIN_PASSWORD`, off without a password). Ids only, never names (rule 4); views, downloads and failed logins audited without usernames (rule 7). `scripts/feedback.py` now shares `app/feedback/export.py`. 5 new tests; backend 273 passed, ruff clean. Copied to the server (not committed yet).
+- **Next:** install the APK on team phones and run the two-phone test; commit + PR `p2/admin-feedback-page` (and the proguard fix) when sumeet says; destroy the server after 3 days.
+
+## <date> — sumeet: ...` (or `tanisha:`, `shruj:`, `jival:`).
 
 ## 2026-11-14 — jival: Walk With Me + responder verification on one branch; no approval; face scan before location
 
