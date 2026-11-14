@@ -686,7 +686,7 @@ class _ApplyDialogState extends State<_ApplyDialog> {
             ),
           ),
           const Text(
-            'The campus team checks you in person (no ID is stored in the app). '
+            'You verify your identity once with an ID photo and a selfie (the ID itself is never saved). '
             'People you help see this name and your live location only while you go to them.',
           ),
         ],
