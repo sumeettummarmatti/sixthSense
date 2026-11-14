@@ -23,6 +23,7 @@ import '../sos/sudden_sos_screen.dart';
 import 'destination_picker.dart';
 import 'journey_route_screen.dart';
 import 'safe_routes_panel.dart';
+import '../feedback/feedback_sheet.dart';
 import '../walk/walk_flow.dart';
 import '../map/map_route_screen.dart';
 
@@ -792,6 +793,9 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
             ),
           ),
         );
+      } else if (journeyId != null && mounted) {
+        // "How was it?" (skippable), stored raw by journey id.
+        await showFeedbackSheet(context, api: widget.api, journeyId: journeyId);
       }
     }
   }
@@ -885,6 +889,15 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
       onEnd: _endJourney,
       onSos: _requestSos,
       onRequestBatteryExemption: _requestBatteryExemption,
+      onWalkWithMe: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => WalkFlow(
+            api: widget.api,
+            relay: widget.relay,
+            journeyId: _serverJourneyId,
+          ),
+        ),
+      ),
       sharing: widget.relay?.sharing,
       helpersPanel: widget.relay == null || _serverJourneyId == null
           ? null
@@ -1339,6 +1352,7 @@ class ActiveJourneyScreen extends StatelessWidget {
     this.helpersPanel,
     this.compact,
     this.escortPanel,
+    this.onWalkWithMe,
   });
 
   /// Who is coming to help, while an alert is open.
@@ -1346,6 +1360,9 @@ class ActiveJourneyScreen extends StatelessWidget {
 
   /// Start or stop an Audio Escort.
   final Widget? escortPanel;
+
+  /// Opens Walk With Me for this journey.
+  final VoidCallback? onWalkWithMe;
 
   /// When an alert is open the timer shrinks to make room for helpers.
   final ValueListenable<HelpView>? compact;
@@ -1409,13 +1426,12 @@ class ActiveJourneyScreen extends StatelessWidget {
             ),
             icon: const Icon(Icons.map_outlined),
           ),
-          IconButton(
-            tooltip: 'Walk With Me',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute<void>(builder: (_) => const WalkFlow())),
-            icon: const Icon(Icons.directions_walk_rounded),
-          ),
+          if (onWalkWithMe != null)
+            IconButton(
+              tooltip: 'Walk With Me',
+              onPressed: onWalkWithMe,
+              icon: const Icon(Icons.directions_walk_rounded),
+            ),
           IconButton(
             tooltip: 'Battery settings',
             onPressed: onRequestBatteryExemption,

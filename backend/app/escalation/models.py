@@ -82,6 +82,9 @@ class EscalationRecipient(Base):
     cycle: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_channel: Mapped[str | None] = mapped_column(Text)
+    # contact = trusted contact; companion = Walk With Me partner during an SOS (may say
+    # "I'm on it", may not close the alarm).
+    kind: Mapped[str] = mapped_column(Text, server_default="contact")
 
 
 class EscalationHelper(Base):

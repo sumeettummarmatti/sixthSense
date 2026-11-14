@@ -17,6 +17,7 @@ from app.identity.models import Device, DeviceE2EKeys
 from app.identity.router import CurrentSession
 from app.journey.models import Journey
 from app.journey.state import ESCALATED_STATES, State
+from app.walks import service as walks
 
 ENVELOPE_FIELDS = frozenset(
     {
@@ -86,7 +87,14 @@ def route(db: Session, sender: CurrentSession, envelopes: object) -> Routed:
     journey_id = _validate(envelopes)
     envelopes = cast(list[dict], envelopes)
     journey = db.get(Journey, journey_id)
-    if journey is None or journey.state == State.RESOLVED:
+    if journey is None:
+        # Walk With Me: session id = walk id; the two walkers share with each other only.
+        walk = walks.accepted_walk(db, journey_id)
+        if walk is None or sender.account_id not in (walk.traveller_id, walk.companion_id):
+            raise RelayError("no_open_journey")
+        other = walk.companion_id if sender.account_id == walk.traveller_id else walk.traveller_id
+        return _deliveries(db, sender, envelopes, {other}, "location")
+    if journey.state == State.RESOLVED:
         raise RelayError("no_open_journey")
     if journey.account_id == sender.account_id:
         allowed_accounts = _traveller_recipients(db, journey)

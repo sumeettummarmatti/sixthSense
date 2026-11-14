@@ -99,6 +99,11 @@ def for_owner(db: Session, owner_id: uuid.UUID, journey_id: uuid.UUID) -> list[s
                     TrustedContact.contact_id == helper.account_id,
                 )
             )
+            if link_id is None:  # the Walk With Me companion, alerted by the SOS
+                from app.profiles.models import Profile
+
+                profile = db.get(Profile, helper.account_id)
+                label = profile.first_name if profile else None
         else:
             label = db.scalar(
                 select(ResponderProfile.display_name).where(

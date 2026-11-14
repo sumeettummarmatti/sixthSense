@@ -121,6 +121,7 @@ def _open(db: Session, journey: Journey, settings: Settings, now: datetime) -> N
     if escalation_id is None:  # already open: a duplicate trigger sends nothing extra
         return
     links = _recipients_for(db, journey)
+    alerted = {link.contact_id for link in links}
     for link in links:
         token = security.new_token()
         db.add(
@@ -134,10 +135,45 @@ def _open(db: Session, journey: Journey, settings: Settings, now: datetime) -> N
             )
         )
     target = f"escalation:{escalation_id}"
+    if journey.state == State.FULL_ESCALATION:
+        _add_walk_companion(db, journey, escalation_id, alerted, settings, now)
     audit.record(db, f"escalation.opened.{journey.state}", actor=journey.account_id, target=target)
     if not links:
         audit.record(db, "escalation.no_contacts", actor=journey.account_id, target=target)
     log.info("escalation opened (%s, %d recipients)", journey.state, len(links))
+
+
+def _add_walk_companion(
+    db: Session,
+    journey: Journey,
+    escalation_id: uuid.UUID,
+    alerted: set[uuid.UUID],
+    settings: Settings,
+    now: datetime,
+) -> None:
+    """An SOS during Walk With Me also alerts the companion walking with them."""
+    from app.profiles.models import Profile  # local: keeps the ladder's imports small
+    from app.walks import service as walks
+
+    walk = walks.accepted_walk_for_journey(db, journey.id)
+    if walk is None or walk.companion_id in alerted:
+        return
+    profile = db.get(Profile, journey.account_id)
+    token = security.new_token()
+    db.add(
+        EscalationRecipient(
+            escalation_id=escalation_id,
+            contact_account_id=walk.companion_id,
+            owner_label=profile.first_name if profile else "Your walk partner",
+            ack_token_hash=ack_token_hash(settings, token),
+            ack_token_enc=crypto.encrypt(token),
+            next_attempt_at=now,
+            kind="companion",
+        )
+    )
+    audit.record(
+        db, "escalation.walk_companion", actor=journey.account_id, target=f"walk:{walk.id}"
+    )
 
 
 @dataclass(frozen=True)
@@ -297,9 +333,21 @@ def send_all_clear(db: Session, senders: Senders, closed: list[Closed]) -> None:
 # --- acknowledging and retention -----------------------------------------------------------
 
 
-def acknowledge(db: Session, escalation: Escalation, contact_id: uuid.UUID, now: datetime) -> None:
+def acknowledge(
+    db: Session,
+    escalation: Escalation,
+    contact_id: uuid.UUID,
+    now: datetime,
+    kind: str = "contact",
+) -> None:
     """Stop the ladder. For a missed check-in this also pauses the automatic upgrade to a full
-    escalation: the contact now resolves it or raises the alarm."""
+    escalation: the contact now resolves it or raises the alarm. A walk companion is added as
+    someone coming, but never stops the alerts to trusted contacts."""
+    if kind == "companion":
+        from app.escalation import helpers  # local: helpers imports matching models
+
+        helpers.add(db, escalation, contact_id, "contact", now)
+        return
     if escalation.level == State.CONTACT_ALERT and escalation.journey_id:
         journey = db.get(Journey, escalation.journey_id)
         if journey is not None and journey.state == State.CONTACT_ALERT:

@@ -55,6 +55,12 @@ def _open_for_recipient(
     return row[0], row[1]
 
 
+def _contacts_only(recipient: EscalationRecipient) -> None:
+    """A walk companion (a verified stranger) can never close or change someone's alarm."""
+    if recipient.kind != "contact":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "contacts_only")
+
+
 @router.get("/active", response_model=schemas.ActiveEscalations)
 def active(
     session: CurrentSessionDep, db: DbDep, settings: SettingsDep
@@ -93,9 +99,10 @@ def active(
 def acknowledge(
     escalation_id: uuid.UUID, session: CurrentSessionDep, db: DbDep, now: NowDep
 ) -> schemas.Acknowledged:
-    """'I'm on it.' Stops further alerts to everyone; the alert stays open until resolved."""
+    """'I'm on it.' Stops further alerts to everyone; the alert stays open until resolved.
+    A walk companion's "I'm on it" shows them as coming but keeps alerting the contacts."""
     escalation, recipient = _open_for_recipient(db, escalation_id, session.account_id)
-    ladder.acknowledge(db, escalation, session.account_id, now)
+    ladder.acknowledge(db, escalation, session.account_id, now, kind=recipient.kind)
     db.commit()
     return schemas.Acknowledged(owner_label=recipient.owner_label)
 
@@ -183,7 +190,8 @@ def resolve(
     now: NowDep,
 ) -> schemas.Resolved:
     """'They're safe.' A missed check-in goes back to normal; a full alert ends the journey."""
-    escalation, _ = _open_for_recipient(db, escalation_id, session.account_id)
+    escalation, recipient = _open_for_recipient(db, escalation_id, session.account_id)
+    _contacts_only(recipient)
     journey = db.get(Journey, escalation.journey_id, with_for_update=True)
     closed = []
     if journey is not None:
@@ -224,7 +232,8 @@ def raise_alarm(
     escalation_id: uuid.UUID, session: CurrentSessionDep, db: DbDep, now: NowDep
 ) -> schemas.Raised:
     """'I can't reach them.' Turns a missed check-in into a full escalation for everyone."""
-    escalation, _ = _open_for_recipient(db, escalation_id, session.account_id)
+    escalation, recipient = _open_for_recipient(db, escalation_id, session.account_id)
+    _contacts_only(recipient)
     journey = db.get(Journey, escalation.journey_id, with_for_update=True)
     if journey is None:
         raise _NOT_FOUND
@@ -258,7 +267,7 @@ def acknowledge_by_link(
     if row is None:
         raise _NOT_FOUND
     escalation, recipient = row
-    ladder.acknowledge(db, escalation, recipient.contact_account_id, now)
+    ladder.acknowledge(db, escalation, recipient.contact_account_id, now, kind=recipient.kind)
     db.commit()
     return schemas.Acknowledged(owner_label=recipient.owner_label)
 
