@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sixthsense_app/core/api/device_identity.dart';
+import 'package:sixthsense_app/core/theme/app_theme.dart';
 import 'package:sixthsense_app/features/walk/walk_flow.dart';
 
 const _riya = {
@@ -156,6 +157,7 @@ Future<void> _open(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: buildTheme(Brightness.light),
       home: WalkFlow(
         api: api,
         journeyId: journeyId,

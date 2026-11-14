@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sixthsense_app/core/api/device_identity.dart';
+import 'package:sixthsense_app/core/theme/app_theme.dart';
 import 'package:sixthsense_app/features/profile/profile_form.dart';
 import 'package:sixthsense_app/features/profile/profile_screen.dart';
 
@@ -35,6 +36,7 @@ void main() {
     final saved = <Profile>[];
     await tester.pumpWidget(
       MaterialApp(
+        theme: buildTheme(Brightness.light),
         home: Scaffold(body: ProfileForm(onSave: (p) async => saved.add(p))),
       ),
     );
@@ -92,6 +94,7 @@ void main() {
     _tallScreen(tester);
     await tester.pumpWidget(
       MaterialApp(
+        theme: buildTheme(Brightness.light),
         home: Scaffold(body: ProfileForm(onSave: (_) async {})),
       ),
     );
@@ -114,7 +117,12 @@ void main() {
         gender: null,
       ),
     );
-    await tester.pumpWidget(MaterialApp(home: ProfileScreen(api: api)));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: ProfileScreen(api: api),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Priya'), findsOneWidget);
     final chip = tester.widget<FilterChip>(

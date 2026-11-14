@@ -709,15 +709,19 @@ class _WalkFlowState extends State<WalkFlow> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      TextButton(
-                        onPressed: () => _decline(request),
-                        child: const Text('Decline'),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _decline(request),
+                          child: const Text('Decline'),
+                        ),
                       ),
-                      const Spacer(),
-                      FilledButton(
-                        key: ValueKey('walk-accept-${request.id}'),
-                        onPressed: () => _accept(request),
-                        child: const Text('Accept'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          key: ValueKey('walk-accept-${request.id}'),
+                          onPressed: () => _accept(request),
+                          child: const Text('Accept'),
+                        ),
                       ),
                     ],
                   ),

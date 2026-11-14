@@ -174,22 +174,18 @@ class _FeedbackSheetState extends State<FeedbackSheet> {
             if (_error != null)
               Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                TextButton(
-                  key: const ValueKey('feedback-skip'),
-                  onPressed: _sending
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  child: const Text('Skip'),
-                ),
-                const Spacer(),
-                FilledButton(
-                  key: const ValueKey('feedback-send'),
-                  onPressed: _sending ? null : _send,
-                  child: Text(_sending ? 'Sending…' : 'Send'),
-                ),
-              ],
+            // The app theme makes filled buttons full width: stack, don't row.
+            FilledButton(
+              key: const ValueKey('feedback-send'),
+              onPressed: _sending ? null : _send,
+              child: Text(_sending ? 'Sending…' : 'Send'),
+            ),
+            Center(
+              child: TextButton(
+                key: const ValueKey('feedback-skip'),
+                onPressed: _sending ? null : () => Navigator.of(context).pop(),
+                child: const Text('Skip'),
+              ),
             ),
           ],
         ),

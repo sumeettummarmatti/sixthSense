@@ -858,7 +858,11 @@ class _JourneyFlowState extends State<JourneyFlow> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final plan = _plan;
     if (plan == null) {
-      return JourneySetupScreen(onStart: _startJourney, api: widget.api);
+      return JourneySetupScreen(
+        onStart: _startJourney,
+        api: widget.api,
+        relay: widget.relay,
+      );
     }
     // Rebuild when helpers change so the timer can shrink to make room.
     return Stack(
@@ -982,10 +986,14 @@ class JourneySetupScreen extends StatefulWidget {
     super.key,
     required this.onStart,
     this.api = const DemoApi(),
+    this.relay,
   });
 
   final ValueChanged<JourneyPlan> onStart;
   final DemoApi api;
+
+  /// For Walk With Me as a companion (shares location with the traveller).
+  final LiveLocationRelay? relay;
 
   @override
   State<JourneySetupScreen> createState() => _JourneySetupScreenState();
@@ -1141,6 +1149,16 @@ class _JourneySetupScreenState extends State<JourneySetupScreen> {
             tooltip: 'Get alerts on Telegram',
             onPressed: () => linkTelegramFlow(context, widget.api),
             icon: const Icon(Icons.notifications_active_outlined),
+          ),
+          IconButton(
+            // Companions offer walks without a journey of their own.
+            tooltip: 'Walk With Me',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => WalkFlow(api: widget.api, relay: widget.relay),
+              ),
+            ),
+            icon: const Icon(Icons.directions_walk_rounded),
           ),
           IconButton(
             key: const ValueKey('open-sudden-sos'),
