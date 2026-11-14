@@ -55,6 +55,15 @@ class Settings(BaseSettings):
     responder_radius_step_seconds: int = 60
     responder_max_offers: int = 5  # people alerted per SOS, nearest first
     responder_precise_limit: int = 2  # how many "I'm going" get precise live location
+
+    # Walk With Me (P3-W3). Companions: demo verification + approval by hand
+    # (scripts/companions.py). Rough areas only (~110 m), in Redis for minutes.
+    companion_auto_approve: bool = False  # dev laptops only: approve right after verification
+    companion_presence_ttl_seconds: int = 300  # available phones refresh every minute
+    walk_request_ttl_seconds: int = 600  # an unanswered request expires after 10 minutes
+    walk_area_ttl_seconds: int = 10_800  # the traveller's rough area, while the walk is open
+    walk_search_radius_m: int = 2000
+    walk_max_results: int = 10
     alert_area_ttl_seconds: int = 600
 
     # Signed alerts (P2-W6): base64 32-byte Ed25519 seed. The previous key stays published
