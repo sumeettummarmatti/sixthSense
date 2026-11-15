@@ -1,0 +1,10 @@
+# Production override: every container port listens on localhost only, and containers
+# restart with the server. Use together with infra/docker-compose.yml:
+#   docker compose --env-file .env -f infra/docker-compose.yml -f deploy/docker-compose.server.yml up -d
+services:
+  core-db:    { ports: !override ["127.0.0.1:5434:5432"], restart: unless-stopped }
+  insight-db: { ports: !override ["127.0.0.1:5433:5432"], restart: unless-stopped }
+  redis:      { ports: !override ["127.0.0.1:6379:6379"], restart: unless-stopped }
+  nats:       { ports: !override ["127.0.0.1:4222:4222", "127.0.0.1:8222:8222"], restart: unless-stopped }
+  mailpit:    { ports: !override ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"], restart: unless-stopped }
+  compreface: { restart: unless-stopped }
