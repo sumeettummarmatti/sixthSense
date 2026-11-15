@@ -2,6 +2,10 @@
 
 **See the risk. Stop it early.**
 
+> **[Watch the live demo video](https://youtu.be/WOxtzvM9sEw)** · **[View the presentation](https://docs.google.com/presentation/d/1jlreXM0uohBik5lqK4kS2YPlgRHj1oAb/edit?usp=sharing)** · **[Download the Android app](https://drive.google.com/file/d/1YD-t8q_AAa62WVd5ArUvbQ0niCnqKr8L/view?usp=sharing)**
+
+[![SixthSense live demo video](https://img.youtube.com/vi/WOxtzvM9sEw/hqdefault.jpg)](https://youtu.be/WOxtzvM9sEw)
+
 SixthSense is a personal safety platform for women and children. It helps people avoid risky
 routes, stay connected to the people they trust during a journey, get help fast when something
 goes wrong, and fix the places that make people feel unsafe. It does this without ever becoming
