@@ -1,7 +1,13 @@
 # SixthSense — Progress Log
 
 > Human-readable session log (newest at top). Machine state lives in `progress.json`.
-> **Every entry heading names its author:** `## 2026-11-15 — sumeet: test round 1 fixes (logout, journey restore, ML Kit, face reference, Walk With Me tab, helper ban)
+> **Every entry heading names its author:** `## 2026-11-15 — sumeet: synced with HG-SixthSense (deploy kit, README, HLD images)
+
+- sumeet: Brought over everything added in the public repo https://github.com/sumeettummarmatti/HG-SixthSense: `deploy/` (one-command `install.sh`, `make_env.py` with the duplicate `ENV` line fixed, `setup_compreface.sh`, systemd units, Caddyfile, localhost-only compose override), `DEPLOY.md`, the rewritten `README.md` (features, APK download, install steps, HLD diagrams) and `Docs/images/hld/`. `.env.example` gains `ENV` and the admin page settings.
+- sumeet: The live server (139.84.220.87, `/opt/sixthsense`) runs from HG-SixthSense; it was not touched.
+- Next: make code changes in one repo and copy them to the other in the same PR window so they stay the same.
+
+## 2026-11-15 — sumeet: test round 1 fixes (logout, journey restore, ML Kit, face reference, Walk With Me tab, helper ban)
 
 - sumeet: **Journey restore** (`P1-W4-journey-restore`): Back closed the app and the Journey screen came back empty while the journey was still open on the server; starting again failed with `journey_already_open`, which is what left SOS with `no_server_journey`. Now the plan is saved Keystore-encrypted and resumed from `GET /journeys/current`, Back sends the app to the background, and a start refused because an alert is open explains it instead of starting a phone-only journey.
 - sumeet: **ML Kit in release builds** (`P1-W4-mlkit-release-fix`): the "Confirm it's you" scan and ID OCR failed with `getClass() on a null object reference`. Reproduced with a release probe on the emulator: R8 stripped the ML Kit registrar constructors. Keep rules added; probe then detected faces and read the ID text.

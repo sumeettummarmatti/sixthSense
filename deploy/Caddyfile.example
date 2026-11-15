@@ -1,0 +1,8 @@
+# HTTPS for the two APIs (Caddy gets and renews the certificates by itself).
+# install.sh writes /etc/caddy/Caddyfile from this, with your domains filled in.
+API_DOMAIN {
+	reverse_proxy 127.0.0.1:8000
+}
+INSIGHT_DOMAIN {
+	reverse_proxy 127.0.0.1:8001
+}

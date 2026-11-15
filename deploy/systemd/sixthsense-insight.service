@@ -1,0 +1,14 @@
+[Unit]
+Description=SixthSense Insight API (routes, anonymous place reports)
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+WorkingDirectory=/opt/sixthsense/insight
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/root/.local/bin/uv run --no-dev uvicorn app.main:app --host 127.0.0.1 --port 8001 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

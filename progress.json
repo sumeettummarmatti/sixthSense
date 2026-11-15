@@ -1153,6 +1153,12 @@
       "by": "sumeet",
       "decision": "FACE_CHECK_PROVIDER=auto on the test server: real CompreFace match for helpers with a saved face template, phone check for the rest.",
       "why": "Face templates now save correctly; auto avoids locking out helpers who verified before the fix."
+    },
+    {
+      "date": "2026-11-15",
+      "by": "sumeet",
+      "decision": "Keep this repo and the public HG-SixthSense repo in sync. The server deploys from HG-SixthSense; deploy kit, DEPLOY.md, README and HLD images are mirrored here.",
+      "why": "Team wants both repos to show the same code; HG-SixthSense omits only CLAUDE.md, PLANNER.md, PROGRESS.md and progress.json."
     }
   ],
   "blockers": [
